@@ -1,0 +1,74 @@
+name: Build Changed Modules (Backend)
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  detect:
+    name: Detect Changed Modules
+    uses: ./.github/workflows/detect-changed-modules.yml
+    secrets: inherit
+
+  build:
+    name: Build Modules
+    needs: detect
+    if: needs.detect.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Firebase Credentials
+        env:
+          FIREBASE_CREDENTIALS_BASE64: ${{ secrets.FIREBASE_CREDENTIALS_BASE64 }}
+        run: |
+          mkdir -p app/src/main/resources
+          if [ -n "$FIREBASE_CREDENTIALS_BASE64" ]; then
+            echo "$FIREBASE_CREDENTIALS_BASE64" | base64 -d > app/src/main/resources/teEcclesia-firebase-adminsdk.json
+          fi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 21
+          cache: gradle
+
+      - run: chmod +x gradlew
+
+      - name: Compile changed modules
+        run: |
+          MODULES=$(echo '${{ needs.detect.outputs.modules }}' | jq -r '.[]')
+          for module in $MODULES; do
+            echo "Compiling $module..."
+            ./gradlew :$module:classes -x test --build-cache
+          done
+
+  test:
+    name: Test Modules
+    needs: detect
+    if: needs.detect.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Firebase Credentials
+        env:
+          FIREBASE_CREDENTIALS_BASE64: ${{ secrets.FIREBASE_CREDENTIALS_BASE64 }}
+        run: |
+          mkdir -p app/src/main/resources
+          if [ -n "$FIREBASE_CREDENTIALS_BASE64" ]; then
+            echo "$FIREBASE_CREDENTIALS_BASE64" | base64 -d > app/src/main/resources/teEcclesia-firebase-adminsdk.json
+          fi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 21
+          cache: gradle
+
+      - run: chmod +x gradlew
+
+      - name: Test changed modules
+        run: |
+          MODULES=$(echo '${{ needs.detect.outputs.modules }}' | jq -r '.[]')
+          for module in $MODULES; do
+            echo "Testing $module..."
+            ./gradlew :$module:test --build-cache
+          done
