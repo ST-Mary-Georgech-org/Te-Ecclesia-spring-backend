@@ -28,7 +28,7 @@ WORKDIR /app
 # Copy the generated JAR from the builder image
 COPY --from=builder /workspace/app/build/libs/*.jar app.jar
 
-# Expose Spring Boot default port
-EXPOSE 8080
+# Expose Hugging Face default port
+EXPOSE 7860
 
-ENTRYPOINT ["java","-jar","app.jar"]
+ENTRYPOINT ["java","-jar","app.jar", "--server.port=7860"]
