@@ -1,0 +1,483 @@
+package org.teEcclesia.identity.service
+
+import jakarta.persistence.EntityNotFoundException
+import jakarta.transaction.Transactional
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+import org.teEcclesia.events.identity.UserLoggedInEvent
+import org.teEcclesia.events.publisher.TeEcclesiaEventPublisher
+import org.teEcclesia.identity.api.dto.request.*
+import org.teEcclesia.identity.api.dto.response.AuthResponse
+import org.teEcclesia.identity.api.dto.response.RegisterResponse
+import org.teEcclesia.identity.api.dto.response.InitiateWhatsAppVerificationResponse
+import org.teEcclesia.identity.entity.*
+import org.teEcclesia.identity.exception.InvalidCredentialsException
+import org.teEcclesia.identity.exception.TokenExpiredException
+import org.teEcclesia.identity.exception.UnauthorizedException
+import org.teEcclesia.identity.exception.UserAlreadyExistsException
+import org.teEcclesia.identity.repository.*
+import org.teEcclesia.identity.security.JwtUtil
+import org.teEcclesia.identity.service.mapper.WhatsAppWebhookMapper
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.scheduling.annotation.Scheduled
+import org.springframework.security.crypto.password.PasswordEncoder
+import org.springframework.stereotype.Service
+import org.springframework.http.HttpMethod
+import org.teEcclesia.client.ApiClient
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
+import java.security.MessageDigest
+import java.net.URLEncoder
+import java.time.Instant
+import java.time.temporal.ChronoUnit
+import java.util.*
+
+@Service
+@Transactional
+class AuthService(
+    private val userRepository: UserRepository,
+    private val refreshTokenRepository: RefreshTokenRepository,
+    private val otpRepository: EmailVerificationRepository,
+    private val emailService: EmailService,
+    private val passwordEncoder: PasswordEncoder,
+    private val jwtUtil: JwtUtil,
+    private val teEcclesiaEventPublisher: TeEcclesiaEventPublisher,
+    private val whatsAppWebhookMapper: WhatsAppWebhookMapper,
+    private val apiClient: ApiClient,
+    @param:Value("\${whatsapp.business-number}") private val whatsappBusinessNumber: String,
+    @param:Value("\${whatsapp.business-phone}") private val whatsappBusinessPhone: String,
+    @param:Value("\${whatsapp.app-secret:}") private val whatsappAppSecret: String,
+    @param:Value("\${whatsapp.webhook.verify-token}") private val expectedVerifyToken: String,
+    @param:Value("\${whatsapp.access-token:}") private val whatsappAccessToken: String
+) {
+
+    val logger: Logger = LoggerFactory.getLogger(javaClass)
+    fun register(request: RegisterRequest): RegisterResponse {
+        val existingByPhone = userRepository.findByPhone(request.phone)
+        if (existingByPhone != null && existingByPhone.isPhoneVerified) {
+            throw UserAlreadyExistsException("Phone number is already registered and verified.")
+        }
+
+        val existingByUsername = userRepository.findByUsername(request.username)
+        if (existingByUsername != null && existingByUsername.isPhoneVerified) {
+            if (existingByPhone == null || existingByPhone.id != existingByUsername.id) {
+                throw UserAlreadyExistsException("Username is already used by another account.")
+            }
+        }
+
+        if (!request.email.isNullOrBlank()) {
+            val existingByEmail = userRepository.findByEmail(request.email.lowercase())
+            if (existingByEmail != null && existingByEmail.isPhoneVerified) {
+                if (existingByPhone == null || existingByPhone.id != existingByEmail.id) {
+                    throw UserAlreadyExistsException("Email is already registered and verified.")
+                }
+            }
+        }
+
+        val userToSave = existingByPhone?.let {
+            request.toEntity(passwordEncoder.encode(request.password)!!, id = existingByPhone.id)
+        } ?: request.toEntity(passwordEncoder.encode(request.password)!!)
+
+        val savedUser = userRepository.save(userToSave)
+
+        val token = generateWhatsAppToken()
+        val verificationToken = AccountVerification(
+            otp = token,
+            user = savedUser,
+            phone = savedUser.phone,
+            method = VerificationMethod.PHONE
+        )
+        otpRepository.save(verificationToken)
+
+        val deepLink = buildWhatsAppLink(token)
+
+        return RegisterResponse(
+            message = "Registration successful. Please verify your phone number via WhatsApp.",
+            whatsappDeepLink = deepLink,
+            token = token
+        )
+    }
+
+    fun initiateWhatsAppVerification(phone: String): InitiateWhatsAppVerificationResponse {
+        val user = userRepository.findByPhone(phone)
+            ?: throw EntityNotFoundException("User not found with this phone number")
+
+        if (user.isPhoneVerified) {
+            throw RuntimeException("Phone number is already verified")
+        }
+
+        otpRepository.deleteAllByUserAndMethod(user, VerificationMethod.PHONE)
+
+        val token = generateWhatsAppToken()
+        val verificationToken = AccountVerification(
+            otp = token,
+            user = user,
+            phone = user.phone,
+            method = VerificationMethod.PHONE
+        )
+        otpRepository.save(verificationToken)
+
+        val deepLink = buildWhatsAppLink(token)
+
+        return InitiateWhatsAppVerificationResponse(
+            deepLink = deepLink,
+            token = token
+        )
+    }
+
+    fun processWhatsAppWebhook(requestBody: String, signatureHeader: String?) {
+
+        if (whatsappAppSecret.isNotBlank()) {
+            val verified = verifyWebhookSignature(requestBody.toByteArray(), signatureHeader, whatsappAppSecret)
+            if (!verified) {
+                throw UnauthorizedException("Invalid webhook signature")
+            }
+        }
+
+        val message = whatsAppWebhookMapper.parse(requestBody) ?: return
+
+        val fromNumber = message.from
+        val messageBody = message.body
+
+        val tokenRegex = Regex("""AUTH_[A-Z0-9]{8}""")
+        val matchResult = tokenRegex.find(messageBody) ?: return
+
+        val tokenStr = matchResult.value
+
+        val tokenEntity = otpRepository.findByOtpAndMethod(tokenStr, VerificationMethod.PHONE)
+        if (tokenEntity == null) {
+            sendWhatsAppMessage(fromNumber, "This verification code is invalid, expired, or has already been used.")
+            return
+        }
+
+        if (tokenEntity.isExpired()) {
+            otpRepository.delete(tokenEntity)
+            sendWhatsAppMessage(fromNumber, "This verification code has expired. Please request a new one.")
+            return
+        }
+
+        val cleanFrom = fromNumber.replace(Regex("""\D"""), "")
+        val cleanRegistered = tokenEntity.user.phone.replace(Regex("""\D"""), "")
+
+        if (cleanFrom != cleanRegistered) {
+            sendWhatsAppMessage(cleanFrom, "Please send the verification message from your registered phone number.")
+            return
+        }
+
+        val user = tokenEntity.user
+        val verifiedUser = user.copy(isPhoneVerified = true)
+        userRepository.save(verifiedUser)
+        teEcclesiaEventPublisher.publish(verifiedUser.toUserCreatedEvent())
+
+        val approvedToken = tokenEntity.copy(otp = "APPROVED_$tokenStr")
+        otpRepository.save(approvedToken)
+
+        sendWhatsAppMessage(cleanFrom, "Your phone number has been successfully verified!")
+    }
+
+    private fun sendWhatsAppMessage(to: String, text: String) {
+        if (whatsappAccessToken.isBlank()) return
+        
+        val url = "https://graph.facebook.com/v17.0/$whatsappBusinessNumber/messages"
+        val payload = mapOf(
+            "messaging_product" to "whatsapp",
+            "to" to to,
+            "type" to "text",
+            "text" to mapOf("body" to text)
+        )
+
+        try {
+            apiClient.call(String::class.java) {
+                method = HttpMethod.POST
+                path = url
+                addToken = false
+                headers["Authorization"] = "Bearer $whatsappAccessToken"
+                body = payload
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to send WhatsApp message to $to: ${e.message}")
+        }
+    }
+
+    fun getWhatsAppStatus(token: String): AuthResponse {
+        val approvedTokenStr = "APPROVED_$token"
+        val tokenEntity = otpRepository.findByOtpInAndMethod(listOf(token, approvedTokenStr), VerificationMethod.PHONE)
+            ?: throw EntityNotFoundException("Verification token not found or already processed")
+
+        if (tokenEntity.otp == token) {
+            throw UnauthorizedException("Verification pending")
+        }
+
+        if (tokenEntity.isExpired()) {
+            otpRepository.delete(tokenEntity)
+            throw RuntimeException("Verification token has expired")
+        }
+
+        val user = tokenEntity.user
+        val accessToken = jwtUtil.generateAccessToken(user.id)
+        val refreshToken = jwtUtil.generateRefreshToken(user.id)
+        saveRefreshToken(user, refreshToken)
+
+        otpRepository.delete(tokenEntity)
+
+        return AuthResponse(accessToken, refreshToken)
+    }
+
+    fun verifyPhone(request: VerifyPhoneRequest): AuthResponse {
+        return getWhatsAppStatus(request.otp)
+    }
+
+    fun verifyEmail(request: VerifyEmailRequest): AuthResponse {
+        val user = userRepository.findByEmail(request.email.lowercase())
+            ?: throw EntityNotFoundException("User not found with this email")
+
+        val token = otpRepository.findTopByOtpAndUserAndMethod(request.otp, user, VerificationMethod.EMAIL)
+            ?: throw RuntimeException("Invalid or expired OTP")
+
+        if (token.isExpired()) {
+            otpRepository.delete(token)
+            throw RuntimeException("OTP has expired")
+        }
+
+        val verifiedUser = user.copy(isEmailVerified = true)
+        userRepository.save(verifiedUser)
+        otpRepository.delete(token)
+
+        val accessToken = jwtUtil.generateAccessToken(verifiedUser.id)
+        val refreshToken = jwtUtil.generateRefreshToken(verifiedUser.id)
+        saveRefreshToken(verifiedUser, refreshToken)
+
+        return AuthResponse(accessToken, refreshToken)
+    }
+
+    fun login(request: LoginRequest): AuthResponse {
+        val user = userRepository.findByUsername(request.username)
+            ?: throw EntityNotFoundException("User not found with this username")
+
+        if (!passwordEncoder.matches(request.password, user.passwordHash)) {
+            throw InvalidCredentialsException()
+        }
+
+        if (!user.isPhoneVerified) {
+            throw UnauthorizedException("Please verify your phone number before logging in.")
+        }
+
+        val accessToken = jwtUtil.generateAccessToken(user.id)
+        val refreshToken = jwtUtil.generateRefreshToken(user.id)
+
+        saveRefreshToken(user, refreshToken, request.deviceToken)
+        teEcclesiaEventPublisher.publish(UserLoggedInEvent(user.id))
+
+        return AuthResponse(accessToken, refreshToken)
+    }
+
+    fun refreshToken(request: RefreshTokenRequest): AuthResponse {
+        val refreshTokenEntity = refreshTokenRepository.findByToken(request.refreshToken)
+            ?: throw UnauthorizedException("Invalid refresh token")
+
+        val user = refreshTokenEntity.user
+        val oldDeviceToken = refreshTokenEntity.deviceToken
+
+        refreshTokenRepository.delete(refreshTokenEntity)
+
+        if (refreshTokenEntity.expiryDate.isBefore(Instant.now())) {
+            throw TokenExpiredException("Refresh token is expired. Please login again.")
+        }
+
+        if (jwtUtil.validateRefreshToken(request.refreshToken) &&
+            jwtUtil.validateTokenForUser(request.refreshToken, user.id)) {
+
+            val newAccessToken = jwtUtil.generateAccessToken(user.id)
+            val newRefreshToken = jwtUtil.generateRefreshToken(user.id)
+
+            val finalDeviceToken = request.deviceToken ?: oldDeviceToken
+            saveRefreshToken(user, newRefreshToken, finalDeviceToken)
+            teEcclesiaEventPublisher.publish(UserLoggedInEvent(user.id))
+
+            return AuthResponse(newAccessToken, newRefreshToken)
+        } else {
+            throw UnauthorizedException("Invalid refresh token")
+        }
+    }
+
+    private fun saveRefreshToken(user: User, token: String, deviceToken: String? = null) {
+        val expiryDate = Instant.now().plus(14, ChronoUnit.DAYS)
+
+        refreshTokenRepository.save(
+            RefreshToken(token = token, expiryDate = expiryDate, user = user, deviceToken = deviceToken)
+        )
+    }
+
+    fun updateDeviceToken(userId: UUID, refreshToken: String, deviceToken: String) {
+        val tokenEntity = refreshTokenRepository.findByUserIdAndToken(userId, refreshToken)
+            ?: throw UnauthorizedException("Invalid refresh token")
+
+        val updatedEntity = tokenEntity.copy(deviceToken = deviceToken)
+        refreshTokenRepository.save(updatedEntity)
+    }
+
+    fun logout(userId: UUID, request: RefreshTokenRequest) {
+        refreshTokenRepository.findByUserIdAndToken(userId = userId, request.refreshToken)?.let { tokenEntity ->
+            refreshTokenRepository.delete(tokenEntity)
+        }
+    }
+
+    fun forgotPassword(request: ForgotPasswordRequest): String {
+        val user = findUserByKeyAndMethod(request.key, request.method)
+            ?: return "If this user exists, an OTP has been sent."
+
+        return if (request.method == VerificationMethod.PHONE) {
+            val token = generateWhatsAppToken()
+            val verification = AccountVerification(otp = token, user = user, phone = user.phone, method = VerificationMethod.PHONE)
+            otpRepository.save(verification)
+            buildWhatsAppLink(token)
+        } else {
+            val otpCode = emailService.generateOtp()
+            val verification = AccountVerification(otp = otpCode, user = user, email = user.email, method = VerificationMethod.EMAIL)
+            otpRepository.save(verification)
+            if (user.email != null) {
+                emailService.sendOtp(user.email, verification.otp)
+            }
+            "If this user exists, an OTP has been sent."
+        }
+    }
+
+    fun verifyOtp(request: VerifyOtpRequest): String {
+        val user = findUserByKeyAndMethod(request.key, request.method)
+            ?: throw EntityNotFoundException("User not found")
+
+        val tokenStr = request.otp
+        val approvedTokenStr = "APPROVED_$tokenStr"
+
+        val token = otpRepository.findByOtpInAndMethod(listOf(tokenStr, approvedTokenStr), request.method)
+            ?: throw RuntimeException("Invalid or expired OTP")
+
+        if (token.user.id != user.id) {
+            throw RuntimeException("Invalid or expired OTP")
+        }
+
+        if (token.isExpired()) {
+            otpRepository.delete(token)
+            throw RuntimeException("OTP has expired")
+        }
+
+        if (request.method == VerificationMethod.PHONE && token.otp == tokenStr) {
+            throw UnauthorizedException("Verification pending")
+        }
+
+        return "OTP verified successfully. You can now reset your password."
+    }
+
+    fun resetPassword(request: ResetPasswordRequest): String {
+        val user = findUserByKeyAndMethod(request.key, request.method)
+            ?: throw EntityNotFoundException("User not found")
+
+        val tokenStr = request.otp
+        val approvedTokenStr = "APPROVED_$tokenStr"
+
+        val token = otpRepository.findByOtpInAndMethod(listOf(tokenStr, approvedTokenStr), request.method)
+            ?: throw RuntimeException("Invalid OTP")
+
+        if (token.user.id != user.id) {
+            throw RuntimeException("Invalid OTP")
+        }
+
+        if (token.isExpired()) {
+            otpRepository.delete(token)
+            throw RuntimeException("Invalid or expired OTP")
+        }
+
+        if (request.method == VerificationMethod.PHONE && token.otp == tokenStr) {
+            throw UnauthorizedException("Verification pending")
+        }
+
+        val updatedUser = user.copy(
+            passwordHash = passwordEncoder.encode(request.newPassword)!!
+        )
+        userRepository.save(updatedUser)
+        otpRepository.delete(token)
+
+        return "Password reset successfully. You can now login."
+    }
+
+    fun resendOtp(request: ForgotPasswordRequest): String {
+        val user = findUserByKeyAndMethod(request.key, request.method)
+            ?: throw EntityNotFoundException("User not found")
+
+        if (request.method == VerificationMethod.PHONE) {
+            val token = generateWhatsAppToken()
+            val verification = AccountVerification(otp = token, user = user, phone = user.phone, method = VerificationMethod.PHONE)
+            otpRepository.save(verification)
+            return buildWhatsAppLink(token)
+        } else {
+            val otpCode = emailService.generateOtp()
+            val verificationToken = AccountVerification(otp = otpCode, user = user, email = user.email, method = VerificationMethod.EMAIL)
+            otpRepository.save(verificationToken)
+            if (user.email != null) {
+                if (!user.isEmailVerified) {
+                    emailService.sendWelcomeVerificationOtp(user.email, verificationToken.otp)
+                } else {
+                    emailService.sendOtp(user.email, verificationToken.otp)
+                }
+            }
+            return "OTP resent successfully."
+        }
+    }
+
+    private fun findUserByKeyAndMethod(key: String, method: VerificationMethod): User? {
+        return if (method == VerificationMethod.PHONE) {
+            userRepository.findByPhone(key)
+        } else {
+            userRepository.findByEmail(key.lowercase())
+        }
+    }
+
+    private fun verifyWebhookSignature(payloadBytes: ByteArray, signatureHeader: String?, appSecret: String): Boolean {
+        if (signatureHeader == null || !signatureHeader.startsWith("sha256=")) return false
+        val expectedSignature = signatureHeader.substringAfter("sha256=")
+        val mac = Mac.getInstance("HmacSHA256")
+        val secretKey = SecretKeySpec(appSecret.toByteArray(), "HmacSHA256")
+        mac.init(secretKey)
+        val actualSignatureBytes = mac.doFinal(payloadBytes)
+        val actualSignature = actualSignatureBytes.joinToString("") { String.format("%02x", it) }
+        return MessageDigest.isEqual(expectedSignature.toByteArray(), actualSignature.toByteArray())
+    }
+
+    fun getVerifyWebhookResponse(mode: String, verifyToken: String, challenge: String): String {
+        if (mode == "subscribe" && verifyToken == expectedVerifyToken) {
+            return challenge
+        }
+        throw UnauthorizedException("Webhook verification failed")
+    }
+
+    private fun generateWhatsAppToken(): String {
+        val allowedChars = ('A'..'Z') + ('0'..'9')
+        return "AUTH_" + (1..8)
+            .map { allowedChars.random() }
+            .joinToString("")
+    }
+
+    private fun buildWhatsAppLink(token: String): String {
+        val message = "Verify my account: $token"
+        val encodedMessage = URLEncoder.encode(message, "UTF-8")
+        return "https://wa.me/$whatsappBusinessPhone?text=$encodedMessage"
+    }
+
+    @Scheduled(cron = "0 0 0 * * *")
+    fun clearExpiredRefreshTokens() {
+        val now = Instant.now()
+        refreshTokenRepository.deleteAllByExpiryDateBefore(now)
+    }
+
+    @Scheduled(cron = "0 0 0 * * *")
+    fun clearExpiredOtps() {
+        val now = Instant.now()
+        otpRepository.deleteAllBySentAtBefore(now.minus(15, ChronoUnit.MINUTES))
+    }
+
+    @Scheduled(cron = "0 0 0 * * *")
+    fun clearUnverifiedUsers() {
+        val cutoffDate = Instant.now().minus(1, ChronoUnit.DAYS)
+        userRepository.deleteAllByIsPhoneVerifiedIsFalseAndCreatedAtBefore(cutoffDate)
+    }
+}

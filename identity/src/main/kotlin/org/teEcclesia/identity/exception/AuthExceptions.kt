@@ -1,0 +1,20 @@
+package org.teEcclesia.identity.exception
+
+abstract class AuthenticationException(message: String) : RuntimeException(message)
+
+class InvalidCredentialsException(
+    message: String = "Invalid username or password") : AuthenticationException(message)
+
+
+class TokenExpiredException (
+    message: String = "Token has expired. Please login again.") : AuthenticationException(message)
+
+
+class UnauthorizedException (
+    message: String = "Unauthorized access") : AuthenticationException(message)
+
+class UserAlreadyExistsException(
+    message: String = "User already exists") : AuthenticationException(message)
+
+class UserNotFoundException(message: String) : AuthenticationException(message)
+
