@@ -28,6 +28,8 @@ import org.springframework.test.context.ActiveProfiles
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.*
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 
 @SpringBootTest(classes = [IdentityTestApplication::class])
 @ActiveProfiles("test")
@@ -284,7 +286,15 @@ class AuthServiceIntegrationTest {
         }
         """.trimIndent()
 
-        authService.processWhatsAppWebhook(jsonPayload, signatureHeader = null)
+        val appSecret = "test-secret"
+        val mac = Mac.getInstance("HmacSHA256")
+        val secretKey = SecretKeySpec(appSecret.toByteArray(), "HmacSHA256")
+        mac.init(secretKey)
+        val signatureBytes = mac.doFinal(jsonPayload.toByteArray())
+        val signature = signatureBytes.joinToString("") { String.format("%02x", it) }
+        val signatureHeader = "sha256=$signature"
+
+        authService.processWhatsAppWebhook(jsonPayload, signatureHeader = signatureHeader)
 
         val updatedUser = userRepository.findById(user.id).get()
         val updatedToken = otpRepository.findByOtpAndMethod("APPROVED_$token", VerificationMethod.PHONE)
