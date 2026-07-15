@@ -13,7 +13,16 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
 import org.teEcclesia.identity.api.dto.response.toProfileResponse
+import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.entity.toUserUpdatedEvent
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
+import org.teEcclesia.identity.api.dto.request.RegisterRequest
+import org.teEcclesia.identity.api.dto.request.toEntity
+import org.teEcclesia.identity.entity.MakhdoomProfile
+import org.teEcclesia.identity.repository.EducationalStageRepository
+import org.teEcclesia.identity.repository.EducationalYearRepository
+import org.springframework.security.crypto.password.PasswordEncoder
 import java.util.*
 
 @Service
@@ -21,8 +30,14 @@ class UserService(
     private val userRepository: UserRepository,
     private val imageStorageService: ImageStorageService,
     private val eventPublisher: TeEcclesiaEventPublisher,
+    private val userCodeGenerator: UserCodeGenerator,
+    private val passwordEncoder: PasswordEncoder,
+    private val educationalStageRepository: EducationalStageRepository,
+    private val educationalYearRepository: EducationalYearRepository,
+    @param:Value("\${storage.teEcclesia.cdn-endpoint}") private val cdnEndpoint: String,
     @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String
 ) {
+    private val imagesBaseUrl: String = "$cdnEndpoint/$profileImageDirectory"
     fun existById(userId: UUID): Boolean = userRepository.existsById(userId)
 
     fun findById(userId: UUID): User {
@@ -55,8 +70,11 @@ class UserService(
         val user = findById(userId)
 
         val updatedUser = user.copy(
-            fullName = request.fullName,
-            username = request.username,
+            firstName = request.firstName,
+            secondName = request.secondName,
+            thirdName = request.thirdName,
+            lastName = request.lastName,
+            displayName = request.displayName,
             phone = request.phone,
             email = request.email,
         )
@@ -80,5 +98,87 @@ class UserService(
     fun findEmailsByUserIds(userIds: List<UUID>): Map<String, String> {
         val users = userRepository.findAllById(userIds)
         return users.associate { it.id.toString() to (it.email ?: "") }
+    }
+
+    fun getUsersByStatus(status: UserStatus, pageable: Pageable): Page<ProfileResponse> {
+        return userRepository.findByStatus(status, pageable).map { it.toProfileResponse(imagesBaseUrl) }
+    }
+
+    @Transactional
+    fun approveUser(userId: UUID) {
+        val user = findById(userId)
+        val code = user.code ?: userCodeGenerator.generateCode(user)
+        
+        val updatedUser = user.copy(
+            status = UserStatus.APPROVED,
+            code = code
+        )
+        val savedUser = userRepository.save(updatedUser)
+        eventPublisher.publish(savedUser.toUserUpdatedEvent())
+    }
+
+    @Transactional
+    fun rejectUser(userId: UUID) {
+        val user = findById(userId)
+        val updatedUser = user.copy(status = UserStatus.REJECTED)
+        val savedUser = userRepository.save(updatedUser)
+        eventPublisher.publish(savedUser.toUserUpdatedEvent())
+    }
+
+    @Transactional
+    fun banUser(userId: UUID) {
+        val user = findById(userId)
+        val updatedUser = user.copy(status = UserStatus.BANNED)
+        val savedUser = userRepository.save(updatedUser)
+        eventPublisher.publish(savedUser.toUserUpdatedEvent())
+    }
+
+    @Transactional
+    fun createMakhdoomDirectly(request: RegisterRequest): ProfileResponse {
+        var confessionPriest: User? = null
+        if (request.confessionPriestId != null) {
+            confessionPriest = findById(request.confessionPriestId)
+        }
+
+        val rawPassword = request.password
+        val encodedPassword = passwordEncoder.encode(rawPassword)!!
+        val userEntity = request.toEntity(encodedPassword, confessionPriest)
+        
+        // Add Makhdoom profile
+        val makhdoomProfile = if (request.makhdoomProfile != null) {
+            val educationalStage = educationalStageRepository.findById(request.makhdoomProfile.educationalStageId).orElseThrow {
+                java.lang.IllegalArgumentException("Educational stage not found")
+            }
+            val educationalYear = request.makhdoomProfile.educationalYearId?.let {
+                educationalYearRepository.findById(it).orElseThrow {
+                    java.lang.IllegalArgumentException("Educational year not found")
+                }
+            }
+            MakhdoomProfile(
+                user = userEntity,
+                shamamsaStudyStatus = request.makhdoomProfile.shamamsaStudyStatus,
+                educationalStage = educationalStage,
+                educationalYear = educationalYear,
+                fatherPhone = request.makhdoomProfile.fatherPhone,
+                fatherWhatsapp = request.makhdoomProfile.fatherWhatsapp,
+                motherPhone = request.makhdoomProfile.motherPhone,
+                motherWhatsapp = request.makhdoomProfile.motherWhatsapp,
+                isFatherDeceased = request.makhdoomProfile.isFatherDeceased,
+                isMotherDeceased = request.makhdoomProfile.isMotherDeceased
+            )
+        } else null
+        
+        val code = userCodeGenerator.generateCode(userEntity)
+        val approvedUser: User = userEntity.copy(
+            status = UserStatus.APPROVED,
+            code = code,
+            isPhoneVerified = true,
+            makhdoomProfile = makhdoomProfile ?: userEntity.makhdoomProfile
+        )
+        
+        val savedUser = userRepository.save(approvedUser)
+        eventPublisher.publish(savedUser.toUserUpdatedEvent())
+        
+        return savedUser.toProfileResponse(imagesBaseUrl)
     }
 }

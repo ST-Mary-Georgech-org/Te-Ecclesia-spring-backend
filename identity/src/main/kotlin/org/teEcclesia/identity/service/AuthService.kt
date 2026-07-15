@@ -15,6 +15,10 @@ import org.teEcclesia.identity.exception.InvalidCredentialsException
 import org.teEcclesia.identity.exception.TokenExpiredException
 import org.teEcclesia.identity.exception.UnauthorizedException
 import org.teEcclesia.identity.exception.UserAlreadyExistsException
+import org.teEcclesia.identity.exception.IncompleteProfileException
+import org.teEcclesia.identity.exception.PhoneNotVerifiedException
+import org.teEcclesia.identity.exception.AccountPendingApprovalException
+import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.repository.*
 import org.teEcclesia.identity.security.JwtUtil
 import org.teEcclesia.identity.service.mapper.WhatsAppWebhookMapper
@@ -44,6 +48,9 @@ class AuthService(
     private val teEcclesiaEventPublisher: TeEcclesiaEventPublisher,
     private val whatsAppWebhookMapper: WhatsAppWebhookMapper,
     private val apiClient: ApiClient,
+    private val rankRepository: RankRepository,
+    private val educationalStageRepository: EducationalStageRepository,
+    private val educationalYearRepository: EducationalYearRepository,
     @param:Value("\${whatsapp.business-number}") private val whatsappBusinessNumber: String,
     @param:Value("\${whatsapp.business-phone}") private val whatsappBusinessPhone: String,
     @param:Value("\${whatsapp.app-secret:}") private val whatsappAppSecret: String,
@@ -52,16 +59,17 @@ class AuthService(
 ) {
 
     val logger: Logger = LoggerFactory.getLogger(javaClass)
-    fun register(request: RegisterRequest): RegisterResponse {
+
+    fun register(request: RegisterRequest) {
         val existingByPhone = userRepository.findByPhone(request.phone)
         if (existingByPhone != null && existingByPhone.isPhoneVerified) {
             throw UserAlreadyExistsException("Phone number is already registered and verified.")
         }
 
-        val existingByUsername = userRepository.findByUsername(request.username)
-        if (existingByUsername != null && existingByUsername.isPhoneVerified) {
-            if (existingByPhone == null || existingByPhone.id != existingByUsername.id) {
-                throw UserAlreadyExistsException("Username is already used by another account.")
+        val existingByNationalId = userRepository.findByNationalId(request.nationalId)
+        if (existingByNationalId != null && existingByNationalId.isPhoneVerified) {
+            if (existingByPhone == null || existingByPhone.id != existingByNationalId.id) {
+                throw UserAlreadyExistsException("National ID is already registered.")
             }
         }
 
@@ -74,11 +82,47 @@ class AuthService(
             }
         }
 
-        val userToSave = existingByPhone?.let {
-            request.toEntity(passwordEncoder.encode(request.password)!!, id = existingByPhone.id)
-        } ?: request.toEntity(passwordEncoder.encode(request.password)!!)
+        var confessionPriest: User? = null
+        if (request.confessionPriestId != null) {
+            confessionPriest = userRepository.findById(request.confessionPriestId).orElseThrow {
+                EntityNotFoundException("Confession priest not found")
+            }
+        }
 
-        val savedUser = userRepository.save(userToSave)
+        val userToSave = existingByPhone?.let {
+            request.toEntity(passwordEncoder.encode(request.password)!!, confessionPriest, id = existingByPhone.id)
+        } ?: request.toEntity(passwordEncoder.encode(request.password)!!, confessionPriest)
+
+        val ordinationProfile = request.ordinationProfile?.let { createOrdinationProfile(userToSave, it) }
+        val makhdoomProfile = request.makhdoomProfile?.let { createMakhdoomProfile(userToSave, it) }
+
+        userRepository.save(userToSave.copy(
+            ordinationProfile = ordinationProfile ?: userToSave.ordinationProfile,
+            makhdoomProfile = makhdoomProfile ?: userToSave.makhdoomProfile
+        ))
+    }
+
+    fun completeProfile(request: CompleteProfileRequest): RegisterResponse {
+        val user = findUserByIdentifier(request.identifier)
+
+        if (!passwordEncoder.matches(request.password, user.passwordHash)) {
+            throw InvalidCredentialsException()
+        }
+
+        if (user.status != UserStatus.PROFILE_INCOMPLETE) {
+            throw RuntimeException("Profile is already completed")
+        }
+
+
+        val ordinationProfile = request.ordinationProfile?.let { createOrdinationProfile(user, it) }
+        val makhdoomProfile = request.makhdoomProfile?.let { createMakhdoomProfile(user, it) }
+
+        val savedUser = userRepository.save(user.copy(
+            status = UserStatus.UNVERIFIED,
+            role = request.role,
+            ordinationProfile = ordinationProfile ?: user.ordinationProfile,
+            makhdoomProfile = makhdoomProfile ?: user.makhdoomProfile,
+        ))
 
         val token = generateWhatsAppToken()
         val verificationToken = AccountVerification(
@@ -92,7 +136,7 @@ class AuthService(
         val deepLink = buildWhatsAppLink(token)
 
         return RegisterResponse(
-            message = "Registration successful. Please verify your phone number via WhatsApp.",
+            message = "Profile completed successfully. Please verify your phone number via WhatsApp.",
             whatsappDeepLink = deepLink,
             token = token
         )
@@ -165,14 +209,17 @@ class AuthService(
         }
 
         val user = tokenEntity.user
-        val verifiedUser = user.copy(isPhoneVerified = true)
+        val verifiedUser = user.copy(
+            isPhoneVerified = true,
+            status = if (user.status == UserStatus.UNVERIFIED) UserStatus.PENDING_APPROVAL else user.status
+        )
         userRepository.save(verifiedUser)
-        teEcclesiaEventPublisher.publish(verifiedUser.toUserCreatedEvent())
+        teEcclesiaEventPublisher.publish(verifiedUser.toUserUpdatedEvent())
 
         val approvedToken = tokenEntity.copy(otp = "APPROVED_$tokenStr")
         otpRepository.save(approvedToken)
 
-        sendWhatsAppMessage(cleanFrom, "Your phone number has been successfully verified!")
+        sendWhatsAppMessage(cleanFrom, "Your phone number has been successfully verified! Your account is now pending approval.")
     }
 
     private fun sendWhatsAppMessage(to: String, text: String) {
@@ -251,15 +298,28 @@ class AuthService(
     }
 
     fun login(request: LoginRequest): AuthResponse {
-        val user = userRepository.findByUsername(request.username)
-            ?: throw EntityNotFoundException("User not found with this username")
+        val user = findUserByIdentifier(request.identifier)
 
         if (!passwordEncoder.matches(request.password, user.passwordHash)) {
             throw InvalidCredentialsException()
         }
 
-        if (!user.isPhoneVerified) {
-            throw UnauthorizedException("Please verify your phone number before logging in.")
+        when (user.status) {
+            UserStatus.PROFILE_INCOMPLETE -> throw IncompleteProfileException()
+            UserStatus.PENDING_APPROVAL -> throw AccountPendingApprovalException()
+            UserStatus.UNVERIFIED -> {
+                if (!user.isPhoneVerified) {
+                    throw PhoneNotVerifiedException()
+                }
+            }
+            UserStatus.REJECTED -> throw UnauthorizedException("Account rejected")
+            UserStatus.BANNED -> throw UnauthorizedException("Account banned")
+            UserStatus.APPROVED -> {
+                // If it's approved but somehow phone is not verified, block them.
+                if (!user.isPhoneVerified) {
+                    throw PhoneNotVerifiedException()
+                }
+            }
         }
 
         val accessToken = jwtUtil.generateAccessToken(user.id)
@@ -305,6 +365,54 @@ class AuthService(
 
         refreshTokenRepository.save(
             RefreshToken(token = token, expiryDate = expiryDate, user = user, deviceToken = deviceToken)
+        )
+    }
+
+    private fun findUserByIdentifier(identifier: String): User {
+        val id = identifier.trim()
+        return when {
+            id.contains("@") -> userRepository.findByEmail(id.lowercase())
+            id.matches(Regex("^\\d{14}$")) -> userRepository.findByNationalId(id)
+            id.matches(Regex("^[A-H]\\d{8}$", RegexOption.IGNORE_CASE)) -> userRepository.findByCode(id.uppercase())
+            id.matches(Regex("^\\+?\\d{10,15}$")) -> userRepository.findByPhone(id)
+            else -> userRepository.findByPhone(id)
+        } ?: throw EntityNotFoundException("User not found with this identifier")
+    }
+
+    private fun createOrdinationProfile(user: User, dto: OrdinationProfileRequest): OrdinationProfile {
+        val rank = rankRepository.findById(dto.rankId).orElseThrow {
+            EntityNotFoundException("Rank not found")
+        }
+        return OrdinationProfile(
+            user = user,
+            rank = rank,
+            ordinationYear = dto.ordinationYear,
+            bishopName = dto.bishopName,
+            ordinationPlace = dto.ordinationPlace,
+            certificateImageUrl = dto.certificateImageUrl
+        )
+    }
+
+    private fun createMakhdoomProfile(user: User, dto: MakhdoomProfileRequest): MakhdoomProfile {
+        val educationalStage = educationalStageRepository.findById(dto.educationalStageId).orElseThrow {
+            EntityNotFoundException("Educational stage not found")
+        }
+        val educationalYear = dto.educationalYearId?.let {
+            educationalYearRepository.findById(it).orElseThrow {
+                EntityNotFoundException("Educational year not found")
+            }
+        }
+        return MakhdoomProfile(
+            user = user,
+            shamamsaStudyStatus = dto.shamamsaStudyStatus,
+            educationalStage = educationalStage,
+            educationalYear = educationalYear,
+            fatherPhone = dto.fatherPhone,
+            fatherWhatsapp = dto.fatherWhatsapp,
+            motherPhone = dto.motherPhone,
+            motherWhatsapp = dto.motherWhatsapp,
+            isFatherDeceased = dto.isFatherDeceased,
+            isMotherDeceased = dto.isMotherDeceased
         )
     }
 

@@ -22,9 +22,16 @@ class AuthController (
 
     @Tag(name = "Registration", description = "Endpoints related to user registration and account verification")
     @PostMapping("/signup")
-    fun register (@Valid @RequestBody request: RegisterRequest): ResponseEntity<RegisterResponse> {
-        val response = authService.register(request)
-        return ResponseEntity.status(HttpStatus.CREATED).body(response)
+    fun register (@Valid @RequestBody request: RegisterRequest): ResponseEntity<Void> {
+        authService.register(request)
+        return ResponseEntity.status(HttpStatus.CREATED).build()
+    }
+
+    @Tag(name = "Registration")
+    @PostMapping("/complete-profile")
+    fun completeProfile (@Valid @RequestBody request: CompleteProfileRequest): ResponseEntity<RegisterResponse> {
+        val response = authService.completeProfile(request)
+        return ResponseEntity.ok(response)
     }
 
     @Tag(name = "Registration")
