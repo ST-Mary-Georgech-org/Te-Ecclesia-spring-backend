@@ -40,6 +40,24 @@ class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error)
     }
 
+    @ExceptionHandler(IncompleteProfileException::class)
+    fun handleIncompleteProfile(ex: IncompleteProfileException): ResponseEntity<ErrorResponse> {
+        val error = ErrorResponse(ex.message ?: "Profile incomplete", HttpStatus.PRECONDITION_REQUIRED.value())
+        return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED).body(error)
+    }
+
+    @ExceptionHandler(PhoneNotVerifiedException::class)
+    fun handlePhoneNotVerified(ex: PhoneNotVerifiedException): ResponseEntity<ErrorResponse> {
+        val error = ErrorResponse(ex.message ?: "Phone not verified", HttpStatus.PRECONDITION_FAILED.value())
+        return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED).body(error)
+    }
+
+    @ExceptionHandler(AccountPendingApprovalException::class)
+    fun handleAccountPendingApproval(ex: AccountPendingApprovalException): ResponseEntity<ErrorResponse> {
+        val error = ErrorResponse(ex.message ?: "Account pending approval", HttpStatus.LOCKED.value())
+        return ResponseEntity.status(HttpStatus.LOCKED).body(error)
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleValidationExceptions(ex: MethodArgumentNotValidException): ResponseEntity<ErrorResponse> {
         val errorMessage = ex.bindingResult.allErrors.firstOrNull()?.defaultMessage ?: "Validation failed"

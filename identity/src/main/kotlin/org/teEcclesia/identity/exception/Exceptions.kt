@@ -18,3 +18,11 @@ class UserAlreadyExistsException(
 
 class UserNotFoundException(message: String) : AuthenticationException(message)
 
+class AccountPendingApprovalException(
+    message: String = "User account is pending approval") : RuntimeException(message)
+
+class IncompleteProfileException(
+    message: String = "User profile is incomplete") : RuntimeException(message)
+
+class PhoneNotVerifiedException(
+    message: String = "User phone number is not verified") : RuntimeException(message)
