@@ -4,7 +4,10 @@ import jakarta.persistence.EntityNotFoundException
 import jakarta.transaction.Transactional
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.teEcclesia.events.identity.UserCreatedEvent
 import org.teEcclesia.events.identity.UserLoggedInEvent
+import org.teEcclesia.events.identity.UserUpdatedEvent
+import org.teEcclesia.events.identity.UserPendingApprovalEvent
 import org.teEcclesia.events.publisher.TeEcclesiaEventPublisher
 import org.teEcclesia.identity.api.dto.request.*
 import org.teEcclesia.identity.api.dto.response.AuthResponse
@@ -48,6 +51,7 @@ class AuthService(
     private val teEcclesiaEventPublisher: TeEcclesiaEventPublisher,
     private val whatsAppWebhookMapper: WhatsAppWebhookMapper,
     private val apiClient: ApiClient,
+    private val parentProfileService: ParentProfileService,
     private val rankRepository: RankRepository,
     private val educationalStageRepository: EducationalStageRepository,
     private val educationalYearRepository: EducationalYearRepository,
@@ -95,11 +99,12 @@ class AuthService(
 
         val ordinationProfile = request.ordinationProfile?.let { createOrdinationProfile(userToSave, it) }
         val makhdoomProfile = request.makhdoomProfile?.let { createMakhdoomProfile(userToSave, it) }
-
-        userRepository.save(userToSave.copy(
+        val savedUser = userRepository.save(userToSave.copy(
             ordinationProfile = ordinationProfile ?: userToSave.ordinationProfile,
             makhdoomProfile = makhdoomProfile ?: userToSave.makhdoomProfile
         ))
+
+        request.parentProfile?.let { parentProfileService.createOrUpdateProfile(savedUser, it) }
     }
 
     fun completeProfile(request: CompleteProfileRequest): RegisterResponse {
@@ -116,13 +121,17 @@ class AuthService(
 
         val ordinationProfile = request.ordinationProfile?.let { createOrdinationProfile(user, it) }
         val makhdoomProfile = request.makhdoomProfile?.let { createMakhdoomProfile(user, it) }
+        val khademProfile = request.khademProfile?.let { createKhademProfile(user, it) }
 
         val savedUser = userRepository.save(user.copy(
             status = UserStatus.UNVERIFIED,
             role = request.role,
             ordinationProfile = ordinationProfile ?: user.ordinationProfile,
             makhdoomProfile = makhdoomProfile ?: user.makhdoomProfile,
+            khademProfile = khademProfile ?: user.khademProfile
         ))
+
+        request.parentProfile?.let { parentProfileService.createOrUpdateProfile(savedUser, it) }
 
         val token = generateWhatsAppToken()
         val verificationToken = AccountVerification(
@@ -209,12 +218,17 @@ class AuthService(
         }
 
         val user = tokenEntity.user
+        val wasUnverified = user.status == UserStatus.UNVERIFIED
         val verifiedUser = user.copy(
             isPhoneVerified = true,
-            status = if (user.status == UserStatus.UNVERIFIED) UserStatus.PENDING_APPROVAL else user.status
+            status = if (wasUnverified) UserStatus.PENDING_APPROVAL else user.status
         )
         userRepository.save(verifiedUser)
         teEcclesiaEventPublisher.publish(verifiedUser.toUserUpdatedEvent())
+
+        if (wasUnverified) {
+            teEcclesiaEventPublisher.publish(UserPendingApprovalEvent(verifiedUser.id, verifiedUser.fullName))
+        }
 
         val approvedToken = tokenEntity.copy(otp = "APPROVED_$tokenStr")
         otpRepository.save(approvedToken)
@@ -413,6 +427,22 @@ class AuthService(
             motherWhatsapp = dto.motherWhatsapp,
             isFatherDeceased = dto.isFatherDeceased,
             isMotherDeceased = dto.isMotherDeceased
+        )
+    }
+
+    private fun createKhademProfile(user: User, dto: KhademProfileRequest): KhademProfile {
+        val educationalStage = educationalStageRepository.findById(dto.educationalStageId).orElseThrow {
+            EntityNotFoundException("Educational stage not found")
+        }
+        val educationalYear = dto.educationalYearId?.let { id ->
+            educationalYearRepository.findById(id).orElseThrow {
+                EntityNotFoundException("Educational year not found")
+            }
+        }
+        return KhademProfile(
+            user = user,
+            educationalStage = educationalStage,
+            educationalYear = educationalYear
         )
     }
 

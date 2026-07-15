@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
 import org.teEcclesia.identity.api.dto.response.toProfileResponse
 import org.teEcclesia.identity.entity.enums.UserStatus
+import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.entity.toUserUpdatedEvent
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
@@ -22,7 +23,10 @@ import org.teEcclesia.identity.api.dto.request.toEntity
 import org.teEcclesia.identity.entity.MakhdoomProfile
 import org.teEcclesia.identity.repository.EducationalStageRepository
 import org.teEcclesia.identity.repository.EducationalYearRepository
+import org.teEcclesia.identity.repository.AreaRepository
 import org.springframework.security.crypto.password.PasswordEncoder
+import org.teEcclesia.identity.api.dto.request.ParentProfileRequest
+import org.teEcclesia.identity.entity.lookups.Area
 import java.util.*
 
 @Service
@@ -30,10 +34,12 @@ class UserService(
     private val userRepository: UserRepository,
     private val imageStorageService: ImageStorageService,
     private val eventPublisher: TeEcclesiaEventPublisher,
+    private val parentProfileService: ParentProfileService,
     private val userCodeGenerator: UserCodeGenerator,
     private val passwordEncoder: PasswordEncoder,
     private val educationalStageRepository: EducationalStageRepository,
     private val educationalYearRepository: EducationalYearRepository,
+    private val areaRepository: AreaRepository,
     @param:Value("\${storage.teEcclesia.cdn-endpoint}") private val cdnEndpoint: String,
     @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String
 ) {
@@ -114,23 +120,31 @@ class UserService(
             code = code
         )
         val savedUser = userRepository.save(updatedUser)
+        
+        savedUser.parentProfile?.let {
+            parentProfileService.syncPartner(it)
+        }
+        
+        addAreaIfNotExists(savedUser.area)
+        
         eventPublisher.publish(savedUser.toUserUpdatedEvent())
     }
 
     @Transactional
-    fun rejectUser(userId: UUID) {
+    fun rejectUser(userId: UUID, reason: String) {
         val user = findById(userId)
-        val updatedUser = user.copy(status = UserStatus.REJECTED)
-        val savedUser = userRepository.save(updatedUser)
-        eventPublisher.publish(savedUser.toUserUpdatedEvent())
+        if (user.status != UserStatus.PENDING_APPROVAL) {
+            throw RuntimeException("Only users pending approval can be rejected")
+        }
+        val updatedUser = userRepository.save(user.copy(status = UserStatus.REJECTED, statusReason = reason))
+        eventPublisher.publish(updatedUser.toUserUpdatedEvent())
     }
 
     @Transactional
-    fun banUser(userId: UUID) {
+    fun banUser(userId: UUID, reason: String) {
         val user = findById(userId)
-        val updatedUser = user.copy(status = UserStatus.BANNED)
-        val savedUser = userRepository.save(updatedUser)
-        eventPublisher.publish(savedUser.toUserUpdatedEvent())
+        val updatedUser = userRepository.save(user.copy(status = UserStatus.BANNED, statusReason = reason))
+        eventPublisher.publish(updatedUser.toUserUpdatedEvent())
     }
 
     @Transactional
@@ -177,8 +191,69 @@ class UserService(
         )
         
         val savedUser = userRepository.save(approvedUser)
+        addAreaIfNotExists(savedUser.area)
         eventPublisher.publish(savedUser.toUserUpdatedEvent())
         
         return savedUser.toProfileResponse(imagesBaseUrl)
+    }
+
+    @Transactional
+    fun createParentDirectly(request: RegisterRequest): ProfileResponse {
+        var confessionPriest: User? = null
+        if (request.confessionPriestId != null) {
+            confessionPriest = findById(request.confessionPriestId)
+        }
+
+        val rawPassword = request.password
+        val encodedPassword = passwordEncoder.encode(rawPassword)!!
+        val userEntity = request.toEntity(encodedPassword, confessionPriest)
+        
+        val savedUser = userRepository.save(userEntity.copy(
+            status = UserStatus.APPROVED, // Direct creations by Khadem are automatically approved
+            role = UserRole.PARENT,
+            isPhoneVerified = true,
+            isEmailVerified = true,
+            code = userCodeGenerator.generateCode(userEntity)
+        ))
+
+        request.parentProfile?.let {
+            val parentProfile = parentProfileService.createOrUpdateProfile(savedUser, it)
+            savedUser.parentProfile = parentProfile
+            userRepository.save(savedUser)
+            parentProfileService.syncPartner(parentProfile)
+        }
+
+        addAreaIfNotExists(savedUser.area)
+        eventPublisher.publish(savedUser.toUserUpdatedEvent())
+        return savedUser.toProfileResponse(imagesBaseUrl)
+    }
+
+    @Transactional
+    fun updateParentProfile(parentId: UUID, request: ParentProfileRequest): ProfileResponse {
+        val user = findById(parentId)
+        if (user.role != UserRole.PARENT) {
+            throw IllegalArgumentException("User is not a PARENT")
+        }
+
+        val parentProfile = parentProfileService.createOrUpdateProfile(user, request)
+        user.parentProfile = parentProfile
+        val savedUser = userRepository.save(user)
+        
+        if (savedUser.status == UserStatus.APPROVED) {
+            parentProfileService.syncPartner(parentProfile)
+        }
+
+        eventPublisher.publish(savedUser.toUserUpdatedEvent())
+        return savedUser.toProfileResponse(imagesBaseUrl)
+    }
+
+    private fun addAreaIfNotExists(areaName: String) {
+        val area = areaName.trim()
+        if (area.isNotEmpty()) {
+            val existing = areaRepository.findByName(area)
+            if (existing == null) {
+                areaRepository.save(Area(name = area, suggestedCount = 1))
+            }
+        }
     }
 }

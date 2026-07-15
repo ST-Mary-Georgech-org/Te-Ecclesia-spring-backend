@@ -7,6 +7,7 @@ import org.teEcclesia.identity.entity.enums.Gender
 import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.entity.enums.UserStatus
 import java.time.Instant
+import java.time.LocalDate
 import java.util.UUID
 
 @Entity
@@ -53,13 +54,13 @@ data class User(
     val createdAt: Instant = Instant.now(),
 
     @Column(nullable = false)
-    val birthDate: java.time.LocalDate,
+    val birthDate: LocalDate,
 
     @Column(nullable = false)
     val job: String,
 
-    @Column(nullable = false)
-    val buildingNo: String,
+    @Column(nullable = true)
+    val buildingNo: String? = null,
 
     @Column(nullable = false)
     val street: String,
@@ -76,8 +77,8 @@ data class User(
     @Column(nullable = false)
     val apartment: String,
 
-    @Column(nullable = true)
-    val specialMark: String? = null,
+    @Column(nullable = false)
+    val specialMark: String,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -86,6 +87,9 @@ data class User(
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     val status: UserStatus = UserStatus.UNVERIFIED,
+
+    @Column(nullable = true)
+    val statusReason: String? = null,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -115,15 +119,21 @@ data class User(
 
     @OneToMany(mappedBy = "user", cascade = [CascadeType.ALL], orphanRemoval = true)
     val refreshTokens: MutableList<RefreshToken> = mutableListOf(),
-    
+
     @OneToOne(mappedBy = "user", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
     val ordinationProfile: OrdinationProfile? = null,
 
     @OneToOne(mappedBy = "user", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
-    val makhdoomProfile: MakhdoomProfile? = null
+    val makhdoomProfile: MakhdoomProfile? = null,
+
+    @OneToOne(mappedBy = "user", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
+    val khademProfile: KhademProfile? = null,
+
+    @OneToOne(mappedBy = "user", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
+    var parentProfile: ParentProfile? = null
 ) {
-    @Transient
-    val fullName: String = "$firstName $secondName $thirdName $lastName"
+    val fullName: String
+        get() = "$firstName $secondName $thirdName $lastName"
 }
 
 fun User.toUserCreatedEvent(): UserCreatedEvent {

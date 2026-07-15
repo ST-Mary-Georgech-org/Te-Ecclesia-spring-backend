@@ -11,6 +11,9 @@ import org.teEcclesia.events.publisher.TeEcclesiaEventPublisher
 import org.teEcclesia.identity.IdentityTestApplication
 import org.teEcclesia.identity.api.dto.request.UpdateProfileRequest
 import org.teEcclesia.identity.entity.User
+import org.teEcclesia.identity.entity.enums.Gender
+import org.teEcclesia.identity.entity.enums.UserStatus
+import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.exception.UserNotFoundException
 import org.teEcclesia.identity.repository.*
 import org.teEcclesia.identity.service.UserService
@@ -20,6 +23,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.mock.web.MockMultipartFile
 import org.springframework.test.context.ActiveProfiles
 import java.time.Instant
+import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.*
 
@@ -155,13 +159,26 @@ class UserServiceIntegrationTest {
         val username = email.substringBefore("@")
         return userRepository.save(
             User(
-                username = username,
-                fullName = "Image User",
+                firstName = "Integration",
+                secondName = "User",
+                thirdName = "Test",
+                lastName = "Case",
+                displayName = "Integration User",
+                nationalId = "2900101010101" + (0..9).random(), // 14 digits
                 email = email,
                 phone = "123456_" + UUID.randomUUID().toString().take(6),
+                homePhone = "0223456789",
                 passwordHash = "encoded-password",
-                isEmailVerified = true,
-                isPhoneVerified = true,
+                birthDate = LocalDate.of(1990, 1, 1),
+                job = "Engineer",
+                street = "Main Street",
+                area = "Test Area",
+                floor = "1",
+                apartment = "1",
+                specialMark = "Near hospital",
+                gender = Gender.MALE,
+                status = UserStatus.APPROVED,
+                role = UserRole.GUEST,
                 createdAt = Instant.now().minus(2, ChronoUnit.DAYS),
                 imageUrl = imageUrl
             )
@@ -172,17 +189,20 @@ class UserServiceIntegrationTest {
     fun `updateProfile updates user data successfully if user exists`() {
         val existingUser = createUser(email = "profile-update@mail.com")
         val request = UpdateProfileRequest(
-            username = "israa_updated",
-            fullName = "Israa Updated",
+            firstName = "Israa",
+            secondName = "Updated",
+            thirdName = "Test",
+            lastName = "Case",
+            displayName = "Israa Updated",
             phone = "987654321",
             email = "new-email@mail.com"
         )
 
         userService.updateProfile(existingUser.id, request)
 
-        val updatedUser = userRepository.findByUsername("israa_updated")
+        val updatedUser = userRepository.findById(existingUser.id).orElse(null)
         assertThat(updatedUser).isNotNull()
-        assertThat(updatedUser?.fullName).isEqualTo("Israa Updated")
+        assertThat(updatedUser?.displayName).isEqualTo("Israa Updated")
         assertThat(updatedUser?.phone).isEqualTo("987654321")
         assertThat(updatedUser?.email).isEqualTo("new-email@mail.com")
     }

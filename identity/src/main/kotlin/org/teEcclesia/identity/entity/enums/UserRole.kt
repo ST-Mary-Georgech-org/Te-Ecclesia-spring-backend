@@ -3,7 +3,7 @@ package org.teEcclesia.identity.entity.enums
 enum class UserRole {
     KHADEM,
     MAKHDOOM,
-    WALY_AMR,
+    PARENT,
     KAHEN,
     ADMIN,
     GUEST

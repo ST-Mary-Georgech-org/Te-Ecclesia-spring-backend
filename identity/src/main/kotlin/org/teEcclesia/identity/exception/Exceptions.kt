@@ -26,3 +26,5 @@ class IncompleteProfileException(
 
 class PhoneNotVerifiedException(
     message: String = "User phone number is not verified") : RuntimeException(message)
+
+class ResourceNotFoundException(message: String) : RuntimeException(message)

@@ -5,10 +5,12 @@ import org.springframework.data.domain.Pageable
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import org.teEcclesia.identity.api.dto.request.RegisterRequest
+import org.teEcclesia.identity.api.dto.request.ActionReasonRequest
 import org.teEcclesia.identity.api.dto.response.ProfileResponse
 import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.service.UserService
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.teEcclesia.identity.api.dto.request.ParentProfileRequest
 import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.exception.UnauthorizedException
 import java.util.UUID
@@ -44,16 +46,24 @@ class UserController(
     }
 
     @PostMapping("/{userId}/reject")
-    fun rejectUser(@AuthenticationPrincipal callerId: UUID, @PathVariable userId: UUID): ResponseEntity<Void> {
+    fun rejectUser(
+        @AuthenticationPrincipal callerId: UUID, 
+        @PathVariable userId: UUID,
+        @RequestBody request: ActionReasonRequest
+    ): ResponseEntity<Void> {
         authorizeAdminOrKhadem(callerId)
-        userService.rejectUser(userId)
+        userService.rejectUser(userId, request.reason)
         return ResponseEntity.ok().build()
     }
 
     @PostMapping("/{userId}/ban")
-    fun banUser(@AuthenticationPrincipal callerId: UUID, @PathVariable userId: UUID): ResponseEntity<Void> {
+    fun banUser(
+        @AuthenticationPrincipal callerId: UUID, 
+        @PathVariable userId: UUID,
+        @RequestBody request: ActionReasonRequest
+    ): ResponseEntity<Void> {
         authorizeAdminOrKhadem(callerId)
-        userService.banUser(userId)
+        userService.banUser(userId, request.reason)
         return ResponseEntity.ok().build()
     }
 
@@ -64,5 +74,24 @@ class UserController(
     ): ResponseEntity<ProfileResponse> {
         authorizeAdminOrKhadem(callerId)
         return ResponseEntity.ok(userService.createMakhdoomDirectly(request))
+    }
+
+    @PostMapping("/parent")
+    fun createParent(
+        @AuthenticationPrincipal callerId: UUID,
+        @RequestBody request: RegisterRequest
+    ): ResponseEntity<ProfileResponse> {
+        authorizeAdminOrKhadem(callerId)
+        return ResponseEntity.ok(userService.createParentDirectly(request))
+    }
+
+    @PutMapping("/{id}/parent-profile")
+    fun updateParentProfile(
+        @AuthenticationPrincipal callerId: UUID,
+        @PathVariable id: UUID,
+        @RequestBody request: ParentProfileRequest
+    ): ResponseEntity<ProfileResponse> {
+        authorizeAdminOrKhadem(callerId)
+        return ResponseEntity.ok(userService.updateParentProfile(id, request))
     }
 }

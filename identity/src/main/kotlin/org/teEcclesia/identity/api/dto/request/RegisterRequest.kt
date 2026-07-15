@@ -5,11 +5,11 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Pattern
 import jakarta.validation.constraints.Size
 import org.teEcclesia.identity.entity.User
-import org.teEcclesia.identity.entity.enums.Gender
 import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.entity.enums.UserStatus
+import org.teEcclesia.identity.utils.extractBirthDate
+import org.teEcclesia.identity.utils.extractGender
 import java.time.Instant
-import java.time.LocalDate
 import java.util.UUID
 
 data class RegisterRequest(
@@ -50,8 +50,6 @@ data class RegisterRequest(
 
     val imageUrl: String? = null,
 
-    val birthDate: LocalDate,
-
     @field:NotBlank(message = "Job is required")
     val job: String,
 
@@ -72,9 +70,8 @@ data class RegisterRequest(
     @field:NotBlank(message = "Apartment is required")
     val apartment: String,
 
-    val specialMark: String? = null,
-
-    val gender: Gender,
+    @field:NotBlank(message = "Special mark is required")
+    val specialMark: String,
 
     val role: UserRole? = null,
 
@@ -83,7 +80,8 @@ data class RegisterRequest(
     val externalConfessionChurch: String? = null,
 
     val ordinationProfile: OrdinationProfileRequest? = null,
-    val makhdoomProfile: MakhdoomProfileRequest? = null
+    val makhdoomProfile: MakhdoomProfileRequest? = null,
+    val parentProfile: ParentProfileRequest? = null
 )
 
 fun RegisterRequest.toEntity(hashedPassword: String, confessionPriest: User? = null, id: UUID = UUID.randomUUID()): User {
@@ -101,7 +99,7 @@ fun RegisterRequest.toEntity(hashedPassword: String, confessionPriest: User? = n
         passwordHash = hashedPassword,
         imageUrl = this.imageUrl,
         createdAt = Instant.now(),
-        birthDate = this.birthDate,
+        birthDate = extractBirthDate(this.nationalId),
         job = this.job,
         buildingNo = this.buildingNo,
         street = this.street,
@@ -110,7 +108,7 @@ fun RegisterRequest.toEntity(hashedPassword: String, confessionPriest: User? = n
         floor = this.floor,
         apartment = this.apartment,
         specialMark = this.specialMark,
-        gender = this.gender,
+        gender = extractGender(this.nationalId),
         status = UserStatus.PROFILE_INCOMPLETE,
         role = this.role ?: UserRole.GUEST,
         confessionPriest = confessionPriest,

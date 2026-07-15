@@ -24,18 +24,19 @@ class UserCodeGeneratorTest {
         every { user.gender } returns Gender.MALE
         every { user.ordinationProfile } returns null
 
+        every { user.nationalId } returns "29901011234567" // Birth year 99, last 4 digits 4567
+
         val yearStr = LocalDate.now().year.toString().takeLast(2)
-        val prefix = "${yearStr}H"
+        val prefix = "H${yearStr}99"
         
-        every { userRepository.findMaxCodeByPrefix(prefix) } returns null
-        every { userRepository.findByCode("${prefix}000001") } returns null
+        every { userRepository.findByCode("${prefix}4567") } returns null
 
         // Act
         val code = generator.generateCode(user)
 
         // Assert
         assertTrue(code.startsWith(prefix))
-        assertEquals("${prefix}000001", code)
+        assertEquals("${prefix}4567", code)
     }
 
     @Test
@@ -46,16 +47,19 @@ class UserCodeGeneratorTest {
         every { user.gender } returns Gender.FEMALE
         every { user.ordinationProfile } returns null
 
+        every { user.nationalId } returns "30501011234567" // Birth year 05, last 4 digits 4567
+
         val yearStr = LocalDate.now().year.toString().takeLast(2)
-        val prefix = "${yearStr}G"
+        val prefix = "G${yearStr}05"
         
-        every { userRepository.findMaxCodeByPrefix(prefix) } returns "${prefix}000015"
-        every { userRepository.findByCode("${prefix}000016") } returns null
+        // Mock that 4567 already exists, but 4568 does not
+        every { userRepository.findByCode("${prefix}4567") } returns mockk()
+        every { userRepository.findByCode("${prefix}4568") } returns null
 
         // Act
         val code = generator.generateCode(user)
 
         // Assert
-        assertEquals("${prefix}000016", code)
+        assertEquals("${prefix}4568", code)
     }
 }

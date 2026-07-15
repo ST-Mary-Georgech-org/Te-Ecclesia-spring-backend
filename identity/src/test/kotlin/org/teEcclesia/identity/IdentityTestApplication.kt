@@ -21,6 +21,11 @@ import org.springframework.context.annotation.Bean
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.security.crypto.password.PasswordEncoder
+import org.teEcclesia.identity.repository.EducationalStageRepository
+import org.teEcclesia.identity.repository.EducationalYearRepository
+import org.teEcclesia.identity.repository.RankRepository
+import org.teEcclesia.identity.service.ParentProfileService
+import org.teEcclesia.identity.service.UserCodeGenerator
 
 @SpringBootConfiguration
 @EnableAutoConfiguration
@@ -32,10 +37,13 @@ class IdentityTestApplication {
     fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
 
     @Bean
-    fun emailService(): EmailService = mockk(relaxed = true)
+    fun userCodeGenerator(): UserCodeGenerator = mockk(relaxed = true)
 
     @Bean
     fun jwtUtil(): JwtUtil = mockk(relaxed = true)
+
+    @Bean
+    fun emailService(): EmailService = mockk(relaxed = true)
 
     @Bean
     fun teEcclesiaEventPublisher(): TeEcclesiaEventPublisher = mockk(relaxed = true)
@@ -71,7 +79,10 @@ class IdentityTestApplication {
         @Value("\${whatsapp.business-phone}") whatsappBusinessPhone: String,
         @Value("\${whatsapp.app-secret:}") whatsappAppSecret: String,
         @Value("\${whatsapp.webhook.verify-token}") expectedVerifyToken: String,
-        @Value("\${WHATSAPP_ACCESS_TOKEN:}") whatsappAccessToken: String
+        @Value("\${WHATSAPP_ACCESS_TOKEN:}") whatsappAccessToken: String,
+        rankRepository: RankRepository,
+        educationalStageRepository: EducationalStageRepository,
+        educationalYearRepository: EducationalYearRepository
     ): AuthService {
         return AuthService(
             userRepository = userRepository,
@@ -87,8 +98,17 @@ class IdentityTestApplication {
             whatsappBusinessPhone = whatsappBusinessPhone,
             whatsappAppSecret = whatsappAppSecret,
             expectedVerifyToken = expectedVerifyToken,
-            whatsappAccessToken = whatsappAccessToken
+            whatsappAccessToken = whatsappAccessToken,
+            rankRepository = rankRepository,
+            educationalStageRepository = educationalStageRepository,
+            educationalYearRepository = educationalYearRepository,
+            parentProfileService = parentProfileService()
         )
+    }
+
+    @Bean
+    fun parentProfileService(): ParentProfileService {
+        return mockk<ParentProfileService>(relaxed = true)
     }
 
     @Bean
@@ -96,13 +116,25 @@ class IdentityTestApplication {
         userRepository: UserRepository,
         imageStorageService: ImageStorageService,
         teEcclesiaEventPublisher: TeEcclesiaEventPublisher,
-        @Value("\${identity.resources.profile-image-directory}") profileImageDirectory: String
+        @Value("\${identity.resources.profile-image-directory}") profileImageDirectory: String,
+        userCodeGenerator: UserCodeGenerator,
+        passwordEncoder: PasswordEncoder,
+        educationalStageRepository: EducationalStageRepository,
+        educationalYearRepository: EducationalYearRepository,
+        @Value("\${cdn.endpoint:}") cdnEndpoint: String
     ): UserService {
         return UserService(
             userRepository = userRepository,
             imageStorageService = imageStorageService,
             eventPublisher = teEcclesiaEventPublisher,
             profileImageDirectory = profileImageDirectory,
+            userCodeGenerator = userCodeGenerator,
+            passwordEncoder = passwordEncoder,
+            educationalStageRepository = educationalStageRepository,
+            educationalYearRepository = educationalYearRepository,
+            areaRepository = mockk(relaxed = true),
+            cdnEndpoint = cdnEndpoint,
+            parentProfileService = parentProfileService()
         )
     }
 

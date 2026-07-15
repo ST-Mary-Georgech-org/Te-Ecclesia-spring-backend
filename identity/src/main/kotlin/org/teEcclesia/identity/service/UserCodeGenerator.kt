@@ -13,22 +13,16 @@ class UserCodeGenerator(
     private val userRepository: UserRepository
 ) {
     fun generateCode(user: User): String {
-        val year = LocalDate.now().year.toString().takeLast(2)
         val rankChar = getRankChar(user)
-        val prefix = "$year$rankChar"
+        val regYear = LocalDate.now().year.toString().takeLast(2)
+        val birthYear = user.nationalId.substring(1, 3)
+        val prefix = "$rankChar$regYear$birthYear"
         
-        val latestCode = userRepository.findMaxCodeByPrefix(prefix)
-        var sequenceNumber = 1
-        
-        if (latestCode != null) {
-            val seqStr = latestCode.substring(3)
-            sequenceNumber = (seqStr.toIntOrNull() ?: 0) + 1
-        }
-        
+        var sequenceNumber = user.nationalId.takeLast(4).toIntOrNull() ?: 0
         var candidateCode: String
         
         do {
-            val sequenceStr = String.format("%06d", sequenceNumber)
+            val sequenceStr = String.format("%04d", sequenceNumber)
             candidateCode = "$prefix$sequenceStr"
             
             val exists = userRepository.findByCode(candidateCode) != null
@@ -45,15 +39,6 @@ class UserCodeGenerator(
         if (user.role == UserRole.KAHEN) return 'H'
         if (user.gender == Gender.FEMALE) return 'G'
         
-        val ordinationRankKey = user.ordinationProfile?.rank?.key
-        
-        return when (ordinationRankKey) {
-            RankKey.EPSALTOS -> 'B'
-            RankKey.OGNOSTOS -> 'C'
-            RankKey.EPODKIAKON -> 'D'
-            RankKey.DIAKON -> 'E'
-            RankKey.ARCHDIAKON -> 'F'
-            null -> 'A' // بدون
-        }
+        return user.ordinationProfile?.rank?.codeLetter ?: 'A'
     }
 }
