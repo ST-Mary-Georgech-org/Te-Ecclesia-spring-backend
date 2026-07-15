@@ -3,6 +3,9 @@ package org.teEcclesia.identity.entity
 import jakarta.persistence.*
 import org.teEcclesia.events.identity.UserCreatedEvent
 import org.teEcclesia.events.identity.UserUpdatedEvent
+import org.teEcclesia.identity.entity.enums.Gender
+import org.teEcclesia.identity.entity.enums.UserRole
+import org.teEcclesia.identity.entity.enums.UserStatus
 import java.time.Instant
 import java.util.UUID
 
@@ -13,14 +16,29 @@ data class User(
     @Column(columnDefinition = "uuid", updatable = false, nullable = false)
     val id: UUID = UUID.randomUUID(),
 
-    @Column(nullable = false, unique = true)
-    val username: String,
+    @Column(nullable = false)
+    val firstName: String,
 
     @Column(nullable = false)
-    val fullName: String,
+    val secondName: String,
+
+    @Column(nullable = false)
+    val thirdName: String,
+
+    @Column(nullable = false)
+    val lastName: String,
+
+    @Column(nullable = false)
+    val displayName: String,
+
+    @Column(nullable = false, unique = true, length = 14)
+    val nationalId: String,
 
     @Column(nullable = false, unique = true)
     val phone: String,
+
+    @Column(nullable = false)
+    val homePhone: String,
 
     @Column(nullable = true, unique = true)
     val email: String? = null,
@@ -35,6 +53,58 @@ data class User(
     val createdAt: Instant = Instant.now(),
 
     @Column(nullable = false)
+    val birthDate: java.time.LocalDate,
+
+    @Column(nullable = false)
+    val job: String,
+
+    @Column(nullable = false)
+    val buildingNo: String,
+
+    @Column(nullable = false)
+    val street: String,
+
+    @Column(nullable = true)
+    val streetBranch: String? = null,
+
+    @Column(nullable = false)
+    val area: String,
+
+    @Column(nullable = false)
+    val floor: String,
+
+    @Column(nullable = false)
+    val apartment: String,
+
+    @Column(nullable = true)
+    val specialMark: String? = null,
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    val gender: Gender,
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    val status: UserStatus = UserStatus.UNVERIFIED,
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    val role: UserRole,
+
+    @Column(nullable = true, unique = true, length = 9)
+    val code: String? = null,
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "confession_priest_id")
+    val confessionPriest: User? = null,
+
+    @Column(nullable = true)
+    val externalConfessionPriestName: String? = null,
+
+    @Column(nullable = true)
+    val externalConfessionChurch: String? = null,
+
+    @Column(nullable = false)
     val isEmailVerified: Boolean = false,
 
     @Column(nullable = false)
@@ -44,14 +114,23 @@ data class User(
     val accountVerifications: MutableList<AccountVerification> = mutableListOf(),
 
     @OneToMany(mappedBy = "user", cascade = [CascadeType.ALL], orphanRemoval = true)
-    val refreshTokens: MutableList<RefreshToken> = mutableListOf()
-)
+    val refreshTokens: MutableList<RefreshToken> = mutableListOf(),
+    
+    @OneToOne(mappedBy = "user", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
+    val ordinationProfile: OrdinationProfile? = null,
+
+    @OneToOne(mappedBy = "user", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
+    val makhdoomProfile: MakhdoomProfile? = null
+) {
+    @Transient
+    val fullName: String = "$firstName $secondName $thirdName $lastName"
+}
 
 fun User.toUserCreatedEvent(): UserCreatedEvent {
     return UserCreatedEvent(
         id = id,
         password = passwordHash,
-        fullName = fullName,
+        fullName = this.fullName,
         imageUrl = imageUrl,
     )
 }
@@ -60,7 +139,7 @@ fun User.toUserUpdatedEvent(): UserUpdatedEvent {
     return UserUpdatedEvent(
         id = id,
         password = passwordHash,
-        fullName = fullName,
+        fullName = this.fullName,
         imageUrl = imageUrl,
     )
 }
