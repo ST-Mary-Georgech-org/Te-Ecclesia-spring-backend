@@ -4,7 +4,11 @@ import org.teEcclesia.identity.entity.User
 
 data class ProfileResponse(
     val id: String,
-    val username: String,
+    val firstName: String,
+    val secondName: String,
+    val thirdName: String,
+    val lastName: String,
+    val displayName: String,
     val fullName: String,
     val phone: String,
     val email: String?,
@@ -21,7 +25,11 @@ fun User.toProfileResponse(imageBaseUrl: String): ProfileResponse {
     }
     return ProfileResponse(
         id = id.toString(),
-        username = username,
+        firstName = firstName,
+        secondName = secondName,
+        thirdName = thirdName,
+        lastName = lastName,
+        displayName = displayName,
         fullName = fullName,
         phone = phone,
         email = email,

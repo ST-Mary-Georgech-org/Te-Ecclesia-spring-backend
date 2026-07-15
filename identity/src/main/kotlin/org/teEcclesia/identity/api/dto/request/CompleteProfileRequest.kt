@@ -1,0 +1,14 @@
+package org.teEcclesia.identity.api.dto.request
+
+import org.teEcclesia.identity.entity.enums.UserRole
+
+data class CompleteProfileRequest(
+    val identifier: String,
+
+    val password: String,
+
+    val role: UserRole,
+
+    val ordinationProfile: OrdinationProfileRequest? = null,
+    val makhdoomProfile: MakhdoomProfileRequest? = null
+)

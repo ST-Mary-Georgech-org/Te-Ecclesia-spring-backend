@@ -1,7 +1,6 @@
 package org.teEcclesia.identity.api.dto.request
 
 import jakarta.validation.constraints.NotBlank
-import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Pattern
 import jakarta.validation.constraints.Size
 import org.teEcclesia.identity.entity.VerificationMethod
@@ -21,6 +20,5 @@ data class ResetPasswordRequest(
     )
     val newPassword: String,
 
-    @field:NotNull(message = "Method is required")
     val method: VerificationMethod
 )
