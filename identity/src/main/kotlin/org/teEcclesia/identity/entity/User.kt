@@ -10,6 +10,9 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 
+import org.hibernate.envers.Audited
+
+@Audited
 @Entity
 @Table(name = "users", schema = "identity")
 data class User(

@@ -3,6 +3,9 @@ package org.teEcclesia.identity.entity
 import jakarta.persistence.*
 import org.teEcclesia.identity.entity.lookups.Rank
 
+import org.hibernate.envers.Audited
+
+@Audited
 @Entity
 @Table(name = "ordination_profiles", schema = "identity")
 data class OrdinationProfile(

@@ -15,6 +15,7 @@ dependencies {
 	implementation(projects.events)
 	implementation(projects.storage)
 	implementation(projects.i18n)
+	implementation(projects.audit)
 	implementation("org.springframework.boot:spring-boot-starter-web")
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	runtimeOnly("org.postgresql:postgresql")

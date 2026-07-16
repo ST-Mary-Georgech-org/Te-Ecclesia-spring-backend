@@ -6,6 +6,9 @@ import java.time.Instant
 import java.util.*
 
 
+import org.hibernate.envers.Audited
+
+@Audited
 @Entity
 @Table(name = "notifications", schema = "notification")
 data class Notification(

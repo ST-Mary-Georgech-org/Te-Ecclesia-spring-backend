@@ -5,6 +5,9 @@ import org.teEcclesia.identity.entity.lookups.EducationalStage
 import org.teEcclesia.identity.entity.lookups.EducationalYear
 
 
+import org.hibernate.envers.Audited
+
+@Audited
 @Entity
 @Table(name = "khadem_profiles", schema = "identity")
 data class KhademProfile(
@@ -30,6 +33,7 @@ data class KhademProfile(
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "khadem_responsible_stages",
+        schema = "identity",
         joinColumns = [JoinColumn(name = "khadem_profile_id")],
         inverseJoinColumns = [JoinColumn(name = "educational_stage_id")]
     )
@@ -38,6 +42,7 @@ data class KhademProfile(
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "khadem_responsible_years",
+        schema = "identity",
         joinColumns = [JoinColumn(name = "khadem_profile_id")],
         inverseJoinColumns = [JoinColumn(name = "educational_year_id")]
     )

@@ -32,7 +32,7 @@ class UserVerificationListener(
 
         while (hasMore) {
             val pageable = PageRequest.of(page, batchSize)
-            val khademsPage = userRepository.findByRole(UserRole.KHADEM, pageable)
+            val khademsPage = userRepository.findByRole(UserRole.KHADEM, pageable) //TODO: and can approve
 
             if (khademsPage.isEmpty) {
                 hasMore = false

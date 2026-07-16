@@ -5,6 +5,9 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.*
 
+import org.hibernate.envers.Audited
+
+@Audited
 @Entity
 @Table(name = "account_verification", schema = "identity")
 data class AccountVerification(

@@ -1,8 +1,10 @@
 package org.teEcclesia.identity.entity
 
 import jakarta.persistence.*
-import java.util.UUID
 
+import org.hibernate.envers.Audited
+
+@Audited
 @Entity
 @Table(name = "parent_profiles", schema = "identity")
 data class ParentProfile(
@@ -21,6 +23,7 @@ data class ParentProfile(
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "parent_children",
+        schema = "identity",
         joinColumns = [JoinColumn(name = "parent_profile_id")],
         inverseJoinColumns = [JoinColumn(name = "child_id")]
     )

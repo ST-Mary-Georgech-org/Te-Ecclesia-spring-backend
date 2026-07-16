@@ -3,6 +3,9 @@ package org.teEcclesia.identity.entity
 import jakarta.persistence.*
 import java.time.Instant
 
+import org.hibernate.envers.Audited
+
+@Audited
 @Entity
 @Table(name = "refresh_token", schema = "identity")
 data class RefreshToken(

@@ -2,6 +2,9 @@ package org.teEcclesia.identity.entity.lookups
 
 import jakarta.persistence.*
 
+import org.hibernate.envers.Audited
+
+@Audited
 @Entity
 @Table(name = "educational_stages", schema = "identity")
 data class EducationalStage(

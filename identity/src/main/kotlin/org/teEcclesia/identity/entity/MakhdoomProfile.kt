@@ -5,6 +5,9 @@ import org.teEcclesia.identity.entity.enums.ShamamsaStudyStatus
 import org.teEcclesia.identity.entity.lookups.EducationalStage
 import org.teEcclesia.identity.entity.lookups.EducationalYear
 
+import org.hibernate.envers.Audited
+
+@Audited
 @Entity
 @Table(name = "makhdoom_profiles", schema = "identity")
 data class MakhdoomProfile(
