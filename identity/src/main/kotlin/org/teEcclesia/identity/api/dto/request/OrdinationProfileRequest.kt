@@ -1,16 +1,15 @@
 package org.teEcclesia.identity.api.dto.request
 
-import jakarta.validation.constraints.NotBlank
-
 data class OrdinationProfileRequest(
     val rankId: Long,
     
-    val ordinationYear: Int,
+    val isOrdinationInAnotherChurch: Boolean,
     
-    @field:NotBlank(message = "Bishop name is required")
-    val bishopName: String,
+    val ordinationYear: Int? = null,
     
-    val ordinationPlace: String,
+    val bishopName: String? = null,
+    
+    val ordinationPlace: String? = null,
     
     val certificateImageUrl: String? = null
 )

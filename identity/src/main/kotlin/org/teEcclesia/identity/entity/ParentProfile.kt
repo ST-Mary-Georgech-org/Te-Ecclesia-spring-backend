@@ -24,5 +24,8 @@ data class ParentProfile(
         joinColumns = [JoinColumn(name = "parent_profile_id")],
         inverseJoinColumns = [JoinColumn(name = "child_id")]
     )
-    var children: MutableList<User> = mutableListOf()
+    var children: MutableList<User> = mutableListOf(),
+
+    @Column(nullable = true)
+    var nationalIdImageUrl: String? = null
 )

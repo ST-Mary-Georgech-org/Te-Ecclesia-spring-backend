@@ -12,7 +12,10 @@ import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
+import org.teEcclesia.identity.api.dto.request.ActionReasonRequest
+import org.teEcclesia.identity.api.dto.request.ApproveUserRequest
 import org.teEcclesia.identity.api.dto.response.toProfileResponse
+import org.teEcclesia.identity.exception.UnauthorizedException
 import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.entity.toUserUpdatedEvent
@@ -41,7 +44,8 @@ class UserService(
     private val educationalYearRepository: EducationalYearRepository,
     private val areaRepository: AreaRepository,
     @param:Value("\${storage.teEcclesia.cdn-endpoint}") private val cdnEndpoint: String,
-    @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String
+    @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String,
+    @param:Value("\${identity.resources.documents-directory}") private val documentsDirectory: String
 ) {
     private val imagesBaseUrl: String = "$cdnEndpoint/$profileImageDirectory"
     fun existById(userId: UUID): Boolean = userRepository.existsById(userId)
@@ -106,14 +110,39 @@ class UserService(
         return users.associate { it.id.toString() to (it.email ?: "") }
     }
 
-    fun getUsersByStatus(status: UserStatus, pageable: Pageable): Page<ProfileResponse> {
-        return userRepository.findByStatus(status, pageable).map { it.toProfileResponse(imagesBaseUrl) }
+    fun getUsersByStatus(status: UserStatus, stageId: Long?, yearId: Long?, pageable: Pageable): Page<ProfileResponse> {
+        return userRepository.findByStatusAndEducationalFilters(status, stageId, yearId, pageable).map { it.toProfileResponse(imagesBaseUrl) }
     }
 
     @Transactional
-    fun approveUser(userId: UUID) {
-        val user = findById(userId)
-        val code = user.code ?: userCodeGenerator.generateCode(user)
+    fun approveUser(userId: UUID, request: ApproveUserRequest?) {
+        var user = findById(userId)
+        
+        request?.updateProfileData?.let { updateData ->
+            user = user.copy(
+                firstName = updateData.firstName,
+                secondName = updateData.secondName,
+                thirdName = updateData.thirdName,
+                lastName = updateData.lastName,
+                displayName = updateData.displayName,
+                nationalId = updateData.nationalId,
+                phone = updateData.phone,
+                email = updateData.email,
+                job = updateData.job,
+                buildingNo = updateData.buildingNo,
+                street = updateData.street,
+                streetBranch = updateData.streetBranch,
+                area = updateData.area,
+                floor = updateData.floor,
+                apartment = updateData.apartment,
+                specialMark = updateData.specialMark,
+                externalConfessionPriestName = updateData.externalConfessionPriestName,
+                externalConfessionChurch = updateData.externalConfessionChurch,
+                externalConfessionPhone = updateData.externalConfessionPhone
+            )
+        }
+
+        val code = request?.customCode ?: user.code ?: userCodeGenerator.generateCode(user)
         
         val updatedUser = user.copy(
             status = UserStatus.APPROVED,
@@ -147,8 +176,38 @@ class UserService(
         eventPublisher.publish(updatedUser.toUserUpdatedEvent())
     }
 
+    fun isResponsibleFor(caller: User, target: User): Boolean {
+        if (caller.role == UserRole.ADMIN) return true
+        
+        val callerKhadem = caller.khademProfile ?: return false
+        val targetStageId = target.makhdoomProfile?.educationalStage?.id ?: target.khademProfile?.educationalStage?.id
+        val targetYearId = target.makhdoomProfile?.educationalYear?.id ?: target.khademProfile?.educationalYear?.id
+        
+        if (targetStageId != null && callerKhadem.responsibleStages.any { it.id == targetStageId }) return true
+        if (targetYearId != null && callerKhadem.responsibleYears.any { it.id == targetYearId }) return true
+        
+        return false
+    }
+
     @Transactional
-    fun createMakhdoomDirectly(request: RegisterRequest): ProfileResponse {
+    fun updateCode(callerId: UUID, userId: UUID, newCode: String) {
+        val caller = findById(callerId)
+        val user = findById(userId)
+        if (!isResponsibleFor(caller, user)) {
+            throw UnauthorizedException("User is not authorized to edit this profile")
+        }
+        
+        val existingUser = userRepository.findByCode(newCode)
+        if (existingUser != null && existingUser.id != userId) {
+            throw IllegalArgumentException("Code already exists for another user")
+        }
+
+        val savedUser = userRepository.save(user.copy(code = newCode))
+        eventPublisher.publish(savedUser.toUserUpdatedEvent())
+    }
+
+    @Transactional
+    fun createMakhdoomDirectly(request: RegisterRequest, image: MultipartFile? = null, identityDocument: MultipartFile? = null): ProfileResponse {
         var confessionPriest: User? = null
         if (request.confessionPriestId != null) {
             confessionPriest = findById(request.confessionPriestId)
@@ -156,7 +215,20 @@ class UserService(
 
         val rawPassword = request.password
         val encodedPassword = passwordEncoder.encode(rawPassword)!!
-        val userEntity = request.toEntity(encodedPassword, confessionPriest)
+        val userId = UUID.randomUUID()
+        
+        val finalImageUrl = if (image != null) {
+            imageStorageService.uploadImage(image, userId.toString(), profileImageDirectory)
+        } else {
+            request.imageUrl
+        }
+
+        val userEntity = request.toEntity(
+            hashedPassword = encodedPassword, 
+            confessionPriest = confessionPriest,
+            id = userId,
+            imageUrl = finalImageUrl
+        )
         
         // Add Makhdoom profile
         val makhdoomProfile = if (request.makhdoomProfile != null) {
@@ -168,6 +240,12 @@ class UserService(
                     java.lang.IllegalArgumentException("Educational year not found")
                 }
             }
+            val finalDocumentUrl = if (identityDocument != null) {
+                imageStorageService.uploadImage(identityDocument, "doc_${userId}", documentsDirectory)
+            } else {
+                request.makhdoomProfile.identityDocumentImageUrl
+            }
+
             MakhdoomProfile(
                 user = userEntity,
                 shamamsaStudyStatus = request.makhdoomProfile.shamamsaStudyStatus,
@@ -178,7 +256,8 @@ class UserService(
                 motherPhone = request.makhdoomProfile.motherPhone,
                 motherWhatsapp = request.makhdoomProfile.motherWhatsapp,
                 isFatherDeceased = request.makhdoomProfile.isFatherDeceased,
-                isMotherDeceased = request.makhdoomProfile.isMotherDeceased
+                isMotherDeceased = request.makhdoomProfile.isMotherDeceased,
+                identityDocumentImageUrl = finalDocumentUrl
             )
         } else null
         
@@ -198,7 +277,7 @@ class UserService(
     }
 
     @Transactional
-    fun createParentDirectly(request: RegisterRequest): ProfileResponse {
+    fun createParentDirectly(request: RegisterRequest, image: MultipartFile? = null, nationalIdImage: MultipartFile? = null): ProfileResponse {
         var confessionPriest: User? = null
         if (request.confessionPriestId != null) {
             confessionPriest = findById(request.confessionPriestId)
@@ -206,7 +285,20 @@ class UserService(
 
         val rawPassword = request.password
         val encodedPassword = passwordEncoder.encode(rawPassword)!!
-        val userEntity = request.toEntity(encodedPassword, confessionPriest)
+        val userId = UUID.randomUUID()
+
+        val finalImageUrl = if (image != null) {
+            imageStorageService.uploadImage(image, userId.toString(), profileImageDirectory)
+        } else {
+            request.imageUrl
+        }
+
+        val userEntity = request.toEntity(
+            hashedPassword = encodedPassword, 
+            confessionPriest = confessionPriest,
+            id = userId,
+            imageUrl = finalImageUrl
+        )
         
         val savedUser = userRepository.save(userEntity.copy(
             status = UserStatus.APPROVED, // Direct creations by Khadem are automatically approved
@@ -216,8 +308,15 @@ class UserService(
             code = userCodeGenerator.generateCode(userEntity)
         ))
 
+        val finalDocumentUrl = if (nationalIdImage != null) {
+            imageStorageService.uploadImage(nationalIdImage, "doc_${userId}", documentsDirectory)
+        } else {
+            request.parentProfile?.nationalIdImageUrl
+        }
+
         request.parentProfile?.let {
             val parentProfile = parentProfileService.createOrUpdateProfile(savedUser, it)
+            parentProfile.nationalIdImageUrl = finalDocumentUrl
             savedUser.parentProfile = parentProfile
             userRepository.save(savedUser)
             parentProfileService.syncPartner(parentProfile)

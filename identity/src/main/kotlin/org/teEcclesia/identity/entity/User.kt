@@ -59,8 +59,8 @@ data class User(
     @Column(nullable = false)
     val job: String,
 
-    @Column(nullable = true)
-    val buildingNo: String? = null,
+    @Column(nullable = false)
+    val buildingNo: String, 
 
     @Column(nullable = false)
     val street: String,
@@ -74,8 +74,8 @@ data class User(
     @Column(nullable = false)
     val floor: String,
 
-    @Column(nullable = false)
-    val apartment: String,
+    @Column(nullable = true)
+    val apartment: String? = null,
 
     @Column(nullable = false)
     val specialMark: String,
@@ -107,6 +107,9 @@ data class User(
 
     @Column(nullable = true)
     val externalConfessionChurch: String? = null,
+
+    @Column(nullable = true)
+    val externalConfessionPhone: String? = null,
 
     @Column(nullable = false)
     val isEmailVerified: Boolean = false,

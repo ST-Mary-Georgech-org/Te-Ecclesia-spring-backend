@@ -37,6 +37,8 @@ import java.security.MessageDigest
 import java.net.URLEncoder
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import org.springframework.web.multipart.MultipartFile
+import org.teEcclesia.storage.service.ImageStorageService
 import java.util.*
 
 @Service
@@ -55,16 +57,19 @@ class AuthService(
     private val rankRepository: RankRepository,
     private val educationalStageRepository: EducationalStageRepository,
     private val educationalYearRepository: EducationalYearRepository,
+    private val imageStorageService: ImageStorageService,
+    @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String,
     @param:Value("\${whatsapp.business-number}") private val whatsappBusinessNumber: String,
     @param:Value("\${whatsapp.business-phone}") private val whatsappBusinessPhone: String,
     @param:Value("\${whatsapp.app-secret:}") private val whatsappAppSecret: String,
     @param:Value("\${whatsapp.webhook.verify-token}") private val expectedVerifyToken: String,
-    @param:Value("\${whatsapp.access-token:}") private val whatsappAccessToken: String
+    @param:Value("\${whatsapp.access-token:}") private val whatsappAccessToken: String,
+    @param:Value("\${identity.resources.documents-directory}") private val documentsDirectory: String
 ) {
 
     val logger: Logger = LoggerFactory.getLogger(javaClass)
 
-    fun register(request: RegisterRequest) {
+    fun register(request: RegisterRequest, image: MultipartFile? = null, certificateImage: MultipartFile? = null) {
         val existingByPhone = userRepository.findByPhone(request.phone)
         if (existingByPhone != null && existingByPhone.isPhoneVerified) {
             throw UserAlreadyExistsException("Phone number is already registered and verified.")
@@ -93,11 +98,28 @@ class AuthService(
             }
         }
 
-        val userToSave = existingByPhone?.let {
-            request.toEntity(passwordEncoder.encode(request.password)!!, confessionPriest, id = existingByPhone.id)
-        } ?: request.toEntity(passwordEncoder.encode(request.password)!!, confessionPriest)
+        val userId = existingByPhone?.id ?: UUID.randomUUID()
+        
+        val finalImageUrl = if (image != null) {
+            imageStorageService.uploadImage(image, userId.toString(), profileImageDirectory)
+        } else {
+            request.imageUrl
+        }
 
-        val ordinationProfile = request.ordinationProfile?.let { createOrdinationProfile(userToSave, it) }
+        val userToSave = request.toEntity(
+            hashedPassword = passwordEncoder.encode(request.password)!!,
+            confessionPriest = confessionPriest,
+            id = userId,
+            imageUrl = finalImageUrl
+        )
+
+        val finalCertificateUrl = if (certificateImage != null) {
+            imageStorageService.uploadImage(certificateImage, "cert_${userId}", documentsDirectory)
+        } else {
+            request.ordinationProfile?.certificateImageUrl
+        }
+
+        val ordinationProfile = request.ordinationProfile?.let { createOrdinationProfile(userToSave, it, finalCertificateUrl) }
         val makhdoomProfile = request.makhdoomProfile?.let { createMakhdoomProfile(userToSave, it) }
         val savedUser = userRepository.save(userToSave.copy(
             ordinationProfile = ordinationProfile ?: userToSave.ordinationProfile,
@@ -119,7 +141,7 @@ class AuthService(
         }
 
 
-        val ordinationProfile = request.ordinationProfile?.let { createOrdinationProfile(user, it) }
+        val ordinationProfile = request.ordinationProfile?.let { createOrdinationProfile(user, it, it.certificateImageUrl) }
         val makhdoomProfile = request.makhdoomProfile?.let { createMakhdoomProfile(user, it) }
         val khademProfile = request.khademProfile?.let { createKhademProfile(user, it) }
 
@@ -393,17 +415,18 @@ class AuthService(
         } ?: throw EntityNotFoundException("User not found with this identifier")
     }
 
-    private fun createOrdinationProfile(user: User, dto: OrdinationProfileRequest): OrdinationProfile {
+    private fun createOrdinationProfile(user: User, dto: OrdinationProfileRequest, finalCertificateUrl: String?): OrdinationProfile {
         val rank = rankRepository.findById(dto.rankId).orElseThrow {
             EntityNotFoundException("Rank not found")
         }
         return OrdinationProfile(
             user = user,
             rank = rank,
+            isOrdinationInAnotherChurch = dto.isOrdinationInAnotherChurch,
             ordinationYear = dto.ordinationYear,
             bishopName = dto.bishopName,
             ordinationPlace = dto.ordinationPlace,
-            certificateImageUrl = dto.certificateImageUrl
+            certificateImageUrl = finalCertificateUrl
         )
     }
 

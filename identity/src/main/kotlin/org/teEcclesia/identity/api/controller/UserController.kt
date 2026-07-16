@@ -11,8 +11,13 @@ import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.service.UserService
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.teEcclesia.identity.api.dto.request.ParentProfileRequest
+import org.teEcclesia.identity.api.dto.request.ApproveUserRequest
+import org.teEcclesia.identity.api.dto.request.UserCodeRequest
 import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.exception.UnauthorizedException
+import org.springframework.http.MediaType
+import org.springframework.web.multipart.MultipartFile
+import jakarta.validation.Valid
 import java.util.UUID
 
 @RestController
@@ -21,27 +26,50 @@ class UserController(
     private val userService: UserService
 ) {
 
-    private fun authorizeAdminOrKhadem(callerId: UUID) {
+    private fun authorizeAdminOrKhadem(callerId: UUID, requireApprovePermission: Boolean = false) {
         val caller = userService.findById(callerId)
-        if (caller.role != UserRole.ADMIN && caller.role != UserRole.KHADEM) {
-            throw UnauthorizedException("User is not authorized for this action")
+        if (caller.role == UserRole.ADMIN) return
+        
+        if (caller.role == UserRole.KHADEM) {
+            if (requireApprovePermission && caller.khademProfile?.canApproveRequests != true) {
+                throw UnauthorizedException("User does not have permission to approve requests")
+            }
+            return
         }
+        
+        throw UnauthorizedException("User is not authorized for this action")
     }
 
     @GetMapping("/status/{status}")
     fun getUsersByStatus(
         @AuthenticationPrincipal callerId: UUID,
         @PathVariable status: UserStatus,
+        @RequestParam(required = false) stageId: Long?,
+        @RequestParam(required = false) yearId: Long?,
         pageable: Pageable
     ): ResponseEntity<Page<ProfileResponse>> {
-        authorizeAdminOrKhadem(callerId)
-        return ResponseEntity.ok(userService.getUsersByStatus(status, pageable))
+        authorizeAdminOrKhadem(callerId, requireApprovePermission = true)
+        return ResponseEntity.ok(userService.getUsersByStatus(status, stageId, yearId, pageable))
     }
 
     @PostMapping("/{userId}/approve")
-    fun approveUser(@AuthenticationPrincipal callerId: UUID, @PathVariable userId: UUID): ResponseEntity<Void> {
-        authorizeAdminOrKhadem(callerId)
-        userService.approveUser(userId)
+    fun approveUser(
+        @AuthenticationPrincipal callerId: UUID, 
+        @PathVariable userId: UUID,
+        @RequestBody(required = false) request: ApproveUserRequest?
+    ): ResponseEntity<Void> {
+        authorizeAdminOrKhadem(callerId, requireApprovePermission = true)
+        userService.approveUser(userId, request)
+        return ResponseEntity.ok().build()
+    }
+
+    @PutMapping("/{userId}/code")
+    fun updateCode(
+        @AuthenticationPrincipal callerId: UUID,
+        @PathVariable userId: UUID,
+        @RequestBody request: UserCodeRequest
+    ): ResponseEntity<Void> {
+        userService.updateCode(callerId, userId, request.code)
         return ResponseEntity.ok().build()
     }
 
@@ -67,22 +95,26 @@ class UserController(
         return ResponseEntity.ok().build()
     }
 
-    @PostMapping("/makhdoom")
+    @PostMapping("/makhdoom", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     fun createMakhdoom(
         @AuthenticationPrincipal callerId: UUID,
-        @RequestBody request: RegisterRequest
+        @RequestPart("request") @Valid request: RegisterRequest,
+        @RequestPart("image", required = false) image: MultipartFile?,
+        @RequestPart("identityDocument", required = false) identityDocument: MultipartFile?
     ): ResponseEntity<ProfileResponse> {
         authorizeAdminOrKhadem(callerId)
-        return ResponseEntity.ok(userService.createMakhdoomDirectly(request))
+        return ResponseEntity.ok(userService.createMakhdoomDirectly(request, image, identityDocument))
     }
 
-    @PostMapping("/parent")
+    @PostMapping("/parent", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     fun createParent(
         @AuthenticationPrincipal callerId: UUID,
-        @RequestBody request: RegisterRequest
+        @RequestPart("request") @Valid request: RegisterRequest,
+        @RequestPart("image", required = false) image: MultipartFile?,
+        @RequestPart("nationalIdImage", required = false) nationalIdImage: MultipartFile?
     ): ResponseEntity<ProfileResponse> {
         authorizeAdminOrKhadem(callerId)
-        return ResponseEntity.ok(userService.createParentDirectly(request))
+        return ResponseEntity.ok(userService.createParentDirectly(request, image, nationalIdImage))
     }
 
     @PutMapping("/{id}/parent-profile")

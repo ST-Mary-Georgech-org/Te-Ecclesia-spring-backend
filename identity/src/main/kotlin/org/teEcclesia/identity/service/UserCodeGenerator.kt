@@ -3,7 +3,6 @@ package org.teEcclesia.identity.service
 import org.springframework.stereotype.Service
 import org.teEcclesia.identity.entity.User
 import org.teEcclesia.identity.entity.enums.Gender
-import org.teEcclesia.identity.entity.enums.RankKey
 import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.repository.UserRepository
 import java.time.LocalDate
@@ -25,7 +24,8 @@ class UserCodeGenerator(
             val sequenceStr = String.format("%04d", sequenceNumber)
             candidateCode = "$prefix$sequenceStr"
             
-            val exists = userRepository.findByCode(candidateCode) != null
+            val searchPattern = "_" + candidateCode.substring(1)
+            val exists = userRepository.existsByCodeLike(searchPattern)
             if (!exists) {
                 break
             }

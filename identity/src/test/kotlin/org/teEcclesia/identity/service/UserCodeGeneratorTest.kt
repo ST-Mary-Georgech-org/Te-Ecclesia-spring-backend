@@ -29,7 +29,7 @@ class UserCodeGeneratorTest {
         val yearStr = LocalDate.now().year.toString().takeLast(2)
         val prefix = "H${yearStr}99"
         
-        every { userRepository.findByCode("${prefix}4567") } returns null
+        every { userRepository.existsByCodeLike("_${yearStr}994567") } returns false
 
         // Act
         val code = generator.generateCode(user)
@@ -53,8 +53,8 @@ class UserCodeGeneratorTest {
         val prefix = "G${yearStr}05"
         
         // Mock that 4567 already exists, but 4568 does not
-        every { userRepository.findByCode("${prefix}4567") } returns mockk()
-        every { userRepository.findByCode("${prefix}4568") } returns null
+        every { userRepository.existsByCodeLike("_${yearStr}054567") } returns true
+        every { userRepository.existsByCodeLike("_${yearStr}054568") } returns false
 
         // Act
         val code = generator.generateCode(user)

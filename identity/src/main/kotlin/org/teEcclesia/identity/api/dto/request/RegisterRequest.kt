@@ -67,8 +67,7 @@ data class RegisterRequest(
     @field:NotBlank(message = "Floor is required")
     val floor: String,
 
-    @field:NotBlank(message = "Apartment is required")
-    val apartment: String,
+    val apartment: String? = null,
 
     @field:NotBlank(message = "Special mark is required")
     val specialMark: String,
@@ -78,13 +77,28 @@ data class RegisterRequest(
     val confessionPriestId: UUID? = null,
     val externalConfessionPriestName: String? = null,
     val externalConfessionChurch: String? = null,
+    val externalConfessionPhone: String? = null,
 
     val ordinationProfile: OrdinationProfileRequest? = null,
     val makhdoomProfile: MakhdoomProfileRequest? = null,
     val parentProfile: ParentProfileRequest? = null
 )
 
-fun RegisterRequest.toEntity(hashedPassword: String, confessionPriest: User? = null, id: UUID = UUID.randomUUID()): User {
+fun formatHomePhone(homePhone: String): String {
+    val cleanPhone = homePhone.trim()
+    return when {
+        cleanPhone.length == 8 -> "02$cleanPhone"
+        cleanPhone.length == 10 && cleanPhone.startsWith("02") -> cleanPhone
+        else -> throw IllegalArgumentException("Invalid home phone format. Must be 8 digits, or 10 digits starting with 02.")
+    }
+}
+
+fun RegisterRequest.toEntity(
+    hashedPassword: String, 
+    confessionPriest: User? = null, 
+    id: UUID = UUID.randomUUID(),
+    imageUrl: String? = this.imageUrl
+): User {
     return User(
         id = id,
         firstName = this.firstName,
@@ -94,10 +108,10 @@ fun RegisterRequest.toEntity(hashedPassword: String, confessionPriest: User? = n
         displayName = this.displayName,
         nationalId = this.nationalId,
         phone = this.phone,
-        homePhone = this.homePhone,
+        homePhone = formatHomePhone(this.homePhone),
         email = this.email,
         passwordHash = hashedPassword,
-        imageUrl = this.imageUrl,
+        imageUrl = imageUrl,
         createdAt = Instant.now(),
         birthDate = extractBirthDate(this.nationalId),
         job = this.job,
@@ -114,6 +128,7 @@ fun RegisterRequest.toEntity(hashedPassword: String, confessionPriest: User? = n
         confessionPriest = confessionPriest,
         externalConfessionPriestName = this.externalConfessionPriestName,
         externalConfessionChurch = this.externalConfessionChurch,
+        externalConfessionPhone = this.externalConfessionPhone,
         accountVerifications = mutableListOf(),
         refreshTokens = mutableListOf(),
         isEmailVerified = false,

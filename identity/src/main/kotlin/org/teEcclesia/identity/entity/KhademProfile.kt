@@ -22,5 +22,24 @@ data class KhademProfile(
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "educational_year_id", nullable = true)
-    val educationalYear: EducationalYear? = null
+    val educationalYear: EducationalYear? = null,
+
+    @Column(nullable = false)
+    var canApproveRequests: Boolean = false,
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "khadem_responsible_stages",
+        joinColumns = [JoinColumn(name = "khadem_profile_id")],
+        inverseJoinColumns = [JoinColumn(name = "educational_stage_id")]
+    )
+    var responsibleStages: MutableList<EducationalStage> = mutableListOf(),
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "khadem_responsible_years",
+        joinColumns = [JoinColumn(name = "khadem_profile_id")],
+        inverseJoinColumns = [JoinColumn(name = "educational_year_id")]
+    )
+    var responsibleYears: MutableList<EducationalYear> = mutableListOf()
 )

@@ -19,14 +19,17 @@ data class OrdinationProfile(
     val rank: Rank,
 
     @Column(nullable = false)
-    val ordinationYear: Int,
-
-    @Column(nullable = false)
-    val bishopName: String,
-
-    @Column(nullable = false)
-    val ordinationPlace: String,
+    val isOrdinationInAnotherChurch: Boolean,
 
     @Column(nullable = true)
-    val certificateImageUrl: String? = null
+    val ordinationYear: Int? = null, 
+
+    @Column(nullable = true)
+    val bishopName: String? = null, 
+
+    @Column(nullable = true)
+    val ordinationPlace: String? = null, 
+
+    @Column(nullable = true)
+    val certificateImageUrl: String? = null 
 )

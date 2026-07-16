@@ -102,7 +102,10 @@ class IdentityTestApplication {
             rankRepository = rankRepository,
             educationalStageRepository = educationalStageRepository,
             educationalYearRepository = educationalYearRepository,
-            parentProfileService = parentProfileService()
+            parentProfileService = parentProfileService(),
+            imageStorageService = imageStorageService(),
+            profileImageDirectory = "test-profiles",
+            documentsDirectory = "test-docs"
         )
     }
 
@@ -134,7 +137,8 @@ class IdentityTestApplication {
             educationalYearRepository = educationalYearRepository,
             areaRepository = mockk(relaxed = true),
             cdnEndpoint = cdnEndpoint,
-            parentProfileService = parentProfileService()
+            parentProfileService = parentProfileService(),
+            documentsDirectory = "test-docs"
         )
     }
 

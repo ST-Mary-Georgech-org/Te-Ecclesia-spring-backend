@@ -12,6 +12,8 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.*
+import org.springframework.web.multipart.MultipartFile
+import org.springframework.http.MediaType
 import java.util.*
 
 @RestController
@@ -21,9 +23,13 @@ class AuthController (
 ) {
 
     @Tag(name = "Registration", description = "Endpoints related to user registration and account verification")
-    @PostMapping("/signup")
-    fun register (@Valid @RequestBody request: RegisterRequest): ResponseEntity<Void> {
-        authService.register(request)
+    @PostMapping("/signup", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun register(
+        @RequestPart("request") @Valid request: RegisterRequest,
+        @RequestPart("image", required = false) image: MultipartFile?,
+        @RequestPart("certificateImage", required = false) certificateImage: MultipartFile?
+    ): ResponseEntity<Void> {
+        authService.register(request, image, certificateImage)
         return ResponseEntity.status(HttpStatus.CREATED).build()
     }
 

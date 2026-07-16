@@ -171,6 +171,7 @@ class UserServiceIntegrationTest {
                 passwordHash = "encoded-password",
                 birthDate = LocalDate.of(1990, 1, 1),
                 job = "Engineer",
+                buildingNo = "1",
                 street = "Main Street",
                 area = "Test Area",
                 floor = "1",
