@@ -333,8 +333,6 @@ class AuthServiceIntegrationTest {
         var user = createUser(email = "parent-complete@mail.com", isVerified = false)
         user = userRepository.save(user.copy(status = UserStatus.PROFILE_INCOMPLETE))
         val request = CompleteProfileRequest(
-            identifier = user.email!!,
-            password = "Password@1",
             role = UserRole.PARENT,
             parentProfile = ParentProfileRequest(
                 partnerCode = null,
@@ -342,7 +340,7 @@ class AuthServiceIntegrationTest {
             )
         )
 
-        authService.completeProfile(request)
+        authService.completeProfile(user.id, request)
 
         val updatedUser = userRepository.findById(user.id).get()
         assertThat(updatedUser.role).isEqualTo(UserRole.PARENT)
@@ -362,8 +360,6 @@ class AuthServiceIntegrationTest {
         val stage = educationalStageRepository.save(EducationalStage(nameAr = "Stage", nameEn = "Stage"))
         val year = educationalYearRepository.save(EducationalYear(nameAr = "Year", nameEn = "Year", stage = stage))
         val request = CompleteProfileRequest(
-            identifier = user.email!!,
-            password = "Password@1",
             role = UserRole.MAKHDOOM,
             makhdoomProfile = MakhdoomProfileRequest(
                 shamamsaStudyStatus = ShamamsaStudyStatus.NO,
@@ -378,7 +374,7 @@ class AuthServiceIntegrationTest {
             )
         )
 
-        authService.completeProfile(request)
+        authService.completeProfile(user.id, request)
 
         val updatedUser = userRepository.findById(user.id).get()
         assertThat(updatedUser.role).isEqualTo(UserRole.MAKHDOOM)
