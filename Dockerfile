@@ -31,4 +31,4 @@ COPY --from=builder /workspace/app/build/libs/*.jar app.jar
 # Expose Hugging Face default port
 EXPOSE 7860
 
-ENTRYPOINT ["java","-jar","app.jar", "--server.port=7860"]
+ENTRYPOINT ["java", "-Djava.net.preferIPv4Stack=true", "-jar", "app.jar", "--server.port=7860"]

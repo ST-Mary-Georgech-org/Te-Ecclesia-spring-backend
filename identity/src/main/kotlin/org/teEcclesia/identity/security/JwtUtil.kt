@@ -41,6 +41,10 @@ class JwtUtil(
         return createToken(id, refreshExpiration.toMillis(), "refresh")
     }
 
+    fun generateRegistrationToken(id: UUID): String {
+        return createToken(id, Duration.ofHours(2).toMillis(), "registration")
+    }
+
     // ================== Parsing ==================
 
     private fun parseAllClaims(token: String) =
@@ -78,6 +82,11 @@ class JwtUtil(
     fun validateRefreshToken(token: String): Boolean {
         val claims = validateTokenInternal(token) ?: return false
         return claims["type"] == "refresh"
+    }
+
+    fun validateRegistrationToken(token: String): Boolean {
+        val claims = validateTokenInternal(token) ?: return false
+        return claims["type"] == "registration"
     }
 
     fun validateTokenForUser(token: String, userId: UUID): Boolean {

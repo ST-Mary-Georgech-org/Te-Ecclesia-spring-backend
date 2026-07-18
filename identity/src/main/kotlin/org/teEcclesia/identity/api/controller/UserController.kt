@@ -103,7 +103,7 @@ class UserController(
         @RequestPart("identityDocument", required = false) identityDocument: MultipartFile?
     ): ResponseEntity<ProfileResponse> {
         authorizeAdminOrKhadem(callerId)
-        return ResponseEntity.ok(userService.createMakhdoomDirectly(request, image, identityDocument))
+        return ResponseEntity.ok(userService.createMakhdoomDirectly(callerId, request, image, identityDocument))
     }
 
     @PostMapping("/parent", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])

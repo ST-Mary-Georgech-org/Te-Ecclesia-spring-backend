@@ -12,7 +12,6 @@ import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
-import org.teEcclesia.identity.api.dto.request.ActionReasonRequest
 import org.teEcclesia.identity.api.dto.request.ApproveUserRequest
 import org.teEcclesia.identity.api.dto.response.toProfileResponse
 import org.teEcclesia.identity.exception.UnauthorizedException
@@ -207,7 +206,23 @@ class UserService(
     }
 
     @Transactional
-    fun createMakhdoomDirectly(request: RegisterRequest, image: MultipartFile? = null, identityDocument: MultipartFile? = null): ProfileResponse {
+    fun createMakhdoomDirectly(callerId: UUID, request: RegisterRequest, image: MultipartFile? = null, identityDocument: MultipartFile? = null): ProfileResponse {
+        val caller = findById(callerId)
+        if (caller.role == UserRole.KHADEM) {
+            val khademProfile = caller.khademProfile
+            val reqStageId = request.makhdoomProfile?.educationalStageId
+            val reqYearId = request.makhdoomProfile?.educationalYearId
+            
+            if (khademProfile != null) {
+                val hasStage = reqStageId != null && khademProfile.responsibleStages.any { it.id == reqStageId }
+                val hasYear = reqYearId != null && khademProfile.responsibleYears.any { it.id == reqYearId }
+                
+                if (!hasStage && !hasYear) {
+                    throw UnauthorizedException("You are not responsible for this educational stage or year")
+                }
+            }
+        }
+
         var confessionPriest: User? = null
         if (request.confessionPriestId != null) {
             confessionPriest = findById(request.confessionPriestId)

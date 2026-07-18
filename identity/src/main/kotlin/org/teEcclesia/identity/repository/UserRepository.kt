@@ -26,6 +26,14 @@ interface UserRepository : JpaRepository<User, UUID> {
     
     @Query("""
         SELECT u FROM User u 
+        WHERE (u.email = :id OR u.nationalId = :id OR u.code = :id OR u.phone = :id)
+        ORDER BY u.isPhoneVerified DESC, u.createdAt DESC 
+        LIMIT 1
+    """)
+    fun findTopByIdentifierOrderByVerification(@Param("id") id: String): User?
+    
+    @Query("""
+        SELECT u FROM User u 
         LEFT JOIN u.makhdoomProfile mp 
         LEFT JOIN u.khademProfile kp 
         WHERE u.status = :status 
@@ -40,6 +48,9 @@ interface UserRepository : JpaRepository<User, UUID> {
     ): Page<User>
     
     fun findByRole(role: UserRole, pageable: Pageable): Page<User>
+    
+    @Query("SELECT u FROM User u JOIN u.khademProfile kp WHERE u.role = :role AND kp.canApproveRequests = true")
+    fun findByRoleAndCanApproveRequestsTrue(@Param("role") role: UserRole, pageable: Pageable): Page<User>
     
     fun deleteAllByIsPhoneVerifiedIsFalseAndCreatedAtBefore(date: Instant)
 }

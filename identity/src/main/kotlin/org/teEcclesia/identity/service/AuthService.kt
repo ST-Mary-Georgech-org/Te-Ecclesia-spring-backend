@@ -12,6 +12,7 @@ import org.teEcclesia.events.publisher.TeEcclesiaEventPublisher
 import org.teEcclesia.identity.api.dto.request.*
 import org.teEcclesia.identity.api.dto.response.AuthResponse
 import org.teEcclesia.identity.api.dto.response.RegisterResponse
+import org.teEcclesia.identity.api.dto.response.TokenResponse
 import org.teEcclesia.identity.api.dto.response.InitiateWhatsAppVerificationResponse
 import org.teEcclesia.identity.entity.*
 import org.teEcclesia.identity.exception.InvalidCredentialsException
@@ -69,24 +70,42 @@ class AuthService(
 
     val logger: Logger = LoggerFactory.getLogger(javaClass)
 
-    fun register(request: RegisterRequest, image: MultipartFile? = null, certificateImage: MultipartFile? = null) {
+    fun register(request: RegisterRequest, image: MultipartFile? = null, certificateImage: MultipartFile? = null): TokenResponse {
+        var existingUser: User? = null
+
         val existingByPhone = userRepository.findByPhone(request.phone)
-        if (existingByPhone != null && existingByPhone.isPhoneVerified) {
-            throw UserAlreadyExistsException("Phone number is already registered and verified.")
+        if (existingByPhone != null) {
+            if (existingByPhone.isPhoneVerified) {
+                throw UserAlreadyExistsException("Phone number is already registered and verified.")
+            } else {
+                existingUser = existingByPhone
+            }
         }
 
         val existingByNationalId = userRepository.findByNationalId(request.nationalId)
-        if (existingByNationalId != null && existingByNationalId.isPhoneVerified) {
-            if (existingByPhone == null || existingByPhone.id != existingByNationalId.id) {
+        if (existingByNationalId != null) {
+            if (existingByNationalId.isPhoneVerified) {
                 throw UserAlreadyExistsException("National ID is already registered.")
+            } else {
+                if (existingUser != null && existingUser.id != existingByNationalId.id) {
+                    userRepository.delete(existingByNationalId)
+                } else {
+                    existingUser = existingByNationalId
+                }
             }
         }
 
         if (!request.email.isNullOrBlank()) {
             val existingByEmail = userRepository.findByEmail(request.email.lowercase())
-            if (existingByEmail != null && existingByEmail.isPhoneVerified) {
-                if (existingByPhone == null || existingByPhone.id != existingByEmail.id) {
+            if (existingByEmail != null) {
+                if (existingByEmail.isPhoneVerified) {
                     throw UserAlreadyExistsException("Email is already registered and verified.")
+                } else {
+                    if (existingUser != null && existingUser.id != existingByEmail.id) {
+                        userRepository.delete(existingByEmail)
+                    } else {
+                        existingUser = existingByEmail
+                    }
                 }
             }
         }
@@ -98,12 +117,12 @@ class AuthService(
             }
         }
 
-        val userId = existingByPhone?.id ?: UUID.randomUUID()
+        val userId = existingUser?.id ?: UUID.randomUUID()
         
         val finalImageUrl = if (image != null) {
             imageStorageService.uploadImage(image, userId.toString(), profileImageDirectory)
         } else {
-            request.imageUrl
+            request.imageUrl ?: existingUser?.imageUrl
         }
 
         val userToSave = request.toEntity(
@@ -111,7 +130,21 @@ class AuthService(
             confessionPriest = confessionPriest,
             id = userId,
             imageUrl = finalImageUrl
-        )
+        ).let {
+            if (existingUser != null) {
+                it.copy(
+                    ordinationProfile = existingUser.ordinationProfile,
+                    makhdoomProfile = existingUser.makhdoomProfile,
+                    khademProfile = existingUser.khademProfile,
+                    parentProfile = existingUser.parentProfile,
+                    createdAt = existingUser.createdAt,
+                    accountVerifications = existingUser.accountVerifications,
+                    refreshTokens = existingUser.refreshTokens
+                )
+            } else {
+                it
+            }
+        }
 
         val finalCertificateUrl = if (certificateImage != null) {
             imageStorageService.uploadImage(certificateImage, "cert_${userId}", documentsDirectory)
@@ -127,21 +160,24 @@ class AuthService(
         ))
 
         request.parentProfile?.let { parentProfileService.createOrUpdateProfile(savedUser, it) }
+        
+        return TokenResponse(jwtUtil.generateRegistrationToken(savedUser.id))
     }
 
-    fun completeProfile(request: CompleteProfileRequest): RegisterResponse {
-        val user = findUserByIdentifier(request.identifier)
-
-        if (!passwordEncoder.matches(request.password, user.passwordHash)) {
-            throw InvalidCredentialsException()
-        }
+    fun completeProfile(userId: UUID, request: CompleteProfileRequest, certificateImage: MultipartFile? = null): RegisterResponse {
+        val user = userRepository.findById(userId).orElseThrow { EntityNotFoundException("User not found") }
 
         if (user.status != UserStatus.PROFILE_INCOMPLETE) {
             throw RuntimeException("Profile is already completed")
         }
 
+        val finalCertificateUrl = if (certificateImage != null) {
+            imageStorageService.uploadImage(certificateImage, "cert_${user.id}", documentsDirectory)
+        } else {
+            request.ordinationProfile?.certificateImageUrl
+        }
 
-        val ordinationProfile = request.ordinationProfile?.let { createOrdinationProfile(user, it, it.certificateImageUrl) }
+        val ordinationProfile = request.ordinationProfile?.let { createOrdinationProfile(user, it, finalCertificateUrl) }
         val makhdoomProfile = request.makhdoomProfile?.let { createMakhdoomProfile(user, it) }
         val khademProfile = request.khademProfile?.let { createKhademProfile(user, it) }
 
@@ -334,7 +370,8 @@ class AuthService(
     }
 
     fun login(request: LoginRequest): AuthResponse {
-        val user = findUserByIdentifier(request.identifier)
+        val user = userRepository.findTopByIdentifierOrderByVerification(request.identifier.trim())
+            ?: throw EntityNotFoundException("User not found with this identifier")
 
         if (!passwordEncoder.matches(request.password, user.passwordHash)) {
             throw InvalidCredentialsException()
@@ -402,17 +439,6 @@ class AuthService(
         refreshTokenRepository.save(
             RefreshToken(token = token, expiryDate = expiryDate, user = user, deviceToken = deviceToken)
         )
-    }
-
-    private fun findUserByIdentifier(identifier: String): User {
-        val id = identifier.trim()
-        return when {
-            id.contains("@") -> userRepository.findByEmail(id.lowercase())
-            id.matches(Regex("^\\d{14}$")) -> userRepository.findByNationalId(id)
-            id.matches(Regex("^[A-H]\\d{8}$", RegexOption.IGNORE_CASE)) -> userRepository.findByCode(id.uppercase())
-            id.matches(Regex("^\\+?\\d{10,15}$")) -> userRepository.findByPhone(id)
-            else -> userRepository.findByPhone(id)
-        } ?: throw EntityNotFoundException("User not found with this identifier")
     }
 
     private fun createOrdinationProfile(user: User, dto: OrdinationProfileRequest, finalCertificateUrl: String?): OrdinationProfile {

@@ -3,7 +3,9 @@ package org.teEcclesia.identity.api.controller
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.http.ResponseEntity
+import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.*
+import java.util.UUID
 import org.teEcclesia.identity.api.dto.request.*
 import org.teEcclesia.identity.api.dto.response.LookupResponse
 import org.teEcclesia.identity.service.LookupService
@@ -25,9 +27,10 @@ class LookupController(
     @GetMapping("/educational-stages")
     fun getEducationalStages(
         @RequestHeader(value = "Accept-Language", defaultValue = "ar") language: String,
+        @AuthenticationPrincipal userId: UUID,
         pageable: Pageable
     ): ResponseEntity<Page<LookupResponse>> {
-        return ResponseEntity.ok(lookupService.getEducationalStages(language, pageable))
+        return ResponseEntity.ok(lookupService.getEducationalStages(language, userId, pageable))
     }
 
     @GetMapping("/areas")

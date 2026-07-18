@@ -22,7 +22,14 @@ class JwtFilter(
 ) : OncePerRequestFilter() {
 
     val pathsToSkip = listOf(
-        "/api/v1/identity/auth/**",
+        "/api/v1/identity/auth/signup",
+        "/api/v1/identity/auth/login",
+        "/api/v1/identity/auth/refresh",
+        "/api/v1/identity/auth/forgot-password",
+        "/api/v1/identity/auth/reset-password",
+        "/api/v1/identity/auth/verify-otp",
+        "/api/v1/identity/auth/resend-otp",
+        "/api/v1/identity/auth/whatsapp/**",
         "/v3/api-docs",
         "/v3/api-docs/**",
         "/swagger-ui/**",
@@ -54,17 +61,25 @@ class JwtFilter(
             val token = authHeader.substring(7)
             val userId = jwtUtil.extractUserId(token)
             if (userId != null && SecurityContextHolder.getContext().authentication == null) {
-                if (jwtUtil.validateAccessToken(token) &&
-                    jwtUtil.validateTokenForUser(token, userId)
-                ) {
+                if (jwtUtil.validateRegistrationToken(token)) {
+                    val path = request.servletPath ?: ""
+                    if (!path.startsWith("/api/v1/identity/auth/complete-profile") && 
+                        !path.startsWith("/api/v1/identity/auth/verify-phone") && 
+                        !path.startsWith("/api/v1/identity/auth/verify-email") &&
+                        !path.startsWith("/api/v1/identity/auth/me")) {
+                        throw IllegalStateException("Registration token cannot be used for this endpoint")
+                    }
                     if (!userService.existById(userId)) throw IllegalStateException("Not authorized")
-                    val authToken = UsernamePasswordAuthenticationToken(
-                        userId,
-                        null,
-                        emptyList()
-                    )
+                    val authToken = UsernamePasswordAuthenticationToken(userId, null, emptyList())
                     authToken.details = WebAuthenticationDetailsSource().buildDetails(request)
                     SecurityContextHolder.getContext().authentication = authToken
+                } else if (jwtUtil.validateAccessToken(token) && jwtUtil.validateTokenForUser(token, userId)) {
+                    if (!userService.existById(userId)) throw IllegalStateException("Not authorized")
+                    val authToken = UsernamePasswordAuthenticationToken(userId, null, emptyList())
+                    authToken.details = WebAuthenticationDetailsSource().buildDetails(request)
+                    SecurityContextHolder.getContext().authentication = authToken
+                } else {
+                    throw MalformedJwtException("Invalid token")
                 }
             }
 

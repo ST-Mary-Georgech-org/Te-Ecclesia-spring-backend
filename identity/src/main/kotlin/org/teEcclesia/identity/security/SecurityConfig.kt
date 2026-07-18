@@ -26,17 +26,28 @@ class SecurityConfig(
                 headers.frameOptions { it.disable() }
             }
             .authorizeHttpRequests {
-                it.requestMatchers("/api/v1/identity/auth/logout").authenticated()
                 it.requestMatchers(
-                    "/api/v1/identity/auth/**",
+                    "/api/v1/identity/auth/logout",
+                    "/api/v1/identity/auth/complete-profile",
+                    "/api/v1/identity/auth/verify-phone",
+                    "/api/v1/identity/auth/verify-email"
+                ).authenticated()
+                it.requestMatchers(
+                    "/api/v1/identity/auth/signup",
+                    "/api/v1/identity/auth/login",
+                    "/api/v1/identity/auth/refresh",
+                    "/api/v1/identity/auth/forgot-password",
+                    "/api/v1/identity/auth/reset-password",
+                    "/api/v1/identity/auth/verify-otp",
+                    "/api/v1/identity/auth/resend-otp",
+                    "/api/v1/identity/auth/whatsapp/**",
                     "/v3/api-docs",
                     "/v3/api-docs/**",
                     "/swagger-ui/**",
                     "/swagger-ui.html",
                     "/error",
                     "/"
-                )
-                    .permitAll()
+                ).permitAll()
                 it.anyRequest().authenticated()
             }
             .sessionManagement {

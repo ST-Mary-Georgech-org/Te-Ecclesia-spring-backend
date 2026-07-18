@@ -11,10 +11,14 @@ import java.time.LocalDate
 import java.util.UUID
 
 import org.hibernate.envers.Audited
+import org.hibernate.annotations.SQLDelete
+import org.hibernate.annotations.SQLRestriction
 
 @Audited
 @Entity
 @Table(name = "users", schema = "identity")
+@SQLDelete(sql = "UPDATE identity.users SET deleted = true WHERE id=?")
+@SQLRestriction("deleted = false")
 data class User(
     @Id
     @Column(columnDefinition = "uuid", updatable = false, nullable = false)
@@ -35,16 +39,16 @@ data class User(
     @Column(nullable = false)
     val displayName: String,
 
-    @Column(nullable = false, unique = true, length = 14)
+    @Column(nullable = false, length = 14)
     val nationalId: String,
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     val phone: String,
 
     @Column(nullable = false)
     val homePhone: String,
 
-    @Column(nullable = true, unique = true)
+    @Column(nullable = true)
     val email: String? = null,
 
     @Column(nullable = false)
@@ -98,7 +102,7 @@ data class User(
     @Column(nullable = false)
     val role: UserRole,
 
-    @Column(nullable = true, unique = true, length = 9)
+    @Column(nullable = true, length = 9)
     val code: String? = null,
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -136,7 +140,10 @@ data class User(
     val khademProfile: KhademProfile? = null,
 
     @OneToOne(mappedBy = "user", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
-    var parentProfile: ParentProfile? = null
+    var parentProfile: ParentProfile? = null,
+
+    @Column(nullable = false)
+    var deleted: Boolean = false
 ) {
     val fullName: String
         get() = "$firstName $secondName $thirdName $lastName"

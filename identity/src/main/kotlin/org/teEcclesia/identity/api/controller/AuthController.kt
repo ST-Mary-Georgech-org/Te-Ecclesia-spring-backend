@@ -3,24 +3,32 @@ package org.teEcclesia.identity.api.controller
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
+import org.springframework.beans.factory.annotation.Value
 import org.teEcclesia.identity.api.dto.request.*
 import org.teEcclesia.identity.api.dto.response.AuthResponse
 import org.teEcclesia.identity.api.dto.response.RegisterResponse
 import org.teEcclesia.identity.api.dto.response.InitiateWhatsAppVerificationResponse
+import org.teEcclesia.identity.api.dto.response.TokenResponse
 import org.teEcclesia.identity.service.AuthService
+import org.teEcclesia.identity.service.UserService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import org.springframework.http.MediaType
+import org.teEcclesia.identity.api.dto.response.ProfileResponse
 import java.util.*
 
 @RestController
 @RequestMapping("/api/v1/identity/auth")
 class AuthController (
-    private val authService: AuthService
+    private val authService: AuthService,
+    private val userService: UserService,
+    @Value("\${storage.teEcclesia.cdn-endpoint}") cdnEndpoint: String,
+    @Value("\${identity.resources.profile-image-directory}") profileImageDirectory: String
 ) {
+    private val imagesBaseUrl: String = "$cdnEndpoint/$profileImageDirectory"
 
     @Tag(name = "Registration", description = "Endpoints related to user registration and account verification")
     @PostMapping("/signup", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
@@ -28,15 +36,28 @@ class AuthController (
         @RequestPart("request") @Valid request: RegisterRequest,
         @RequestPart("image", required = false) image: MultipartFile?,
         @RequestPart("certificateImage", required = false) certificateImage: MultipartFile?
-    ): ResponseEntity<Void> {
-        authService.register(request, image, certificateImage)
-        return ResponseEntity.status(HttpStatus.CREATED).build()
+    ): ResponseEntity<TokenResponse> {
+        val response = authService.register(request, image, certificateImage)
+        return ResponseEntity.status(HttpStatus.CREATED).body(response)
     }
 
     @Tag(name = "Registration")
-    @PostMapping("/complete-profile")
-    fun completeProfile (@Valid @RequestBody request: CompleteProfileRequest): ResponseEntity<RegisterResponse> {
-        val response = authService.completeProfile(request)
+    @PostMapping("/complete-profile", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun completeProfile (
+        @AuthenticationPrincipal userId: UUID,
+        @RequestPart("request") @Valid request: CompleteProfileRequest,
+        @RequestPart("certificateImage", required = false) certificateImage: MultipartFile?
+    ): ResponseEntity<RegisterResponse> {
+        val response = authService.completeProfile(userId, request, certificateImage)
+        return ResponseEntity.ok(response)
+    }
+
+    @Tag(name = "Registration")
+    @GetMapping("/me")
+    fun getRegistrationProfile(
+        @AuthenticationPrincipal userId: UUID
+    ): ResponseEntity<ProfileResponse> {
+        val response = userService.getUserProfile(userId, imagesBaseUrl)
         return ResponseEntity.ok(response)
     }
 
