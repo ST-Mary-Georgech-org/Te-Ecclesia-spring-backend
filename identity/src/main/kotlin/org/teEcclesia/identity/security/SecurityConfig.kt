@@ -16,6 +16,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 class SecurityConfig(
     private val jwtFilter: JwtFilter,
+    private val internalHmacFilter: InternalHmacFilter,
     private val authenticationEntryPoint: CustomAuthenticationEntryPoint,
     ) {
 
@@ -40,7 +41,7 @@ class SecurityConfig(
                     "/api/v1/identity/auth/reset-password",
                     "/api/v1/identity/auth/verify-otp",
                     "/api/v1/identity/auth/resend-otp",
-                    "/api/v1/identity/auth/whatsapp/**",
+                    "/api/v1/internal/**",
                     "/v3/api-docs",
                     "/v3/api-docs/**",
                     "/swagger-ui/**",
@@ -53,6 +54,7 @@ class SecurityConfig(
             .sessionManagement {
                 it.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             }
+            .addFilterBefore(internalHmacFilter, UsernamePasswordAuthenticationFilter::class.java)
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter::class.java)
             .exceptionHandling { exception ->
                 exception.authenticationEntryPoint(authenticationEntryPoint)

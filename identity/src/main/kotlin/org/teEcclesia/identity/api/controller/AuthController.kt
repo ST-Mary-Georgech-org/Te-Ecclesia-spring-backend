@@ -89,26 +89,7 @@ class AuthController (
         return ResponseEntity.ok(response)
     }
 
-    @Tag(name = "Registration")
-    @GetMapping("/whatsapp/webhook")
-    fun verifyWebhook(
-        @RequestParam("hub.mode") mode: String,
-        @RequestParam("hub.verify_token") verifyToken: String,
-        @RequestParam("hub.challenge") challenge: String
-    ): ResponseEntity<String> {
-        val response = authService.getVerifyWebhookResponse(mode, verifyToken, challenge)
-        return ResponseEntity.ok(response)
-    }
 
-    @Tag(name = "Registration")
-    @PostMapping("/whatsapp/webhook")
-    fun receiveWebhook(
-        @RequestBody requestBody: String,
-        @RequestHeader("X-Hub-Signature-256", required = false) signatureHeader: String?
-    ): ResponseEntity<Void> {
-        authService.processWhatsAppWebhook(requestBody, signatureHeader)
-        return ResponseEntity.ok().build()
-    }
 
     @Tag(name = "Authentication", description = "Endpoints related to user login, token refresh, and logout")
     @PostMapping("/login")

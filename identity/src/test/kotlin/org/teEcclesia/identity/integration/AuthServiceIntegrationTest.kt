@@ -261,7 +261,7 @@ class AuthServiceIntegrationTest {
     }
 
     @Test
-    fun `processWhatsAppWebhook updates verification status`() {
+    fun `processWhatsAppVerification updates verification status`() {
         val user = createUser(email = "webhook-test@mail.com", isVerified = false)
         val token = "AUTH_T1T2T3T4"
         otpRepository.save(
@@ -273,45 +273,13 @@ class AuthServiceIntegrationTest {
             )
         )
 
-        val jsonPayload = """
-        {
-          "object": "whatsapp_business_account",
-          "entry": [
-            {
-              "id": "12345",
-              "changes": [
-                {
-                  "value": {
-                    "messaging_product": "whatsapp",
-                    "messages": [
-                      {
-                        "from": "${user.phone}",
-                        "text": {
-                          "body": "Hi, please verify me: $token"
-                        }
-                      }
-                    ]
-                  },
-                  "field": "messages"
-                }
-              ]
-            }
-          ]
-        }
-        """.trimIndent()
-
-        val appSecret = "test-secret"
-        val mac = Mac.getInstance("HmacSHA256")
-        val secretKey = SecretKeySpec(appSecret.toByteArray(), "HmacSHA256")
-        mac.init(secretKey)
-        val signatureBytes = mac.doFinal(jsonPayload.toByteArray())
-        val signature = signatureBytes.joinToString("") { String.format("%02x", it) }
-        val signatureHeader = "sha256=$signature"
-
-        authService.processWhatsAppWebhook(jsonPayload, signatureHeader = signatureHeader)
+        val result = authService.processWhatsAppVerification(token, user.phone)
 
         val updatedUser = userRepository.findById(user.id).get()
         val updatedToken = otpRepository.findByOtpAndMethod("APPROVED_$token", VerificationMethod.PHONE)
+        
+        assertThat(result.success).isTrue()
+        assertThat(result.message).contains("Your phone number has been successfully verified!")
         assertThat(updatedUser.status).isEqualTo(UserStatus.PENDING_APPROVAL)
         assertThat(updatedToken?.otp).isEqualTo("APPROVED_$token")
     }

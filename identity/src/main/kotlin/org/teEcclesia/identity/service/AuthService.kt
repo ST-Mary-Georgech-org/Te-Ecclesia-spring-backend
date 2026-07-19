@@ -1,5 +1,6 @@
 package org.teEcclesia.identity.service
 
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import jakarta.persistence.EntityNotFoundException
 import jakarta.transaction.Transactional
 import org.slf4j.Logger
@@ -27,6 +28,7 @@ import org.teEcclesia.identity.repository.*
 import org.teEcclesia.identity.security.JwtUtil
 import org.teEcclesia.identity.service.mapper.WhatsAppWebhookMapper
 import org.springframework.beans.factory.annotation.Value
+import java.util.concurrent.Executors
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
@@ -39,8 +41,10 @@ import java.net.URLEncoder
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import org.springframework.web.multipart.MultipartFile
+import org.teEcclesia.identity.api.dto.response.VerifyTokenResponse
 import org.teEcclesia.storage.service.ImageStorageService
 import java.util.*
+import java.util.concurrent.CompletableFuture
 
 @Service
 @Transactional
@@ -236,43 +240,20 @@ class AuthService(
         )
     }
 
-    fun processWhatsAppWebhook(requestBody: String, signatureHeader: String?) {
-
-        if (whatsappAppSecret.isNotBlank()) {
-            val verified = verifyWebhookSignature(requestBody.toByteArray(), signatureHeader, whatsappAppSecret)
-            if (!verified) {
-                throw UnauthorizedException("Invalid webhook signature")
-            }
-        }
-
-        val message = whatsAppWebhookMapper.parse(requestBody) ?: return
-
-        val fromNumber = message.from
-        val messageBody = message.body
-
-        val tokenRegex = Regex("""AUTH_[A-Z0-9]{8}""")
-        val matchResult = tokenRegex.find(messageBody) ?: return
-
-        val tokenStr = matchResult.value
-
+    fun processWhatsAppVerification(tokenStr: String, fromNumber: String): VerifyTokenResponse {
         val tokenEntity = otpRepository.findByOtpAndMethod(tokenStr, VerificationMethod.PHONE)
-        if (tokenEntity == null) {
-            sendWhatsAppMessage(fromNumber, "This verification code is invalid, expired, or has already been used.")
-            return
-        }
+            ?: return VerifyTokenResponse(false, "This verification code is invalid, expired, or has already been used.\nرمز التحقق هذا غير صالح أو منتهي الصلاحية أو تم استخدامه بالفعل.")
 
         if (tokenEntity.isExpired()) {
             otpRepository.delete(tokenEntity)
-            sendWhatsAppMessage(fromNumber, "This verification code has expired. Please request a new one.")
-            return
+            return VerifyTokenResponse(false, "This verification code has expired. Please request a new one.\nانتهت صلاحية رمز التحقق هذا. يرجى طلب رمز جديد.")
         }
 
         val cleanFrom = fromNumber.replace(Regex("""\D"""), "")
         val cleanRegistered = tokenEntity.user.phone.replace(Regex("""\D"""), "")
 
         if (cleanFrom != cleanRegistered) {
-            sendWhatsAppMessage(cleanFrom, "Please send the verification message from your registered phone number.")
-            return
+            return VerifyTokenResponse(false, "Please send the verification message from your registered phone number.\nيرجى إرسال رسالة التحقق من رقم هاتفك المسجل.")
         }
 
         val user = tokenEntity.user
@@ -291,31 +272,7 @@ class AuthService(
         val approvedToken = tokenEntity.copy(otp = "APPROVED_$tokenStr")
         otpRepository.save(approvedToken)
 
-        sendWhatsAppMessage(cleanFrom, "Your phone number has been successfully verified! Your account is now pending approval.")
-    }
-
-    private fun sendWhatsAppMessage(to: String, text: String) {
-        if (whatsappAccessToken.isBlank()) return
-        
-        val url = "https://graph.facebook.com/v17.0/$whatsappBusinessNumber/messages"
-        val payload = mapOf(
-            "messaging_product" to "whatsapp",
-            "to" to to,
-            "type" to "text",
-            "text" to mapOf("body" to text)
-        )
-
-        try {
-            apiClient.call(String::class.java) {
-                method = HttpMethod.POST
-                path = url
-                addToken = false
-                headers["Authorization"] = "Bearer $whatsappAccessToken"
-                body = payload
-            }
-        } catch (e: Exception) {
-            logger.error("Failed to send WhatsApp message to $to: ${e.message}")
-        }
+        return VerifyTokenResponse(true, "Your phone number has been successfully verified! Your account is now pending approval.\nتم التحقق من رقم هاتفك بنجاح! حسابك الآن قيد الموافقة.")
     }
 
     fun getWhatsAppStatus(token: String): AuthResponse {
@@ -619,23 +576,7 @@ class AuthService(
         }
     }
 
-    private fun verifyWebhookSignature(payloadBytes: ByteArray, signatureHeader: String?, appSecret: String): Boolean {
-        if (signatureHeader == null || !signatureHeader.startsWith("sha256=")) return false
-        val expectedSignature = signatureHeader.substringAfter("sha256=")
-        val mac = Mac.getInstance("HmacSHA256")
-        val secretKey = SecretKeySpec(appSecret.toByteArray(), "HmacSHA256")
-        mac.init(secretKey)
-        val actualSignatureBytes = mac.doFinal(payloadBytes)
-        val actualSignature = actualSignatureBytes.joinToString("") { String.format("%02x", it) }
-        return MessageDigest.isEqual(expectedSignature.toByteArray(), actualSignature.toByteArray())
-    }
 
-    fun getVerifyWebhookResponse(mode: String, verifyToken: String, challenge: String): String {
-        if (mode == "subscribe" && verifyToken == expectedVerifyToken) {
-            return challenge
-        }
-        throw UnauthorizedException("Webhook verification failed")
-    }
 
     private fun generateWhatsAppToken(): String {
         val allowedChars = ('A'..'Z') + ('0'..'9')

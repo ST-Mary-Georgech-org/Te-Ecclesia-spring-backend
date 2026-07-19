@@ -29,7 +29,7 @@ class JwtFilter(
         "/api/v1/identity/auth/reset-password",
         "/api/v1/identity/auth/verify-otp",
         "/api/v1/identity/auth/resend-otp",
-        "/api/v1/identity/auth/whatsapp/**",
+        "/api/v1/internal/**",
         "/v3/api-docs",
         "/v3/api-docs/**",
         "/swagger-ui/**",
