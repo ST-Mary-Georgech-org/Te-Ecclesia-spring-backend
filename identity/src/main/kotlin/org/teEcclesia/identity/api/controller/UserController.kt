@@ -63,6 +63,17 @@ class UserController(
         return ResponseEntity.ok().build()
     }
 
+    @PatchMapping("/{userId}")
+    fun updateMakhdoomProfile(
+        @AuthenticationPrincipal callerId: UUID,
+        @PathVariable userId: UUID,
+        @Valid @RequestBody request: RegisterRequest
+    ): ResponseEntity<Void> {
+        authorizeAdminOrKhadem(callerId)
+        userService.updateMakhdoomProfileByKhadem(callerId, userId, request)
+        return ResponseEntity.ok().build()
+    }
+
     @PutMapping("/{userId}/code")
     fun updateCode(
         @AuthenticationPrincipal callerId: UUID,

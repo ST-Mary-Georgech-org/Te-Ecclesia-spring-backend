@@ -2,6 +2,7 @@ package org.teEcclesia.identity.api.controller
 
 import jakarta.validation.Valid
 import org.teEcclesia.identity.api.dto.request.UpdateProfileRequest
+import org.teEcclesia.identity.api.dto.response.InitiateWhatsAppVerificationResponse
 import org.teEcclesia.identity.api.dto.response.ProfileResponse
 import org.teEcclesia.identity.api.dto.response.UpdateImageResponse
 import org.teEcclesia.identity.service.UserService
@@ -52,5 +53,14 @@ class ProfileController(
     ): ResponseEntity<Unit> {
         userService.updateProfile(userId, request)
         return ResponseEntity.ok().build()
+    }
+
+    @PatchMapping("/phone")
+    fun initiatePhoneChange(
+        @AuthenticationPrincipal userId: UUID,
+        @RequestParam("phone") phone: String
+    ): ResponseEntity<InitiateWhatsAppVerificationResponse> {
+        val response = userService.initiatePhoneChange(userId, phone)
+        return ResponseEntity.ok(response)
     }
 }

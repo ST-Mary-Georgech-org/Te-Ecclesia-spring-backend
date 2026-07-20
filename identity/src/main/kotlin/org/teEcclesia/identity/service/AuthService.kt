@@ -1,17 +1,15 @@
 package org.teEcclesia.identity.service
 
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import jakarta.persistence.EntityNotFoundException
 import jakarta.transaction.Transactional
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import org.teEcclesia.events.identity.UserCreatedEvent
 import org.teEcclesia.events.identity.UserLoggedInEvent
-import org.teEcclesia.events.identity.UserUpdatedEvent
 import org.teEcclesia.events.identity.UserPendingApprovalEvent
 import org.teEcclesia.events.publisher.TeEcclesiaEventPublisher
 import org.teEcclesia.identity.api.dto.request.*
 import org.teEcclesia.identity.api.dto.response.AuthResponse
+import org.teEcclesia.identity.api.dto.response.ForgotPasswordResponse
 import org.teEcclesia.identity.api.dto.response.RegisterResponse
 import org.teEcclesia.identity.api.dto.response.TokenResponse
 import org.teEcclesia.identity.api.dto.response.InitiateWhatsAppVerificationResponse
@@ -23,6 +21,7 @@ import org.teEcclesia.identity.exception.UserAlreadyExistsException
 import org.teEcclesia.identity.exception.IncompleteProfileException
 import org.teEcclesia.identity.exception.PhoneNotVerifiedException
 import org.teEcclesia.identity.exception.AccountPendingApprovalException
+import org.teEcclesia.identity.exception.DuplicatePhoneException
 import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.repository.*
 import org.teEcclesia.identity.security.JwtUtil
@@ -75,28 +74,32 @@ class AuthService(
     val logger: Logger = LoggerFactory.getLogger(javaClass)
 
     fun register(request: RegisterRequest, image: MultipartFile? = null, certificateImage: MultipartFile? = null): TokenResponse {
-        var existingUser: User? = null
+        val formattedPhone = formatPhone(request.phone)
+        var existingUser: User? = userRepository.findByNationalId(request.nationalId)
 
-        val existingByPhone = userRepository.findByPhone(request.phone)
-        if (existingByPhone != null) {
-            if (existingByPhone.isPhoneVerified) {
-                throw UserAlreadyExistsException("Phone number is already registered and verified.")
-            } else {
-                existingUser = existingByPhone
+        if (existingUser != null) {
+            if (existingUser.isPhoneVerified) {
+                throw UserAlreadyExistsException("National ID is already registered.")
             }
         }
 
-        val existingByNationalId = userRepository.findByNationalId(request.nationalId)
-        if (existingByNationalId != null) {
-            if (existingByNationalId.isPhoneVerified) {
-                throw UserAlreadyExistsException("National ID is already registered.")
-            } else {
-                if (existingUser != null && existingUser.id != existingByNationalId.id) {
-                    userRepository.delete(existingByNationalId)
-                } else {
-                    existingUser = existingByNationalId
-                }
-            }
+        val existingUsersByPhone = userRepository.findUsersByPhone(formattedPhone)
+        val verifiedPhoneUsers = existingUsersByPhone.filter { it.isPhoneVerified }
+
+        if (verifiedPhoneUsers.size >= 2) {
+            throw UserAlreadyExistsException("Phone number is already registered and verified twice.")
+        }
+
+        if (verifiedPhoneUsers.any { it.nationalId == request.nationalId }) {
+            throw UserAlreadyExistsException("National ID is already registered.")
+        }
+
+        val matchingUnverifiedPhone = existingUsersByPhone.find { !it.isPhoneVerified && it.nationalId == request.nationalId }
+
+        if (existingUser == null) {
+            existingUser = matchingUnverifiedPhone
+        } else if (matchingUnverifiedPhone != null && existingUser.id != matchingUnverifiedPhone.id) {
+            userRepository.delete(matchingUnverifiedPhone)
         }
 
         if (!request.email.isNullOrBlank()) {
@@ -200,7 +203,8 @@ class AuthService(
             otp = token,
             user = savedUser,
             phone = savedUser.phone,
-            method = VerificationMethod.PHONE
+            method = VerificationMethod.PHONE,
+            purpose = VerificationPurpose.REGISTER
         )
         otpRepository.save(verificationToken)
 
@@ -214,12 +218,10 @@ class AuthService(
     }
 
     fun initiateWhatsAppVerification(phone: String): InitiateWhatsAppVerificationResponse {
-        val user = userRepository.findByPhone(phone)
+        val formattedPhone = formatPhone(phone)
+        val users = userRepository.findUsersByPhone(formattedPhone)
+        val user = users.find { !it.isPhoneVerified }
             ?: throw EntityNotFoundException("User not found with this phone number")
-
-        if (user.isPhoneVerified) {
-            throw RuntimeException("Phone number is already verified")
-        }
 
         otpRepository.deleteAllByUserAndMethod(user, VerificationMethod.PHONE)
 
@@ -228,7 +230,8 @@ class AuthService(
             otp = token,
             user = user,
             phone = user.phone,
-            method = VerificationMethod.PHONE
+            method = VerificationMethod.PHONE,
+            purpose = VerificationPurpose.REGISTER
         )
         otpRepository.save(verificationToken)
 
@@ -240,6 +243,20 @@ class AuthService(
         )
     }
 
+    fun initiateWhatsAppPhoneChangeVerification(user: User, newPhone: String): Pair<String, String> {
+        otpRepository.deleteAllByUserAndMethod(user, VerificationMethod.PHONE)
+        val token = generateWhatsAppToken()
+        val verificationToken = AccountVerification(
+            otp = token,
+            user = user,
+            phone = newPhone,
+            method = VerificationMethod.PHONE,
+            purpose = VerificationPurpose.PHONE_CHANGE
+        )
+        otpRepository.save(verificationToken)
+        return Pair(buildWhatsAppLink(token), token)
+    }
+
     fun processWhatsAppVerification(tokenStr: String, fromNumber: String): VerifyTokenResponse {
         val tokenEntity = otpRepository.findByOtpAndMethod(tokenStr, VerificationMethod.PHONE)
             ?: return VerifyTokenResponse(false, "This verification code is invalid, expired, or has already been used.\nرمز التحقق هذا غير صالح أو منتهي الصلاحية أو تم استخدامه بالفعل.")
@@ -249,30 +266,64 @@ class AuthService(
             return VerifyTokenResponse(false, "This verification code has expired. Please request a new one.\nانتهت صلاحية رمز التحقق هذا. يرجى طلب رمز جديد.")
         }
 
-        val cleanFrom = fromNumber.replace(Regex("""\D"""), "")
-        val cleanRegistered = tokenEntity.user.phone.replace(Regex("""\D"""), "")
-
-        if (cleanFrom != cleanRegistered) {
+        if (!validateFromNumber(tokenEntity, fromNumber)) {
             return VerifyTokenResponse(false, "Please send the verification message from your registered phone number.\nيرجى إرسال رسالة التحقق من رقم هاتفك المسجل.")
         }
 
-        val user = tokenEntity.user
-        val wasUnverified = user.status == UserStatus.UNVERIFIED
-        val verifiedUser = user.copy(
-            isPhoneVerified = true,
-            status = if (wasUnverified) UserStatus.PENDING_APPROVAL else user.status
-        )
-        userRepository.save(verifiedUser)
-        teEcclesiaEventPublisher.publish(verifiedUser.toUserUpdatedEvent())
-
-        if (wasUnverified) {
-            teEcclesiaEventPublisher.publish(UserPendingApprovalEvent(verifiedUser.id, verifiedUser.fullName))
-        }
+        updateVerifiedUser(tokenEntity)
+        val responseMessage = getVerificationResponseMessage(tokenEntity)
 
         val approvedToken = tokenEntity.copy(otp = "APPROVED_$tokenStr")
         otpRepository.save(approvedToken)
 
-        return VerifyTokenResponse(true, "Your phone number has been successfully verified! Your account is now pending approval.\nتم التحقق من رقم هاتفك بنجاح! حسابك الآن قيد الموافقة.")
+        return VerifyTokenResponse(true, responseMessage)
+    }
+
+    private fun validateFromNumber(tokenEntity: AccountVerification, fromNumber: String): Boolean {
+        val registeredPhone = tokenEntity.phone ?: tokenEntity.user.phone
+        val cleanFrom = fromNumber.replace(Regex("""\D"""), "")
+        val cleanRegistered = registeredPhone.replace(Regex("""\D"""), "")
+        return cleanFrom == cleanRegistered
+    }
+
+    private fun updateVerifiedUser(tokenEntity: AccountVerification): User {
+        val user = tokenEntity.user
+        val verifiedUser = when (tokenEntity.purpose) {
+            VerificationPurpose.PHONE_CHANGE -> {
+                user.copy(
+                    phone = tokenEntity.phone!!,
+                    isPhoneVerified = true
+                )
+            }
+            else -> {
+                val wasUnverified = user.status == UserStatus.UNVERIFIED
+                user.copy(
+                    isPhoneVerified = true,
+                    status = if (wasUnverified) UserStatus.PENDING_APPROVAL else user.status
+                )
+            }
+        }
+        val savedUser = userRepository.save(verifiedUser)
+        teEcclesiaEventPublisher.publish(savedUser.toUserUpdatedEvent())
+        
+        if (tokenEntity.purpose != VerificationPurpose.PHONE_CHANGE && user.status == UserStatus.UNVERIFIED) {
+            teEcclesiaEventPublisher.publish(UserPendingApprovalEvent(savedUser.id, savedUser.fullName))
+        }
+        return savedUser
+    }
+
+    private fun getVerificationResponseMessage(tokenEntity: AccountVerification): String {
+        return when (tokenEntity.purpose) {
+            VerificationPurpose.PHONE_CHANGE -> {
+                "Your phone number has been successfully updated and verified!\nتم تحديث رقم هاتفك والتحقق منه بنجاح!"
+            }
+            VerificationPurpose.PASSWORD_RESET -> {
+                "Your password reset request has been verified. Please return to the app to complete the process.\nتم التحقق من طلب إعادة تعيين كلمة المرور. يرجى العودة إلى التطبيق لإكمال العملية."
+            }
+            else -> {
+                "Your phone number has been successfully verified! Your account is now pending approval.\nتم التحقق من رقم هاتفك بنجاح! حسابك الآن قيد الموافقة."
+            }
+        }
     }
 
     fun getWhatsAppStatus(token: String): AuthResponse {
@@ -299,10 +350,6 @@ class AuthService(
         return AuthResponse(accessToken, refreshToken)
     }
 
-    fun verifyPhone(request: VerifyPhoneRequest): AuthResponse {
-        return getWhatsAppStatus(request.otp)
-    }
-
     fun verifyEmail(request: VerifyEmailRequest): AuthResponse {
         val user = userRepository.findByEmail(request.email.lowercase())
             ?: throw EntityNotFoundException("User not found with this email")
@@ -327,12 +374,28 @@ class AuthService(
     }
 
     fun login(request: LoginRequest): AuthResponse {
-        val user = userRepository.findTopByIdentifierOrderByVerification(request.identifier.trim())
-            ?: throw EntityNotFoundException("User not found with this identifier")
+        val identifier = request.identifier.trim()
 
-        if (!passwordEncoder.matches(request.password, user.passwordHash)) {
+        val formattedIdentifier = runCatching {
+            formatPhone(identifier)
+        }.getOrDefault(identifier)
+
+        val users = userRepository.findUsersByIdentifier(formattedIdentifier)
+        if (users.isEmpty()) {
+            throw EntityNotFoundException("User not found with this identifier")
+        }
+
+        val matchingUsers = users.filter { passwordEncoder.matches(request.password, it.passwordHash) }
+
+        if (matchingUsers.isEmpty()) {
             throw InvalidCredentialsException()
         }
+
+        if (matchingUsers.size > 1) {
+            throw InvalidCredentialsException("Ambiguous login. Multiple accounts match this identifier and password. Please use your National ID or user code instead.")
+        }
+
+        val user = matchingUsers[0]
 
         when (user.status) {
             UserStatus.PROFILE_INCOMPLETE -> throw IncompleteProfileException()
@@ -466,28 +529,39 @@ class AuthService(
         }
     }
 
-    fun forgotPassword(request: ForgotPasswordRequest): String {
-        val user = findUserByKeyAndMethod(request.key, request.method)
-            ?: return "If this user exists, an OTP has been sent."
+    fun forgotPassword(request: ForgotPasswordRequest): ForgotPasswordResponse? {
+        val user = findUserForPasswordReset(request.key, request.method) ?: return null
 
         return if (request.method == VerificationMethod.PHONE) {
             val token = generateWhatsAppToken()
-            val verification = AccountVerification(otp = token, user = user, phone = user.phone, method = VerificationMethod.PHONE)
+            val verification = AccountVerification(
+                otp = token,
+                user = user,
+                phone = user.phone,
+                method = VerificationMethod.PHONE,
+                purpose = VerificationPurpose.PASSWORD_RESET
+            )
             otpRepository.save(verification)
-            buildWhatsAppLink(token)
+            ForgotPasswordResponse(buildWhatsAppLink(token), token)
         } else {
             val otpCode = emailService.generateOtp()
-            val verification = AccountVerification(otp = otpCode, user = user, email = user.email, method = VerificationMethod.EMAIL)
+            val verification = AccountVerification(
+                otp = otpCode,
+                user = user,
+                email = user.email,
+                method = VerificationMethod.EMAIL,
+                purpose = VerificationPurpose.PASSWORD_RESET
+            )
             otpRepository.save(verification)
             if (user.email != null) {
                 emailService.sendOtp(user.email, verification.otp)
             }
-            "If this user exists, an OTP has been sent."
+            null
         }
     }
 
     fun verifyOtp(request: VerifyOtpRequest): String {
-        val user = findUserByKeyAndMethod(request.key, request.method)
+        val user = findUserForPasswordReset(request.key, request.method)
             ?: throw EntityNotFoundException("User not found")
 
         val tokenStr = request.otp
@@ -513,7 +587,7 @@ class AuthService(
     }
 
     fun resetPassword(request: ResetPasswordRequest): String {
-        val user = findUserByKeyAndMethod(request.key, request.method)
+        val user = findUserForPasswordReset(request.key, request.method)
             ?: throw EntityNotFoundException("User not found")
 
         val tokenStr = request.otp
@@ -544,18 +618,30 @@ class AuthService(
         return "Password reset successfully. You can now login."
     }
 
-    fun resendOtp(request: ForgotPasswordRequest): String {
-        val user = findUserByKeyAndMethod(request.key, request.method)
+    fun resendOtp(request: ForgotPasswordRequest): ForgotPasswordResponse? {
+        val user = findUserForPasswordReset(request.key, request.method)
             ?: throw EntityNotFoundException("User not found")
 
-        if (request.method == VerificationMethod.PHONE) {
+        return if (request.method == VerificationMethod.PHONE) {
             val token = generateWhatsAppToken()
-            val verification = AccountVerification(otp = token, user = user, phone = user.phone, method = VerificationMethod.PHONE)
+            val verification = AccountVerification(
+                otp = token,
+                user = user,
+                phone = user.phone,
+                method = VerificationMethod.PHONE,
+                purpose = VerificationPurpose.PASSWORD_RESET
+            )
             otpRepository.save(verification)
-            return buildWhatsAppLink(token)
+            ForgotPasswordResponse(buildWhatsAppLink(token), token)
         } else {
             val otpCode = emailService.generateOtp()
-            val verificationToken = AccountVerification(otp = otpCode, user = user, email = user.email, method = VerificationMethod.EMAIL)
+            val verificationToken = AccountVerification(
+                otp = otpCode,
+                user = user,
+                email = user.email,
+                method = VerificationMethod.EMAIL,
+                purpose = VerificationPurpose.PASSWORD_RESET
+            )
             otpRepository.save(verificationToken)
             if (user.email != null) {
                 if (!user.isEmailVerified) {
@@ -564,16 +650,29 @@ class AuthService(
                     emailService.sendOtp(user.email, verificationToken.otp)
                 }
             }
-            return "OTP resent successfully."
+            null
         }
     }
 
-    private fun findUserByKeyAndMethod(key: String, method: VerificationMethod): User? {
-        return if (method == VerificationMethod.PHONE) {
-            userRepository.findByPhone(key)
-        } else {
-            userRepository.findByEmail(key.lowercase())
+    private fun findUserForPasswordReset(key: String, method: VerificationMethod): User? {
+        if (method == VerificationMethod.EMAIL) {
+            return userRepository.findByEmail(key.lowercase())
         }
+
+        val isNationalId = key.matches(Regex("""\d{14}"""))
+        if (isNationalId) {
+            return userRepository.findByNationalId(key)
+        }
+
+        val formattedPhone = runCatching {
+            formatPhone(key)
+        }.getOrDefault(key)
+
+        val usersByPhone = userRepository.findUsersByPhone(formattedPhone)
+        if (usersByPhone.size > 1) {
+            throw DuplicatePhoneException("This phone number is associated with multiple accounts. Please use your National ID to reset your password.")
+        }
+        return usersByPhone.firstOrNull()
     }
 
 

@@ -13,14 +13,20 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.multipart.MultipartFile
 import org.teEcclesia.identity.api.dto.request.ApproveUserRequest
+import org.teEcclesia.identity.api.dto.response.InitiateWhatsAppVerificationResponse
 import org.teEcclesia.identity.api.dto.response.toProfileResponse
 import org.teEcclesia.identity.exception.UnauthorizedException
 import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.entity.toUserUpdatedEvent
+import org.teEcclesia.identity.exception.UserAlreadyExistsException
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.teEcclesia.identity.api.dto.request.RegisterRequest
+import org.teEcclesia.identity.api.dto.request.formatPhone
+import org.teEcclesia.identity.api.dto.request.formatHomePhone
+import org.teEcclesia.identity.utils.extractBirthDate
+import org.teEcclesia.identity.utils.extractGender
 import org.teEcclesia.identity.api.dto.request.toEntity
 import org.teEcclesia.identity.entity.MakhdoomProfile
 import org.teEcclesia.identity.repository.EducationalStageRepository
@@ -42,6 +48,7 @@ class UserService(
     private val educationalStageRepository: EducationalStageRepository,
     private val educationalYearRepository: EducationalYearRepository,
     private val areaRepository: AreaRepository,
+    private val authService: AuthService,
     @param:Value("\${storage.teEcclesia.cdn-endpoint}") private val cdnEndpoint: String,
     @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String,
     @param:Value("\${identity.resources.documents-directory}") private val documentsDirectory: String
@@ -84,12 +91,34 @@ class UserService(
             thirdName = request.thirdName,
             lastName = request.lastName,
             displayName = request.displayName,
-            phone = request.phone,
-            email = request.email,
+            email = request.email
         )
 
         val savedUser = userRepository.save(updatedUser)
         eventPublisher.publish(savedUser.toUserUpdatedEvent())
+    }
+
+    fun initiatePhoneChange(userId: UUID, phone: String): InitiateWhatsAppVerificationResponse {
+        val user = findById(userId)
+        val formattedPhone = formatPhone(phone)
+
+        if (formattedPhone == user.phone) {
+            throw IllegalArgumentException("New phone number must be different from current phone number.")
+        }
+
+        val existingUsersByPhone = userRepository.findUsersByPhone(formattedPhone)
+        val otherVerifiedPhoneUsers = existingUsersByPhone.filter { it.id != userId && it.isPhoneVerified }
+
+        if (otherVerifiedPhoneUsers.size >= 2) {
+            throw UserAlreadyExistsException("Phone number is already registered and verified twice.")
+        }
+
+        if (otherVerifiedPhoneUsers.any { it.nationalId == user.nationalId }) {
+            throw UserAlreadyExistsException("National ID is already registered.")
+        }
+
+        val (deepLink, token) = authService.initiateWhatsAppPhoneChangeVerification(user, formattedPhone)
+        return InitiateWhatsAppVerificationResponse(deepLink, token)
     }
 
     fun deleteUserImage(userId: UUID) {
@@ -118,6 +147,25 @@ class UserService(
         var user = findById(userId)
         
         request?.updateProfileData?.let { updateData ->
+            val formattedPhone = formatPhone(updateData.phone)
+            if (formattedPhone != user.phone || updateData.nationalId != user.nationalId) {
+                val existingUsersByPhone = userRepository.findUsersByPhone(formattedPhone)
+                val otherVerifiedPhoneUsers = existingUsersByPhone.filter { it.id != user.id && it.isPhoneVerified }
+
+                if (otherVerifiedPhoneUsers.size >= 2) {
+                    throw UserAlreadyExistsException("Phone number is already registered and verified twice.")
+                }
+
+                if (otherVerifiedPhoneUsers.any { it.nationalId == updateData.nationalId }) {
+                    throw UserAlreadyExistsException("National ID is already registered.")
+                }
+
+                val existingByNationalId = userRepository.findByNationalId(updateData.nationalId)
+                if (existingByNationalId != null && existingByNationalId.id != user.id) {
+                    throw UserAlreadyExistsException("National ID is already registered.")
+                }
+            }
+
             user = user.copy(
                 firstName = updateData.firstName,
                 secondName = updateData.secondName,
@@ -125,7 +173,8 @@ class UserService(
                 lastName = updateData.lastName,
                 displayName = updateData.displayName,
                 nationalId = updateData.nationalId,
-                phone = updateData.phone,
+                phone = formattedPhone,
+                isPhoneVerified = if (formattedPhone != user.phone) false else user.isPhoneVerified,
                 email = updateData.email,
                 job = updateData.job,
                 buildingNo = updateData.buildingNo,
@@ -238,6 +287,23 @@ class UserService(
             request.imageUrl
         }
 
+        val existingByNationalId = userRepository.findByNationalId(request.nationalId)
+        if (existingByNationalId != null) {
+            throw UserAlreadyExistsException("National ID is already registered.")
+        }
+
+        val formattedPhone = formatPhone(request.phone)
+        val existingUsersByPhone = userRepository.findUsersByPhone(formattedPhone)
+        val verifiedPhoneUsers = existingUsersByPhone.filter { it.isPhoneVerified }
+
+        if (verifiedPhoneUsers.size >= 2) {
+            throw UserAlreadyExistsException("Phone number is already registered and verified twice.")
+        }
+
+        if (verifiedPhoneUsers.any { it.nationalId == request.nationalId }) {
+            throw UserAlreadyExistsException("National ID is already registered.")
+        }
+
         val userEntity = request.toEntity(
             hashedPassword = encodedPassword, 
             confessionPriest = confessionPriest,
@@ -308,6 +374,23 @@ class UserService(
             request.imageUrl
         }
 
+        val existingByNationalId = userRepository.findByNationalId(request.nationalId)
+        if (existingByNationalId != null) {
+            throw UserAlreadyExistsException("National ID is already registered.")
+        }
+
+        val formattedPhone = formatPhone(request.phone)
+        val existingUsersByPhone = userRepository.findUsersByPhone(formattedPhone)
+        val verifiedPhoneUsers = existingUsersByPhone.filter { it.isPhoneVerified }
+
+        if (verifiedPhoneUsers.size >= 2) {
+            throw UserAlreadyExistsException("Phone number is already registered and verified twice.")
+        }
+
+        if (verifiedPhoneUsers.any { it.nationalId == request.nationalId }) {
+            throw UserAlreadyExistsException("National ID is already registered.")
+        }
+
         val userEntity = request.toEntity(
             hashedPassword = encodedPassword, 
             confessionPriest = confessionPriest,
@@ -359,6 +442,134 @@ class UserService(
 
         eventPublisher.publish(savedUser.toUserUpdatedEvent())
         return savedUser.toProfileResponse(imagesBaseUrl)
+    }
+
+    @Transactional
+    fun updateMakhdoomProfileByKhadem(callerId: UUID, targetUserId: UUID, request: RegisterRequest) {
+        val caller = findById(callerId)
+        val target = findById(targetUserId)
+        if (!isResponsibleFor(caller, target)) {
+            throw UnauthorizedException("User is not authorized to edit this profile")
+        }
+
+        if (caller.role == UserRole.KHADEM) {
+            val khademProfile = caller.khademProfile
+            val reqStageId = request.makhdoomProfile?.educationalStageId
+            val reqYearId = request.makhdoomProfile?.educationalYearId
+            
+            if (khademProfile != null) {
+                val hasStage = reqStageId != null && khademProfile.responsibleStages.any { it.id == reqStageId }
+                val hasYear = reqYearId != null && khademProfile.responsibleYears.any { it.id == reqYearId }
+                
+                if (!hasStage && !hasYear) {
+                    throw UnauthorizedException("You are not responsible for this educational stage or year")
+                }
+            }
+        }
+
+        val formattedPhone = formatPhone(request.phone)
+        if (formattedPhone != target.phone) {
+            val existingUsersByPhone = userRepository.findUsersByPhone(formattedPhone)
+            val otherVerifiedPhoneUsers = existingUsersByPhone.filter { it.id != targetUserId && it.isPhoneVerified }
+
+            if (otherVerifiedPhoneUsers.size >= 2) {
+                throw UserAlreadyExistsException("Phone number is already registered and verified twice.")
+            }
+
+            if (otherVerifiedPhoneUsers.any { it.nationalId == request.nationalId }) {
+                throw UserAlreadyExistsException("National ID is already registered.")
+            }
+        }
+
+        if (request.nationalId != target.nationalId) {
+            val existingByNationalId = userRepository.findByNationalId(request.nationalId)
+            if (existingByNationalId != null && existingByNationalId.id != targetUserId) {
+                throw UserAlreadyExistsException("National ID is already registered.")
+            }
+        }
+
+        var confessionPriest: User? = target.confessionPriest
+        if (request.confessionPriestId != null && request.confessionPriestId != target.confessionPriest?.id) {
+            confessionPriest = findById(request.confessionPriestId)
+        }
+
+        val passwordHash = if (!request.password.isNullOrBlank()) {
+            passwordEncoder.encode(request.password)!!
+        } else {
+            target.passwordHash
+        }
+
+        val updatedUser = target.copy(
+            firstName = request.firstName,
+            secondName = request.secondName,
+            thirdName = request.thirdName,
+            lastName = request.lastName,
+            displayName = request.displayName,
+            nationalId = request.nationalId,
+            phone = formattedPhone,
+            homePhone = formatHomePhone(request.homePhone),
+            email = request.email,
+            passwordHash = passwordHash,
+            birthDate = extractBirthDate(request.nationalId),
+            job = request.job,
+            buildingNo = request.buildingNo,
+            street = request.street,
+            streetBranch = request.streetBranch,
+            area = request.area,
+            floor = request.floor,
+            apartment = request.apartment,
+            specialMark = request.specialMark,
+            gender = extractGender(request.nationalId),
+            confessionPriest = confessionPriest,
+            externalConfessionPriestName = request.externalConfessionPriestName,
+            externalConfessionChurch = request.externalConfessionChurch,
+            externalConfessionPhone = request.externalConfessionPhone
+        )
+
+        val finalUser = if (target.role == UserRole.MAKHDOOM && request.makhdoomProfile != null) {
+            val educationalStage = educationalStageRepository.findById(request.makhdoomProfile.educationalStageId).orElseThrow {
+                java.lang.IllegalArgumentException("Educational stage not found")
+            }
+            val educationalYear = request.makhdoomProfile.educationalYearId?.let {
+                educationalYearRepository.findById(it).orElseThrow {
+                    java.lang.IllegalArgumentException("Educational year not found")
+                }
+            }
+
+            val currentProfile = target.makhdoomProfile
+            val updatedMakhdoomProfile = if (currentProfile != null) {
+                currentProfile.copy(
+                    shamamsaStudyStatus = request.makhdoomProfile.shamamsaStudyStatus,
+                    educationalStage = educationalStage,
+                    educationalYear = educationalYear,
+                    fatherPhone = request.makhdoomProfile.fatherPhone,
+                    fatherWhatsapp = request.makhdoomProfile.fatherWhatsapp,
+                    motherPhone = request.makhdoomProfile.motherPhone,
+                    motherWhatsapp = request.makhdoomProfile.motherWhatsapp,
+                    isFatherDeceased = request.makhdoomProfile.isFatherDeceased,
+                    isMotherDeceased = request.makhdoomProfile.isMotherDeceased
+                )
+            } else {
+                MakhdoomProfile(
+                    user = updatedUser,
+                    shamamsaStudyStatus = request.makhdoomProfile.shamamsaStudyStatus,
+                    educationalStage = educationalStage,
+                    educationalYear = educationalYear,
+                    fatherPhone = request.makhdoomProfile.fatherPhone,
+                    fatherWhatsapp = request.makhdoomProfile.fatherWhatsapp,
+                    motherPhone = request.makhdoomProfile.motherPhone,
+                    motherWhatsapp = request.makhdoomProfile.motherWhatsapp,
+                    isFatherDeceased = request.makhdoomProfile.isFatherDeceased,
+                    isMotherDeceased = request.makhdoomProfile.isMotherDeceased
+                )
+            }
+            updatedUser.copy(makhdoomProfile = updatedMakhdoomProfile)
+        } else {
+            updatedUser
+        }
+
+        val savedUser = userRepository.save(finalUser)
+        eventPublisher.publish(savedUser.toUserUpdatedEvent())
     }
 
     private fun addAreaIfNotExists(areaName: String) {

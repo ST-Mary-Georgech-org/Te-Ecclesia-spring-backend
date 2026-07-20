@@ -12,6 +12,7 @@ import org.teEcclesia.identity.exception.InvalidCredentialsException
 import org.teEcclesia.identity.exception.UnauthorizedException
 import org.teEcclesia.identity.exception.UserAlreadyExistsException
 import org.teEcclesia.identity.exception.PhoneNotVerifiedException
+import org.teEcclesia.identity.exception.DuplicatePhoneException
 import org.teEcclesia.identity.security.JwtUtil
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -25,7 +26,7 @@ import org.teEcclesia.identity.api.dto.request.MakhdoomProfileRequest
 import org.teEcclesia.identity.api.dto.request.ParentProfileRequest
 import org.teEcclesia.identity.api.dto.request.RegisterRequest
 import org.teEcclesia.identity.api.dto.request.VerifyEmailRequest
-import org.teEcclesia.identity.api.dto.request.VerifyPhoneRequest
+import org.teEcclesia.identity.api.dto.request.formatPhone
 import org.teEcclesia.identity.entity.enums.Gender
 import org.teEcclesia.identity.entity.enums.ShamamsaStudyStatus
 import org.teEcclesia.identity.entity.enums.UserRole
@@ -91,7 +92,7 @@ class AuthServiceIntegrationTest {
         val request = RegisterRequest(
             firstName = "First", secondName = "Second", thirdName = "Third", lastName = "Last",
             displayName = "New User", nationalId = "29001010101010",
-            phone = "123456789", homePhone = "0223456789",
+            phone = "01118295474", homePhone = "0223456789",
             email = "new-user@mail.com", password = "Password@1",
             job = "Job", buildingNo = "1", street = "Street", area = "Area",
             floor = "1", apartment = "1", specialMark = "Mark"
@@ -99,7 +100,7 @@ class AuthServiceIntegrationTest {
 
         authService.register(request)
 
-        val savedUser = userRepository.findByPhone(request.phone)
+        val savedUser = userRepository.findUsersByPhone(formatPhone(request.phone)).firstOrNull()
         assertThat(savedUser).isNotNull()
         assertThat(savedUser?.status).isEqualTo(UserStatus.PROFILE_INCOMPLETE)
     }
@@ -109,15 +110,14 @@ class AuthServiceIntegrationTest {
         val existingUser = createUser(email = "verified-user@mail.com", isVerified = true)
         val request = RegisterRequest(
             firstName = "First", secondName = "Second", thirdName = "Third", lastName = "Last",
-            displayName = "Verified User", nationalId = "29001010101010",
+            displayName = "Verified User", nationalId = existingUser.nationalId,
             phone = existingUser.phone, homePhone = "0223456789",
             email = "different@mail.com", password = "Password@1",
             job = "Job", buildingNo = "1", street = "Street", area = "Area",
             floor = "1", apartment = "1", specialMark = "Mark"
         )
 
-        val thrownException = assertThrows<UserAlreadyExistsException> { authService.register(request) }
-        assertThat(thrownException).hasMessageThat().contains("Phone number is already registered and verified.")
+        assertThrows<UserAlreadyExistsException> { authService.register(request) }
     }
 
     @Test
@@ -125,7 +125,7 @@ class AuthServiceIntegrationTest {
         val existingUser = createUser(email = "pending-user@mail.com", isVerified = false)
         val request = RegisterRequest(
             firstName = "First", secondName = "Second", thirdName = "Third", lastName = "Last",
-            displayName = "Pending Updated", nationalId = "29001010101010",
+            displayName = "Pending Updated", nationalId = existingUser.nationalId,
             phone = existingUser.phone, homePhone = "0223456789",
             email = "pending-updated@mail.com", password = "Password@1",
             job = "Job", buildingNo = "1", street = "Street", area = "Area",
@@ -134,14 +134,14 @@ class AuthServiceIntegrationTest {
 
         authService.register(request)
 
-        val updatedUser = userRepository.findByPhone(existingUser.phone)
+        val updatedUser = userRepository.findUsersByPhone(existingUser.phone).firstOrNull()
         assertThat(updatedUser).isNotNull()
         assertThat(updatedUser?.id).isEqualTo(existingUser.id)
         assertThat(updatedUser?.displayName).isEqualTo("Pending Updated")
     }
 
     @Test
-    fun `verifyPhone status check throw UnauthorizedException if pending`() {
+    fun `getWhatsAppStatus status check throw UnauthorizedException if pending`() {
         val user = createUser(email = "otp-invalid@mail.com", isVerified = false)
         val token = "AUTH_A1B2C3D4"
         otpRepository.save(
@@ -154,13 +154,13 @@ class AuthServiceIntegrationTest {
         )
 
         val thrownException = assertThrows<UnauthorizedException> {
-            authService.verifyPhone(VerifyPhoneRequest(phone = user.phone, otp = token))
+            authService.getWhatsAppStatus(token)
         }
         assertThat(thrownException).hasMessageThat().contains("Verification pending")
     }
 
     @Test
-    fun `verifyPhone status check returns auth response if approved`() {
+    fun `getWhatsAppStatus status check returns auth response if approved`() {
         val user = createUser(email = "otp-valid@mail.com", isVerified = false)
         val token = "AUTH_A1B2C3D4"
         otpRepository.save(
@@ -172,7 +172,7 @@ class AuthServiceIntegrationTest {
             )
         )
 
-        val authResponse = authService.verifyPhone(VerifyPhoneRequest(phone = user.phone, otp = token))
+        val authResponse = authService.getWhatsAppStatus(token)
 
         assertThat(authResponse.accessToken).isEqualTo("access-token")
         assertThat(authResponse.refreshToken).isEqualTo("refresh-token")
@@ -285,14 +285,41 @@ class AuthServiceIntegrationTest {
     }
 
     @Test
+    fun `processWhatsAppVerification returns password reset message if user is already verified`() {
+        val user = createUser(email = "webhook-reset-test@mail.com", isVerified = true)
+        val token = "AUTH_R1R2R3R4"
+        otpRepository.save(
+            AccountVerification(
+                otp = token,
+                user = user,
+                phone = user.phone,
+                method = VerificationMethod.PHONE,
+                purpose = VerificationPurpose.PASSWORD_RESET
+            )
+        )
+
+        val result = authService.processWhatsAppVerification(token, user.phone)
+
+        val updatedUser = userRepository.findById(user.id).get()
+        val updatedToken = otpRepository.findByOtpAndMethod("APPROVED_$token", VerificationMethod.PHONE)
+        
+        assertThat(result.success).isTrue()
+        assertThat(result.message).contains("Your password reset request has been verified.")
+        assertThat(updatedUser.status).isEqualTo(UserStatus.APPROVED)
+        assertThat(updatedToken?.otp).isEqualTo("APPROVED_$token")
+    }
+
+
+    @Test
     fun `forgotPassword returns whatsapp link for phone request`() {
         val user = createUser(email = "forgot-verified@mail.com", isVerified = true)
         val request = ForgotPasswordRequest(key = user.phone, method = VerificationMethod.PHONE)
 
-        val resultMessage = authService.forgotPassword(request)
+        val response = authService.forgotPassword(request)
 
-        assertThat(resultMessage).startsWith("https://wa.me/")
-        assertThat(resultMessage).contains("AUTH_")
+        assertThat(response).isNotNull()
+        assertThat(response?.link).startsWith("https://wa.me/")
+        assertThat(response?.token).startsWith("AUTH_")
     }
 
 
@@ -349,13 +376,123 @@ class AuthServiceIntegrationTest {
         assertThat(updatedUser.makhdoomProfile).isNotNull()
     }
 
+    @Test
+    fun `register saves user with job and homePhone as null`() {
+        val request = RegisterRequest(
+            firstName = "First", secondName = "Second", thirdName = "Third", lastName = "Last",
+            displayName = "New User Optional", nationalId = "29001010101019",
+            phone = "01118295475", homePhone = null,
+            email = "new-user-opt@mail.com", password = "Password@1",
+            job = null, buildingNo = "1", street = "Street", area = "Area",
+            floor = "1", apartment = "1", specialMark = "Mark"
+        )
+
+        authService.register(request)
+
+        val savedUser = userRepository.findByNationalId(request.nationalId)
+        assertThat(savedUser).isNotNull()
+        assertThat(savedUser?.homePhone).isNull()
+        assertThat(savedUser?.job).isNull()
+    }
+
+    @Test
+    fun `register allows same phone number twice for different national IDs`() {
+        val user1 = createUser(email = "phone-shared-1@mail.com", isVerified = true)
+        userRepository.save(user1.copy(nationalId = "29001010101091"))
+        val sharedPhone = user1.phone
+        
+        val request = RegisterRequest(
+            firstName = "Second", secondName = "User", thirdName = "Test", lastName = "Case",
+            displayName = "Second User", nationalId = "29001010101018",
+            phone = sharedPhone, homePhone = "0223456789",
+            email = "phone-shared-2@mail.com", password = "Password@1",
+            job = "Engineer", buildingNo = "2", street = "Street", area = "Area",
+            floor = "1", apartment = "1", specialMark = "Mark"
+        )
+
+        authService.register(request)
+
+        val users = userRepository.findUsersByPhone(sharedPhone)
+        assertThat(users.size).isEqualTo(2)
+    }
+
+    @Test
+    fun `register throws UserAlreadyExistsException if phone registered twice`() {
+        val user1 = createUser(email = "phone-shared-3@mail.com", isVerified = true)
+        val sharedPhone = user1.phone
+        
+        val user2 = user1.copy(
+            id = UUID.randomUUID(),
+            nationalId = "29001010101017",
+            email = "phone-shared-4@mail.com"
+        )
+        userRepository.save(user2)
+        
+        val request = RegisterRequest(
+            firstName = "Third", secondName = "User", thirdName = "Test", lastName = "Case",
+            displayName = "Third User", nationalId = "29001010101016",
+            phone = sharedPhone, homePhone = "0223456789",
+            email = "phone-shared-5@mail.com", password = "Password@1",
+            job = "Engineer", buildingNo = "2", street = "Street", area = "Area",
+            floor = "1", apartment = "1", specialMark = "Mark"
+        )
+
+        assertThrows<UserAlreadyExistsException> {
+            authService.register(request)
+        }
+    }
+
+    @Test
+    fun `login resolves shared phone number by checking password`() {
+        every { jwtUtil.generateRefreshToken(any()) } answers { "refresh-token-" + java.util.UUID.randomUUID() }
+        val user1 = createUser(email = "login-shared-1@mail.com", isVerified = true, plainPassword = "Password@1")
+        val user2 = createUser(email = "login-shared-2@mail.com", isVerified = true, plainPassword = "Password@2")
+        userRepository.save(user2.copy(phone = user1.phone, nationalId = "29001010101099"))
+        val sharedPhone = user1.phone
+
+        val request1 = LoginRequest(identifier = sharedPhone, password = "Password@1")
+        val response1 = authService.login(request1)
+        assertThat(response1.accessToken).isNotNull()
+
+        val request2 = LoginRequest(identifier = sharedPhone, password = "Password@2")
+        val response2 = authService.login(request2)
+        assertThat(response2.accessToken).isNotNull()
+    }
+
+    @Test
+    fun `forgotPassword throws DuplicatePhoneException if phone is registered twice`() {
+        val user1 = createUser(email = "forgot-shared-1@mail.com", isVerified = true)
+        val user2 = createUser(email = "forgot-shared-2@mail.com", isVerified = true)
+        userRepository.save(user2.copy(phone = user1.phone, nationalId = "29001010101098"))
+        val sharedPhone = user1.phone
+
+        val request = ForgotPasswordRequest(key = sharedPhone, method = VerificationMethod.PHONE)
+        assertThrows<DuplicatePhoneException> {
+            authService.forgotPassword(request)
+        }
+    }
+
+    @Test
+    fun `forgotPassword succeeds with National ID if phone is registered twice`() {
+        val user1 = createUser(email = "forgot-shared-3@mail.com", isVerified = true)
+        val user2 = createUser(email = "forgot-shared-4@mail.com", isVerified = true)
+        val savedUser2 = userRepository.save(user2.copy(phone = user1.phone, nationalId = "29001010101097"))
+
+        val request = ForgotPasswordRequest(key = savedUser2.nationalId, method = VerificationMethod.PHONE)
+        val response = authService.forgotPassword(request)
+        assertThat(response).isNotNull()
+        assertThat(response?.link).startsWith("https://wa.me/")
+    }
+
     private fun createUser(
         email: String,
         isVerified: Boolean,
         plainPassword: String = "Password@1",
         createdAt: Instant = Instant.now().minus(2, ChronoUnit.HOURS)
     ): User {
-        val phone = "12345" + UUID.randomUUID().toString().replace("-", "").take(6)
+        val prefix = listOf("010", "011", "012", "015").random()
+        val randomDigits = (10000000..99999999).random().toString()
+        val phone = "+2$prefix$randomDigits"
         val userToSave = User(
             firstName = "Integration",
             secondName = "User",

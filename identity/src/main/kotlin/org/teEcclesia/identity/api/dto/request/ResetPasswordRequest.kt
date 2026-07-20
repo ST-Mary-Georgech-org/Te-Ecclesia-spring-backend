@@ -10,7 +10,7 @@ data class ResetPasswordRequest(
     val key: String,
 
     @field:NotBlank(message = "OTP is required")
-    @field:Size(min = 4, max = 5, message = "OTP must be 4 or 5 characters")
+    @field:Size(min = 4, max = 15, message = "OTP must be between 4 and 15 characters")
     val otp: String,
 
     @field:NotBlank(message = "New password is required")

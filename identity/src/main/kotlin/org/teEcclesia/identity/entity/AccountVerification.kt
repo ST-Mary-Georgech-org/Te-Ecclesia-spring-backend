@@ -31,6 +31,10 @@ data class AccountVerification(
     @Column(nullable = false)
     val method: VerificationMethod,
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    val purpose: VerificationPurpose = VerificationPurpose.REGISTER,
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     val user: User

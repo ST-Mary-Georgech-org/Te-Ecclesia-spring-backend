@@ -45,8 +45,8 @@ data class User(
     @Column(nullable = false)
     val phone: String,
 
-    @Column(nullable = false)
-    val homePhone: String,
+    @Column(nullable = true)
+    val homePhone: String? = null,
 
     @Column(nullable = true)
     val email: String? = null,
@@ -63,8 +63,8 @@ data class User(
     @Column(nullable = false)
     val birthDate: LocalDate,
 
-    @Column(nullable = false)
-    val job: String,
+    @Column(nullable = true)
+    val job: String? = null,
 
     @Column(nullable = false)
     val buildingNo: String, 

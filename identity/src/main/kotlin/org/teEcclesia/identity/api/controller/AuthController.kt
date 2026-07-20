@@ -8,6 +8,7 @@ import org.teEcclesia.identity.api.dto.request.*
 import org.teEcclesia.identity.api.dto.response.AuthResponse
 import org.teEcclesia.identity.api.dto.response.RegisterResponse
 import org.teEcclesia.identity.api.dto.response.InitiateWhatsAppVerificationResponse
+import org.teEcclesia.identity.api.dto.response.ForgotPasswordResponse
 import org.teEcclesia.identity.api.dto.response.TokenResponse
 import org.teEcclesia.identity.service.AuthService
 import org.teEcclesia.identity.service.UserService
@@ -58,13 +59,6 @@ class AuthController (
         @AuthenticationPrincipal userId: UUID
     ): ResponseEntity<ProfileResponse> {
         val response = userService.getUserProfile(userId, imagesBaseUrl)
-        return ResponseEntity.ok(response)
-    }
-
-    @Tag(name = "Registration")
-    @PostMapping("/verify-phone")
-    fun verifyPhone(@Valid @RequestBody request: VerifyPhoneRequest): ResponseEntity<AuthResponse> {
-        val response = authService.verifyPhone(request)
         return ResponseEntity.ok(response)
     }
 
@@ -127,7 +121,7 @@ class AuthController (
 
     @Tag(name = "Password Management", description = "Endpoints related to password reset and OTP verification")
     @PostMapping("/forgot-password")
-    fun forgotPassword (@Valid @RequestBody request: ForgotPasswordRequest): ResponseEntity<String> {
+    fun forgotPassword (@Valid @RequestBody request: ForgotPasswordRequest): ResponseEntity<ForgotPasswordResponse> {
         val response = authService.forgotPassword(request)
         return ResponseEntity.ok(response)
     }
@@ -148,7 +142,7 @@ class AuthController (
 
     @Operation(tags = ["Password Management", "Registration"], summary = "Resend OTP for account verification or password reset")
     @PostMapping("/resend-otp")
-    fun resendOtp(@Valid @RequestBody request: ForgotPasswordRequest): ResponseEntity<String> {
+    fun resendOtp(@Valid @RequestBody request: ForgotPasswordRequest): ResponseEntity<ForgotPasswordResponse> {
         val response = authService.resendOtp(request)
         return ResponseEntity.ok(response)
     }

@@ -10,7 +10,13 @@ import org.junit.jupiter.api.assertThrows
 import org.teEcclesia.events.publisher.TeEcclesiaEventPublisher
 import org.teEcclesia.identity.IdentityTestApplication
 import org.teEcclesia.identity.api.dto.request.UpdateProfileRequest
+import org.teEcclesia.identity.api.dto.request.RegisterRequest
+import org.teEcclesia.identity.api.dto.request.MakhdoomProfileRequest
 import org.teEcclesia.identity.entity.User
+import org.teEcclesia.identity.entity.VerificationPurpose
+import org.teEcclesia.identity.entity.VerificationMethod
+import org.teEcclesia.identity.entity.lookups.EducationalStage
+import org.teEcclesia.identity.entity.lookups.EducationalYear
 import org.teEcclesia.identity.entity.enums.Gender
 import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.entity.enums.UserRole
@@ -22,6 +28,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.mock.web.MockMultipartFile
 import org.springframework.test.context.ActiveProfiles
+import org.teEcclesia.identity.entity.enums.ShamamsaStudyStatus
 import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -44,6 +51,12 @@ class UserServiceIntegrationTest {
     private lateinit var emailVerificationRepository: EmailVerificationRepository
 
     @Autowired
+    private lateinit var educationalStageRepository: EducationalStageRepository
+
+    @Autowired
+    private lateinit var educationalYearRepository: EducationalYearRepository
+
+    @Autowired
     private lateinit var imageStorageService: ImageStorageService
 
     @Autowired
@@ -54,6 +67,8 @@ class UserServiceIntegrationTest {
         refreshTokenRepository.deleteAll()
         emailVerificationRepository.deleteAll()
         userRepository.deleteAll()
+        educationalYearRepository.deleteAll()
+        educationalStageRepository.deleteAll()
         clearMocks(imageStorageService, answers = false, recordedCalls = true)
     }
 
@@ -166,7 +181,7 @@ class UserServiceIntegrationTest {
                 displayName = "Integration User",
                 nationalId = "2900101010101" + (0..9).random(), // 14 digits
                 email = email,
-                phone = "123456_" + UUID.randomUUID().toString().take(6),
+                phone = "+2" + listOf("010", "011", "012", "015").random() + (10000000..99999999).random().toString(),
                 homePhone = "0223456789",
                 passwordHash = "encoded-password",
                 birthDate = LocalDate.of(1990, 1, 1),
@@ -195,7 +210,7 @@ class UserServiceIntegrationTest {
             thirdName = "Test",
             lastName = "Case",
             displayName = "Israa Updated",
-            phone = "987654321",
+            phone = "01118295476",
             email = "new-email@mail.com"
         )
 
@@ -204,7 +219,64 @@ class UserServiceIntegrationTest {
         val updatedUser = userRepository.findById(existingUser.id).orElse(null)
         assertThat(updatedUser).isNotNull()
         assertThat(updatedUser?.displayName).isEqualTo("Israa Updated")
-        assertThat(updatedUser?.phone).isEqualTo("987654321")
+        assertThat(updatedUser?.phone).isEqualTo(existingUser.phone)
         assertThat(updatedUser?.email).isEqualTo("new-email@mail.com")
+    }
+
+    @Test
+    fun `initiatePhoneChange successfully creates phone change verification token`() {
+        val user = createUser(email = "phone-change-init@mail.com")
+        val newPhone = "01118295477"
+        val response = userService.initiatePhoneChange(user.id, newPhone)
+        
+        assertThat(response).isNotNull()
+        assertThat(response.deepLink).startsWith("https://wa.me/")
+        assertThat(response.token).startsWith("AUTH_")
+
+        val tokenEntity = emailVerificationRepository.findByOtpAndMethod(response.token, VerificationMethod.PHONE)
+        assertThat(tokenEntity).isNotNull()
+        assertThat(tokenEntity?.phone).isEqualTo("+201118295477")
+        assertThat(tokenEntity?.purpose).isEqualTo(VerificationPurpose.PHONE_CHANGE)
+    }
+
+    @Test
+    fun `updateMakhdoomProfileByKhadem updates Makhdoom profile successfully`() {
+        val admin = createUser(email = "admin-update@mail.com")
+        userRepository.save(admin.copy(role = UserRole.ADMIN))
+        
+        val makhdoom = createUser(email = "makhdoom-update@mail.com")
+        userRepository.save(makhdoom.copy(role = UserRole.MAKHDOOM))
+
+        val stage = educationalStageRepository.save(EducationalStage(nameAr = "Stage", nameEn = "Stage"))
+        val year = educationalYearRepository.save(EducationalYear(nameAr = "Year", nameEn = "Year", stage = stage))
+
+        val request = RegisterRequest(
+            firstName = "Makhdoom", secondName = "Updated", thirdName = "By", lastName = "Admin",
+            displayName = "Makhdoom Updated", nationalId = "29001010101098",
+            phone = "01118295479", homePhone = "0223456789",
+            email = "makhdoom-new@mail.com", password = "NewPassword@1",
+            job = "Student", buildingNo = "3", street = "Street", area = "Area",
+            floor = "1", apartment = "1", specialMark = "Mark",
+            role = UserRole.MAKHDOOM,
+            makhdoomProfile = MakhdoomProfileRequest(
+                shamamsaStudyStatus = ShamamsaStudyStatus.YES,
+                educationalStageId = stage.id,
+                educationalYearId = year.id,
+                fatherPhone = "01118295470",
+                fatherWhatsapp = "01118295470",
+                motherPhone = "01118295471",
+                motherWhatsapp = "01118295471",
+                isFatherDeceased = false,
+                isMotherDeceased = false
+            )
+        )
+
+        userService.updateMakhdoomProfileByKhadem(admin.id, makhdoom.id, request)
+
+        val updated = userRepository.findById(makhdoom.id).get()
+        assertThat(updated.displayName).isEqualTo("Makhdoom Updated")
+        assertThat(updated.phone).isEqualTo("+201118295479")
+        assertThat(updated.makhdoomProfile).isNotNull()
+        assertThat(updated.makhdoomProfile?.educationalStage?.id).isEqualTo(stage.id)
     }
 }

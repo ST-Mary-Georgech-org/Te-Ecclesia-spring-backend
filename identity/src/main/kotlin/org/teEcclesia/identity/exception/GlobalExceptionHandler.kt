@@ -77,6 +77,13 @@ class GlobalExceptionHandler {
 
         return handleGenericException(ex)
     }
+
+    @ExceptionHandler(DuplicatePhoneException::class)
+    fun handleDuplicatePhone(ex: DuplicatePhoneException): ResponseEntity<ErrorResponse> {
+        val error = ErrorResponse(ex.message ?: "Conflict", HttpStatus.CONFLICT.value())
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(error)
+    }
+
     @ExceptionHandler(Exception::class)
     fun handleGenericException(ex: Exception): ResponseEntity<ErrorResponse> {
         logger.error("Unexpected error occurred", ex)

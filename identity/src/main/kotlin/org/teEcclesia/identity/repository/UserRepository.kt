@@ -18,6 +18,7 @@ interface UserRepository : JpaRepository<User, UUID> {
     fun findAllByCodeIn(codes: List<String>): List<User>
     fun findByNationalId(nationalId: String): User?
     fun findByPhone(phone: String): User?
+    fun findUsersByPhone(phone: String): List<User>
     fun findByEmail(email: String): User?
     
     @Query("SELECT MAX(u.code) FROM User u WHERE u.code LIKE concat(:prefix, '%')")
@@ -31,6 +32,13 @@ interface UserRepository : JpaRepository<User, UUID> {
         LIMIT 1
     """)
     fun findTopByIdentifierOrderByVerification(@Param("id") id: String): User?
+
+    @Query("""
+        SELECT u FROM User u 
+        WHERE (u.email = :id OR u.nationalId = :id OR u.code = :id OR u.phone = :id)
+        ORDER BY u.isPhoneVerified DESC, u.createdAt DESC
+    """)
+    fun findUsersByIdentifier(@Param("id") id: String): List<User>
     
     @Query("""
         SELECT u FROM User u 

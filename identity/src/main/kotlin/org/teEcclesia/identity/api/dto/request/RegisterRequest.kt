@@ -9,6 +9,8 @@ import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.utils.extractBirthDate
 import org.teEcclesia.identity.utils.extractGender
+import org.teEcclesia.identity.utils.formatHomePhone
+import org.teEcclesia.identity.utils.formatPhone
 import java.time.Instant
 import java.util.UUID
 
@@ -35,8 +37,7 @@ data class RegisterRequest(
     @field:NotBlank(message = "Phone number is required")
     val phone: String,
 
-    @field:NotBlank(message = "Home phone is required")
-    val homePhone: String,
+    val homePhone: String? = null,
 
     @field:Email(message = "Please provide a valid email address")
     val email: String? = null,
@@ -50,8 +51,7 @@ data class RegisterRequest(
 
     val imageUrl: String? = null,
 
-    @field:NotBlank(message = "Job is required")
-    val job: String,
+    val job: String? = null,
 
     @field:NotBlank(message = "Building number is required")
     val buildingNo: String,
@@ -84,15 +84,6 @@ data class RegisterRequest(
     val parentProfile: ParentProfileRequest? = null
 )
 
-fun formatHomePhone(homePhone: String): String {
-    val cleanPhone = homePhone.trim()
-    return when {
-        cleanPhone.length == 8 -> "02$cleanPhone"
-        cleanPhone.length == 10 && cleanPhone.startsWith("02") -> cleanPhone
-        else -> throw IllegalArgumentException("Invalid home phone format. Must be 8 digits, or 10 digits starting with 02.")
-    }
-}
-
 fun RegisterRequest.toEntity(
     hashedPassword: String, 
     confessionPriest: User? = null, 
@@ -107,7 +98,7 @@ fun RegisterRequest.toEntity(
         lastName = this.lastName,
         displayName = this.displayName,
         nationalId = this.nationalId,
-        phone = this.phone,
+        phone = formatPhone(this.phone),
         homePhone = formatHomePhone(this.homePhone),
         email = this.email,
         passwordHash = hashedPassword,
