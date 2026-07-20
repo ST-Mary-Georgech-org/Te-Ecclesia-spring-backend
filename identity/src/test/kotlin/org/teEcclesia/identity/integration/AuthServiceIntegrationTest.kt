@@ -26,7 +26,6 @@ import org.teEcclesia.identity.api.dto.request.MakhdoomProfileRequest
 import org.teEcclesia.identity.api.dto.request.ParentProfileRequest
 import org.teEcclesia.identity.api.dto.request.RegisterRequest
 import org.teEcclesia.identity.api.dto.request.VerifyEmailRequest
-import org.teEcclesia.identity.api.dto.request.formatPhone
 import org.teEcclesia.identity.entity.enums.Gender
 import org.teEcclesia.identity.entity.enums.ShamamsaStudyStatus
 import org.teEcclesia.identity.entity.enums.UserRole
@@ -41,12 +40,11 @@ import org.teEcclesia.identity.repository.UserRepository
 import org.teEcclesia.identity.service.AuthService
 import org.teEcclesia.identity.service.EmailService
 import org.teEcclesia.identity.service.ParentProfileService
+import org.teEcclesia.identity.utils.formatPhone
 import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.UUID
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 
 @SpringBootTest(classes = [IdentityTestApplication::class])
 @ActiveProfiles("test")

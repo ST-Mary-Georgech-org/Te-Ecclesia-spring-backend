@@ -23,8 +23,6 @@ import org.teEcclesia.identity.exception.UserAlreadyExistsException
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.teEcclesia.identity.api.dto.request.RegisterRequest
-import org.teEcclesia.identity.api.dto.request.formatPhone
-import org.teEcclesia.identity.api.dto.request.formatHomePhone
 import org.teEcclesia.identity.utils.extractBirthDate
 import org.teEcclesia.identity.utils.extractGender
 import org.teEcclesia.identity.api.dto.request.toEntity
@@ -35,6 +33,8 @@ import org.teEcclesia.identity.repository.AreaRepository
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.teEcclesia.identity.api.dto.request.ParentProfileRequest
 import org.teEcclesia.identity.entity.lookups.Area
+import org.teEcclesia.identity.utils.formatHomePhone
+import org.teEcclesia.identity.utils.formatPhone
 import java.util.*
 
 @Service
