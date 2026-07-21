@@ -23,6 +23,10 @@ class JwtFilter(
 
     val pathsToSkip = listOf(
         "/api/v1/identity/auth/signup",
+        "/api/v1/identity/auth/priests",
+        "/api/v1/identity/auth/search-parents",
+        "/api/v1/identity/auth/search-makhdooms",
+        "/api/v1/lookups/**",
         "/api/v1/identity/auth/login",
         "/api/v1/identity/auth/refresh",
         "/api/v1/identity/auth/forgot-password",
@@ -63,10 +67,16 @@ class JwtFilter(
             if (userId != null && SecurityContextHolder.getContext().authentication == null) {
                 if (jwtUtil.validateRegistrationToken(token)) {
                     val path = request.servletPath ?: ""
-                    if (!path.startsWith("/api/v1/identity/auth/complete-profile") && 
-                        !path.startsWith("/api/v1/identity/auth/verify-phone") && 
-                        !path.startsWith("/api/v1/identity/auth/verify-email") &&
-                        !path.startsWith("/api/v1/identity/auth/me")) {
+                    val isRegistrationAllowedPath = path.startsWith("/api/v1/identity/auth/complete-profile") ||
+                        path.startsWith("/api/v1/identity/auth/verify-phone") ||
+                        path.startsWith("/api/v1/identity/auth/verify-email") ||
+                        path.startsWith("/api/v1/identity/auth/me") ||
+                        path.startsWith("/api/v1/identity/auth/priests") ||
+                        path.startsWith("/api/v1/identity/auth/search-parents") ||
+                        path.startsWith("/api/v1/identity/auth/search-makhdooms") ||
+                        path.startsWith("/api/v1/lookups")
+
+                    if (!isRegistrationAllowedPath) {
                         throw IllegalStateException("Registration token cannot be used for this endpoint")
                     }
                     if (!userService.existById(userId)) throw IllegalStateException("Not authorized")

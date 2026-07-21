@@ -38,7 +38,7 @@ class SecurityConfig(
                     "/api/v1/identity/auth/priests",
                     "/api/v1/identity/auth/search-parents",
                     "/api/v1/identity/auth/search-makhdooms",
-                    "/api/v1/lookups/*",
+                    "/api/v1/lookups/**",
                     "/api/v1/identity/auth/login",
                     "/api/v1/identity/auth/refresh",
                     "/api/v1/identity/auth/forgot-password",
