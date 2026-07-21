@@ -33,6 +33,10 @@ data class ProfileResponse(
     val status: UserStatus,
     val statusReason: String?,
     val role: UserRole,
+    val confessionPriest: UserSummaryResponse? = null,
+    val externalConfessionPriestName: String? = null,
+    val externalConfessionChurch: String? = null,
+    val externalConfessionPhone: String? = null,
     val khademProfile: KhademProfileResponse? = null,
     val parentProfile: ParentProfileResponse? = null,
     val ordinationProfile: OrdinationProfileResponse? = null,
@@ -83,6 +87,10 @@ fun User.toProfileResponse(imageBaseUrl: String): ProfileResponse {
         status = this.status,
         statusReason = this.statusReason,
         role = this.role,
+        confessionPriest = this.confessionPriest?.toUserSummaryResponse(imageBaseUrl),
+        externalConfessionPriestName = this.externalConfessionPriestName,
+        externalConfessionChurch = this.externalConfessionChurch,
+        externalConfessionPhone = this.externalConfessionPhone,
         khademProfile = this.khademProfile?.let {
             val stageName = if (lang.startsWith("en", ignoreCase = true)) it.educationalStage.nameEn else it.educationalStage.nameAr
             KhademProfileResponse(
