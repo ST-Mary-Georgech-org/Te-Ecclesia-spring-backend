@@ -12,8 +12,7 @@ interface AreaRepository : JpaRepository<Area, Long> {
 
     @Query("""
         SELECT a FROM Area a 
-        WHERE :query IS NULL OR TRIM(:query) = '' 
-        OR LOWER(a.name) LIKE LOWER(CONCAT('%', :query, '%'))
+        WHERE LOWER(a.name) LIKE LOWER(CONCAT('%', :query, '%'))
         ORDER BY 
           CASE WHEN LOWER(a.name) = LOWER(:query) THEN 0
                WHEN LOWER(a.name) LIKE LOWER(CONCAT(:query, '%')) THEN 1
@@ -22,5 +21,5 @@ interface AreaRepository : JpaRepository<Area, Long> {
           a.suggestedCount DESC,
           a.name ASC
     """)
-    fun searchAreas(@Param("query") query: String?, pageable: Pageable): Page<Area>
+    fun searchAreas(@Param("query") query: String, pageable: Pageable): Page<Area>
 }
