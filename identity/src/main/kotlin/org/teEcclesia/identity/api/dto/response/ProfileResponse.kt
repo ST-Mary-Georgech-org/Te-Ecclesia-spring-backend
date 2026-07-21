@@ -14,18 +14,29 @@ data class ProfileResponse(
     val lastName: String,
     val displayName: String,
     val fullName: String,
+    val nationalId: String,
     val phone: String,
+    val homePhone: String?,
     val email: String?,
     val isEmailVerified: Boolean,
     val isPhoneVerified: Boolean,
     val imageUrl: String?,
+    val job: String?,
+    val buildingNo: String,
+    val street: String,
+    val streetBranch: String?,
+    val area: String,
+    val floor: String,
+    val apartment: String?,
     val specialMark: String,
     val gender: Gender,
     val status: UserStatus,
     val statusReason: String?,
     val role: UserRole,
     val khademProfile: KhademProfileResponse? = null,
-    val parentProfile: ParentProfileResponse? = null
+    val parentProfile: ParentProfileResponse? = null,
+    val ordinationProfile: OrdinationProfileResponse? = null,
+    val makhdoomProfile: MakhdoomProfileResponse? = null
 )
 
 fun User.toUserSummaryResponse(imageBaseUrl: String): UserSummaryResponse {
@@ -53,11 +64,20 @@ fun User.toProfileResponse(imageBaseUrl: String): ProfileResponse {
         lastName = lastName,
         displayName = displayName,
         fullName = fullName,
+        nationalId = nationalId,
         phone = phone,
+        homePhone = homePhone,
         email = email,
         isEmailVerified = isEmailVerified,
         isPhoneVerified = isPhoneVerified,
         imageUrl = resolvedImageUrl,
+        job = job,
+        buildingNo = buildingNo,
+        street = street,
+        streetBranch = streetBranch,
+        area = area,
+        floor = floor,
+        apartment = apartment,
         specialMark = this.specialMark,
         gender = this.gender,
         status = this.status,
@@ -77,6 +97,35 @@ fun User.toProfileResponse(imageBaseUrl: String): ProfileResponse {
             ParentProfileResponse(
                 partner = it.partner?.toUserSummaryResponse(imageBaseUrl),
                 children = it.children.map { child -> child.toUserSummaryResponse(imageBaseUrl) }
+            )
+        },
+        ordinationProfile = this.ordinationProfile?.let {
+            val rankName = if (lang.startsWith("en", ignoreCase = true)) it.rank.nameEn else it.rank.nameAr
+            OrdinationProfileResponse(
+                rank = LookupResponse(it.rank.id, rankName),
+                isOrdinationInAnotherChurch = it.isOrdinationInAnotherChurch,
+                ordinationYear = it.ordinationYear,
+                bishopName = it.bishopName,
+                ordinationPlace = it.ordinationPlace,
+                certificateImageUrl = if (it.certificateImageUrl.isNullOrBlank()) null else "$imageBaseUrl/${it.certificateImageUrl}"
+            )
+        },
+        makhdoomProfile = this.makhdoomProfile?.let {
+            val stageName = if (lang.startsWith("en", ignoreCase = true)) it.educationalStage.nameEn else it.educationalStage.nameAr
+            MakhdoomProfileResponse(
+                shamamsaStudyStatus = it.shamamsaStudyStatus,
+                educationalStage = LookupResponse(it.educationalStage.id, stageName),
+                educationalYear = it.educationalYear?.let { year ->
+                    val yearName = if (lang.startsWith("en", ignoreCase = true)) year.nameEn else year.nameAr
+                    LookupResponse(year.id, yearName)
+                },
+                fatherPhone = it.fatherPhone,
+                fatherWhatsapp = it.fatherWhatsapp,
+                motherPhone = it.motherPhone,
+                motherWhatsapp = it.motherWhatsapp,
+                isFatherDeceased = it.isFatherDeceased,
+                isMotherDeceased = it.isMotherDeceased,
+                identityDocumentImageUrl = if (it.identityDocumentImageUrl.isNullOrBlank()) null else "$imageBaseUrl/${it.identityDocumentImageUrl}"
             )
         }
     )
