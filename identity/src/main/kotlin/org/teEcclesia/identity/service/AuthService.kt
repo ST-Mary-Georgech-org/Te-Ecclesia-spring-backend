@@ -404,7 +404,10 @@ class AuthService(
         val user = matchingUsers[0]
 
         when (user.status) {
-            UserStatus.PROFILE_INCOMPLETE -> throw IncompleteProfileException()
+            UserStatus.PROFILE_INCOMPLETE -> {
+                val tempToken = jwtUtil.generateRegistrationToken(user.id)
+                throw IncompleteProfileException(token = tempToken)
+            }
             UserStatus.PENDING_APPROVAL -> throw AccountPendingApprovalException()
             UserStatus.UNVERIFIED -> {
                 if (!user.isPhoneVerified) {

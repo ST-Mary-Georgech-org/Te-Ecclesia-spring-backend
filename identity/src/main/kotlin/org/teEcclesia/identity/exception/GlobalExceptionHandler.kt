@@ -9,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.server.ResponseStatusException
+import org.teEcclesia.identity.api.dto.response.IncompleteProfileResponse
 
 
 @RestControllerAdvice
@@ -41,8 +42,12 @@ class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(IncompleteProfileException::class)
-    fun handleIncompleteProfile(ex: IncompleteProfileException): ResponseEntity<ErrorResponse> {
-        val error = ErrorResponse(ex.message ?: "Profile incomplete", HttpStatus.PRECONDITION_REQUIRED.value())
+    fun handleIncompleteProfile(ex: IncompleteProfileException): ResponseEntity<IncompleteProfileResponse> {
+        val error = IncompleteProfileResponse(
+            message = ex.message ?: "Profile incomplete",
+            status = HttpStatus.PRECONDITION_REQUIRED.value(),
+            token = ex.token
+        )
         return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED).body(error)
     }
 
