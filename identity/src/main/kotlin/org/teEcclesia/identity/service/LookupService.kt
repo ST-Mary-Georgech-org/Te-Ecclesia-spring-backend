@@ -11,9 +11,11 @@ import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.entity.lookups.*
 import org.teEcclesia.identity.exception.ResourceNotFoundException
 import org.teEcclesia.identity.repository.*
+import org.springframework.transaction.annotation.Transactional
 import java.util.*
 
 @Service
+@Transactional(readOnly = true)
 class LookupService(
     private val rankRepository: RankRepository,
     private val educationalStageRepository: EducationalStageRepository,
@@ -92,6 +94,7 @@ class LookupService(
         LookupResponse(it.id, it.name)
     }
 
+    @Transactional
     fun createRank(request: RankRequest): LookupResponse {
         val rank = Rank(
             nameAr = request.nameAr,
@@ -102,6 +105,7 @@ class LookupService(
         return LookupResponse(saved.id, saved.nameAr)
     }
 
+    @Transactional
     fun updateRank(id: Long, request: RankRequest): LookupResponse {
         val rank = rankRepository.findById(id).orElseThrow { ResourceNotFoundException("Rank not found") }
         val updated = rankRepository.save(
@@ -114,10 +118,12 @@ class LookupService(
         return LookupResponse(updated.id, updated.nameAr)
     }
 
+    @Transactional
     fun deleteRank(id: Long) {
         rankRepository.deleteById(id)
     }
 
+    @Transactional
     fun createEducationalStage(request: EducationalStageRequest): LookupResponse {
         val stage = EducationalStage(
             nameAr = request.nameAr,
@@ -127,6 +133,7 @@ class LookupService(
         return LookupResponse(saved.id, saved.nameAr)
     }
 
+    @Transactional
     fun updateEducationalStage(id: Long, request: EducationalStageRequest): LookupResponse {
         val stage = educationalStageRepository.findById(id).orElseThrow { ResourceNotFoundException("Stage not found") }
         val updated = educationalStageRepository.save(
@@ -138,10 +145,12 @@ class LookupService(
         return LookupResponse(updated.id, updated.nameAr)
     }
 
+    @Transactional
     fun deleteEducationalStage(id: Long) {
         educationalStageRepository.deleteById(id)
     }
 
+    @Transactional
     fun createEducationalYear(request: EducationalYearRequest): LookupResponse {
         val stage = educationalStageRepository.findById(request.stageId)
             .orElseThrow { ResourceNotFoundException("Stage not found") }
@@ -154,6 +163,7 @@ class LookupService(
         return LookupResponse(saved.id, saved.nameAr)
     }
 
+    @Transactional
     fun updateEducationalYear(id: Long, request: EducationalYearRequest): LookupResponse {
         val year = educationalYearRepository.findById(id).orElseThrow { ResourceNotFoundException("Year not found") }
         val stage = educationalStageRepository.findById(request.stageId)
@@ -168,22 +178,26 @@ class LookupService(
         return LookupResponse(updated.id, updated.nameAr)
     }
 
+    @Transactional
     fun deleteEducationalYear(id: Long) {
         educationalYearRepository.deleteById(id)
     }
 
+    @Transactional
     fun createArea(request: AreaRequest): LookupResponse {
         val area = Area(name = request.name)
         val saved = areaRepository.save(area)
         return LookupResponse(saved.id, saved.name)
     }
 
+    @Transactional
     fun updateArea(id: Long, request: AreaRequest): LookupResponse {
         val area = areaRepository.findById(id).orElseThrow { ResourceNotFoundException("Area not found") }
         val updated = areaRepository.save(area.copy(name = request.name))
         return LookupResponse(updated.id, updated.name)
     }
 
+    @Transactional
     fun deleteArea(id: Long) {
         areaRepository.deleteById(id)
     }
