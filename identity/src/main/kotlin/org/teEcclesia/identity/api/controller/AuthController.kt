@@ -4,6 +4,9 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
+import org.springframework.data.web.PageableDefault
 import org.teEcclesia.identity.api.dto.request.*
 import org.teEcclesia.identity.api.dto.response.AuthResponse
 import org.teEcclesia.identity.api.dto.response.RegisterResponse
@@ -18,7 +21,9 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.multipart.MultipartFile
 import org.springframework.http.MediaType
+import org.teEcclesia.identity.api.dto.response.PriestResponse
 import org.teEcclesia.identity.api.dto.response.ProfileResponse
+import org.teEcclesia.identity.api.dto.response.UserSummaryResponse
 import java.util.*
 
 @RestController
@@ -81,6 +86,29 @@ class AuthController (
     fun getWhatsAppStatus(@RequestParam("token") token: String): ResponseEntity<AuthResponse> {
         val response = authService.getWhatsAppStatus(token)
         return ResponseEntity.ok(response)
+    }
+
+    @Tag(name = "Registration")
+    @GetMapping("/priests")
+    fun getConfessionPriests(
+        @PageableDefault(size = 20) pageable: Pageable
+    ): ResponseEntity<Page<PriestResponse>> {
+        val response = authService.getConfessionPriests(pageable)
+        return ResponseEntity.ok(response)
+    }
+
+    @Tag(name = "Registration")
+    @GetMapping("/search-parents")
+    fun searchParents(@RequestParam("query") query: String): ResponseEntity<UserSummaryResponse> {
+        val response = authService.searchParents(query, imagesBaseUrl)
+        return if (response != null) ResponseEntity.ok(response) else ResponseEntity.notFound().build()
+    }
+
+    @Tag(name = "Registration")
+    @GetMapping("/search-makhdooms")
+    fun searchMakhdooms(@RequestParam("query") query: String): ResponseEntity<UserSummaryResponse> {
+        val response = authService.searchMakhdooms(query, imagesBaseUrl)
+        return if (response != null) ResponseEntity.ok(response) else ResponseEntity.notFound().build()
     }
 
 

@@ -27,6 +27,8 @@ import org.teEcclesia.identity.repository.*
 import org.teEcclesia.identity.security.JwtUtil
 import org.teEcclesia.identity.service.mapper.WhatsAppWebhookMapper
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import java.util.concurrent.Executors
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.security.crypto.password.PasswordEncoder
@@ -40,7 +42,10 @@ import java.net.URLEncoder
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import org.springframework.web.multipart.MultipartFile
+import org.teEcclesia.identity.api.dto.response.PriestResponse
+import org.teEcclesia.identity.api.dto.response.UserSummaryResponse
 import org.teEcclesia.identity.api.dto.response.VerifyTokenResponse
+import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.utils.formatPhone
 import org.teEcclesia.storage.service.ImageStorageService
 import java.util.*
@@ -707,5 +712,37 @@ class AuthService(
     fun clearUnverifiedUsers() {
         val cutoffDate = Instant.now().minus(1, ChronoUnit.DAYS)
         userRepository.deleteAllByIsPhoneVerifiedIsFalseAndCreatedAtBefore(cutoffDate)
+    }
+
+    fun getConfessionPriests(pageable: Pageable): Page<PriestResponse> {
+        val priestsPage = userRepository.findByRole(UserRole.KAHEN, pageable)
+        return priestsPage.map { priest ->
+            PriestResponse(
+                id = priest.id,
+                name = priest.displayName
+            )
+        }
+    }
+
+    fun searchParents(query: String, imagesBaseUrl: String): UserSummaryResponse? {
+        val user = userRepository.findByRoleAndIdentifier(UserRole.PARENT, query).firstOrNull() ?: return null
+        val fullImageUrl = user.imageUrl?.let { "$imagesBaseUrl/$it" }
+        return UserSummaryResponse(
+            id = user.id,
+            code = user.code,
+            name = user.displayName,
+            imageUrl = fullImageUrl
+        )
+    }
+
+    fun searchMakhdooms(query: String, imagesBaseUrl: String): UserSummaryResponse? {
+        val user = userRepository.findByRoleAndIdentifier(UserRole.MAKHDOOM, query).firstOrNull() ?: return null
+        val fullImageUrl = user.imageUrl?.let { "$imagesBaseUrl/$it" }
+        return UserSummaryResponse(
+            id = user.id,
+            code = user.code,
+            name = user.displayName,
+            imageUrl = fullImageUrl
+        )
     }
 }

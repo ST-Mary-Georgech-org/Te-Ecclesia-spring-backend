@@ -31,8 +31,8 @@ data class ProfileResponse(
 fun User.toUserSummaryResponse(imageBaseUrl: String): UserSummaryResponse {
     val resolvedImageUrl = if (imageUrl.isNullOrBlank()) null else "$imageBaseUrl/$imageUrl"
     return UserSummaryResponse(
-        id = id.toString(),
-        fullName = fullName,
+        id = id,
+        name = displayName,
         code = code,
         imageUrl = resolvedImageUrl
     )

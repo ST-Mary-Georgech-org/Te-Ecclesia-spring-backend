@@ -56,6 +56,13 @@ interface UserRepository : JpaRepository<User, UUID> {
     ): Page<User>
     
     fun findByRole(role: UserRole, pageable: Pageable): Page<User>
+
+    @Query("""
+        SELECT u FROM User u 
+        WHERE u.role = :role AND u.isPhoneVerified
+        AND (u.email = :query OR u.nationalId = :query OR u.code = :query OR u.phone = :query)
+    """)
+    fun findByRoleAndIdentifier(@Param("role") role: UserRole, @Param("query") query: String): List<User>
     
     @Query("SELECT u FROM User u JOIN u.khademProfile kp WHERE u.role = :role AND kp.canApproveRequests = true")
     fun findByRoleAndCanApproveRequestsTrue(@Param("role") role: UserRole, pageable: Pageable): Page<User>
