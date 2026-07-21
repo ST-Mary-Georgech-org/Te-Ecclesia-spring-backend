@@ -43,3 +43,4 @@ out/
 local.properties
 **/teEcclesia-firebase-adminsdk.json
 identity/src/main/kotlin/org/teEcclesia/identity/seed/AdminSeeder.kt
+identity/src/main/kotlin/org/teEcclesia/identity/service/KahenSeeder.kt

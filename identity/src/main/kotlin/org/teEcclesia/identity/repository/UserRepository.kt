@@ -56,6 +56,7 @@ interface UserRepository : JpaRepository<User, UUID> {
     ): Page<User>
     
     fun findByRole(role: UserRole, pageable: Pageable): Page<User>
+    fun countByRole(role: UserRole): Long
 
     @Query("""
         SELECT u FROM User u 

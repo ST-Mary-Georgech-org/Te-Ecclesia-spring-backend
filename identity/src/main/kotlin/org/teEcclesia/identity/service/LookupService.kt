@@ -90,9 +90,10 @@ class LookupService(
         return PageImpl(result, pageable, result.size.toLong())
     }
 
-    fun getAreas(pageable: Pageable): Page<LookupResponse> = areaRepository.findAll(pageable).map {
-        LookupResponse(it.id, it.name)
-    }
+    fun getAreas(query: String?, pageable: Pageable): Page<LookupResponse> =
+        areaRepository.searchAreas(query?.trim(), pageable).map {
+            LookupResponse(it.id, it.name)
+        }
 
     @Transactional
     fun createRank(request: RankRequest): LookupResponse {

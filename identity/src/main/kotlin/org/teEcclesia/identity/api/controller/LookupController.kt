@@ -35,9 +35,10 @@ class LookupController(
 
     @GetMapping("/areas")
     fun getAreas(
+        @RequestParam(value = "query", required = false) query: String?,
         pageable: Pageable
     ): ResponseEntity<Page<LookupResponse>> {
-        return ResponseEntity.ok(lookupService.getAreas(pageable))
+        return ResponseEntity.ok(lookupService.getAreas(query, pageable))
     }
 
     @PostMapping("/ranks")
