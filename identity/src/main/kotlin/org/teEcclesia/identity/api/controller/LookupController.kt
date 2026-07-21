@@ -27,7 +27,7 @@ class LookupController(
     @GetMapping("/educational-stages")
     fun getEducationalStages(
         @RequestHeader(value = "Accept-Language", defaultValue = "ar") language: String,
-        @AuthenticationPrincipal userId: UUID,
+        @AuthenticationPrincipal userId: UUID?,
         pageable: Pageable
     ): ResponseEntity<Page<LookupResponse>> {
         return ResponseEntity.ok(lookupService.getEducationalStages(language, userId, pageable))

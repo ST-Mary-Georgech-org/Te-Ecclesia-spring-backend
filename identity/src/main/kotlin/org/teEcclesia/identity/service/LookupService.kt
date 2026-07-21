@@ -25,8 +25,8 @@ class LookupService(
         LookupResponse(it.id, if (lang.startsWith("en")) it.nameEn else it.nameAr)
     }
 
-    fun getEducationalStages(lang: String, userId: UUID, pageable: Pageable): Page<LookupResponse> {
-        val user = userRepository.findById(userId).orElse(null)
+    fun getEducationalStages(lang: String, userId: UUID?, pageable: Pageable): Page<LookupResponse> {
+        val user = userId?.let { userRepository.findById(it).orElse(null) }
         return if (user?.role == UserRole.KHADEM && user.khademProfile != null) {
             fetchEducationalStagesForKhadem(user.khademProfile, lang, pageable)
         } else {
