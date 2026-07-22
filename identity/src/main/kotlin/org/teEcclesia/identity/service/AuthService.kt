@@ -23,6 +23,7 @@ import org.teEcclesia.identity.exception.PhoneNotVerifiedException
 import org.teEcclesia.identity.exception.AccountPendingApprovalException
 import org.teEcclesia.identity.exception.DuplicatePhoneException
 import org.teEcclesia.identity.entity.enums.UserStatus
+import org.teEcclesia.identity.entity.lookups.Area
 import org.teEcclesia.identity.repository.*
 import org.teEcclesia.identity.security.JwtUtil
 import org.teEcclesia.identity.service.mapper.WhatsAppWebhookMapper
@@ -68,6 +69,7 @@ class AuthService(
     private val educationalStageRepository: EducationalStageRepository,
     private val educationalYearRepository: EducationalYearRepository,
     private val imageStorageService: ImageStorageService,
+    private val areaRepository: AreaRepository,
     @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String,
     @param:Value("\${whatsapp.business-number}") private val whatsappBusinessNumber: String,
     @param:Value("\${whatsapp.business-phone}") private val whatsappBusinessPhone: String,
@@ -78,6 +80,16 @@ class AuthService(
 ) {
 
     val logger: Logger = LoggerFactory.getLogger(javaClass)
+
+    private fun addAreaIfNotExists(areaName: String) {
+        val area = areaName.trim()
+        if (area.isNotEmpty()) {
+            val existing = areaRepository.findByName(area)
+            if (existing == null) {
+                areaRepository.save(Area(name = area, suggestedCount = 1))
+            }
+        }
+    }
 
     fun register(request: RegisterRequest, image: MultipartFile? = null, certificateImage: MultipartFile? = null): TokenResponse {
         val formattedPhone = formatPhone(request.phone)
@@ -174,6 +186,8 @@ class AuthService(
 
         request.parentProfile?.let { parentProfileService.createOrUpdateProfile(savedUser, it) }
         
+        addAreaIfNotExists(savedUser.area)
+
         return TokenResponse(jwtUtil.generateRegistrationToken(savedUser.id))
     }
 

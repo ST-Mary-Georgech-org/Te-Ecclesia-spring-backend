@@ -21,6 +21,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.security.crypto.password.PasswordEncoder
+import org.teEcclesia.identity.repository.AreaRepository
 import org.teEcclesia.identity.repository.EducationalStageRepository
 import org.teEcclesia.identity.repository.EducationalYearRepository
 import org.teEcclesia.identity.repository.RankRepository
@@ -82,7 +83,8 @@ class IdentityTestApplication {
         @Value("\${WHATSAPP_ACCESS_TOKEN:}") whatsappAccessToken: String,
         rankRepository: RankRepository,
         educationalStageRepository: EducationalStageRepository,
-        educationalYearRepository: EducationalYearRepository
+        educationalYearRepository: EducationalYearRepository,
+        areaRepository: AreaRepository
     ): AuthService {
         return AuthService(
             userRepository = userRepository,
@@ -102,6 +104,7 @@ class IdentityTestApplication {
             rankRepository = rankRepository,
             educationalStageRepository = educationalStageRepository,
             educationalYearRepository = educationalYearRepository,
+            areaRepository = areaRepository,
             parentProfileService = parentProfileService(),
             imageStorageService = imageStorageService(),
             profileImageDirectory = "test-profiles",

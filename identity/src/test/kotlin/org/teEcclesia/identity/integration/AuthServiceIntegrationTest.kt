@@ -32,6 +32,7 @@ import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.entity.lookups.EducationalStage
 import org.teEcclesia.identity.entity.lookups.EducationalYear
+import org.teEcclesia.identity.repository.AreaRepository
 import org.teEcclesia.identity.repository.EducationalStageRepository
 import org.teEcclesia.identity.repository.EducationalYearRepository
 import org.teEcclesia.identity.repository.EmailVerificationRepository
@@ -73,10 +74,11 @@ class AuthServiceIntegrationTest {
     @Autowired private lateinit var educationalYearRepository: EducationalYearRepository
 
     @Autowired
-    private lateinit var teEcclesiaEventPublisher: TeEcclesiaEventPublisher
+    private lateinit var areaRepository: AreaRepository
 
     @BeforeEach
     fun setUp() {
+        areaRepository.deleteAll()
         refreshTokenRepository.deleteAll()
         otpRepository.deleteAll()
         userRepository.deleteAll()
@@ -86,13 +88,13 @@ class AuthServiceIntegrationTest {
     }
 
     @Test
-    fun `register saves user with status PROFILE_INCOMPLETE`() {
+    fun `register saves user with status PROFILE_INCOMPLETE and saves new area if not exists`() {
         val request = RegisterRequest(
             firstName = "First", secondName = "Second", thirdName = "Third", lastName = "Last",
             displayName = "New User", nationalId = "29001010101010",
             phone = "01118295474", homePhone = "0223456789",
             email = "new-user@mail.com", password = "Password@1",
-            job = "Job", buildingNo = "1", street = "Street", area = "Area",
+            job = "Job", buildingNo = "1", street = "Street", area = "New Test Area",
             floor = "1", apartment = "1", specialMark = "Mark"
         )
 
@@ -101,6 +103,10 @@ class AuthServiceIntegrationTest {
         val savedUser = userRepository.findUsersByPhone(formatPhone(request.phone)).firstOrNull()
         assertThat(savedUser).isNotNull()
         assertThat(savedUser?.status).isEqualTo(UserStatus.PROFILE_INCOMPLETE)
+
+        val savedArea = areaRepository.findByName("New Test Area")
+        assertThat(savedArea).isNotNull()
+        assertThat(savedArea?.suggestedCount).isEqualTo(1)
     }
 
     @Test
