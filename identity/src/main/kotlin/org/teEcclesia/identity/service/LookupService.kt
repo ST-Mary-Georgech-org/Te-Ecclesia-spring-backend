@@ -24,7 +24,7 @@ class LookupService(
     private val userRepository: UserRepository
 ) {
     fun getRanks(lang: String, pageable: Pageable): Page<LookupResponse> = rankRepository.findAll(pageable).map {
-        LookupResponse(it.id, if (lang.startsWith("en")) it.nameEn else it.nameAr)
+        LookupResponse(it.id, if (lang.startsWith("en", ignoreCase = true)) it.nameEn else it.nameAr)
     }
 
     fun getEducationalStages(lang: String, userId: UUID?, pageable: Pageable): Page<LookupResponse> {
@@ -45,11 +45,11 @@ class LookupService(
         return allStages.map { stage ->
             LookupResponse(
                 id = stage.id,
-                name = if (lang.startsWith("en")) stage.nameEn else stage.nameAr,
+                name = if (lang.startsWith("en", ignoreCase = true)) stage.nameEn else stage.nameAr,
                 subItems = stage.years.map { year ->
                     LookupResponse(
                         id = year.id,
-                        name = if (lang.startsWith("en")) year.nameEn else year.nameAr
+                        name = if (lang.startsWith("en", ignoreCase = true)) year.nameEn else year.nameAr
                     )
                 }
             )
@@ -76,13 +76,13 @@ class LookupService(
             val isFullStage = responsibleStagesIds.contains(stage.id)
             LookupResponse(
                 id = stage.id,
-                name = if (lang.startsWith("en")) stage.nameEn else stage.nameAr,
+                name = if (lang.startsWith("en", ignoreCase = true)) stage.nameEn else stage.nameAr,
                 subItems = stage.years
                     .filter { isFullStage || responsibleYearsIds.contains(it.id) }
                     .map { year ->
                         LookupResponse(
                             id = year.id,
-                            name = if (lang.startsWith("en")) year.nameEn else year.nameAr
+                            name = if (lang.startsWith("en", ignoreCase = true)) year.nameEn else year.nameAr
                         )
                     }
             )
