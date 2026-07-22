@@ -65,8 +65,8 @@ class GlobalExceptionHandler {
 
     @ExceptionHandler(EmailNotVerifiedException::class)
     fun handleEmailNotVerified(ex: EmailNotVerifiedException): ResponseEntity<ErrorResponse> {
-        val error = ErrorResponse(ex.message ?: "User email is not verified", HttpStatus.PRECONDITION_FAILED.value())
-        return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED).body(error)
+        val error = ErrorResponse(ex.message ?: "User email is not verified", HttpStatus.UNPROCESSABLE_ENTITY.value())
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(error)
     }
 
     @ExceptionHandler(AccountPendingApprovalException::class)
