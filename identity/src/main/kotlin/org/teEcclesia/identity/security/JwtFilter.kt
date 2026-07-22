@@ -33,6 +33,7 @@ class JwtFilter(
         "/api/v1/identity/auth/reset-password",
         "/api/v1/identity/auth/verify-otp",
         "/api/v1/identity/auth/resend-otp",
+        "/api/v1/identity/auth/whatsapp/status",
         "/api/v1/internal/**",
         "/v3/api-docs",
         "/v3/api-docs/**",
@@ -70,6 +71,7 @@ class JwtFilter(
                     val isRegistrationAllowedPath = path.startsWith("/api/v1/identity/auth/complete-profile") ||
                         path.startsWith("/api/v1/identity/auth/verify-phone") ||
                         path.startsWith("/api/v1/identity/auth/verify-email") ||
+                        path.startsWith("/api/v1/identity/auth/whatsapp") ||
                         path.startsWith("/api/v1/identity/auth/me") ||
                         path.startsWith("/api/v1/identity/auth/priests") ||
                         path.startsWith("/api/v1/identity/auth/search-parents") ||

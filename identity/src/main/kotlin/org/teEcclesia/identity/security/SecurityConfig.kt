@@ -31,7 +31,8 @@ class SecurityConfig(
                     "/api/v1/identity/auth/logout",
                     "/api/v1/identity/auth/complete-profile",
                     "/api/v1/identity/auth/verify-phone",
-                    "/api/v1/identity/auth/verify-email"
+                    "/api/v1/identity/auth/verify-email",
+                    "/api/v1/identity/auth/whatsapp/initiate"
                 ).authenticated()
                 it.requestMatchers(
                     "/api/v1/identity/auth/signup",
@@ -45,6 +46,7 @@ class SecurityConfig(
                     "/api/v1/identity/auth/reset-password",
                     "/api/v1/identity/auth/verify-otp",
                     "/api/v1/identity/auth/resend-otp",
+                    "/api/v1/identity/auth/whatsapp/status",
                     "/api/v1/internal/**",
                     "/v3/api-docs",
                     "/v3/api-docs/**",
