@@ -38,6 +38,7 @@ data class ProfileResponse(
     val externalConfessionChurch: String? = null,
     val externalConfessionPhone: String? = null,
     val khademProfile: KhademProfileResponse? = null,
+    val kahenProfile: KahenProfileResponse? = null,
     val parentProfile: ParentProfileResponse? = null,
     val ordinationProfile: OrdinationProfileResponse? = null,
     val makhdoomProfile: MakhdoomProfileResponse? = null
@@ -98,6 +99,14 @@ fun User.toProfileResponse(imageBaseUrl: String): ProfileResponse {
                 educationalYear = it.educationalYear?.let { year -> 
                     val yearName = if (lang.startsWith("en", ignoreCase = true)) year.nameEn else year.nameAr
                     LookupResponse(year.id, yearName)
+                }
+            )
+        },
+        kahenProfile = this.kahenProfile?.let {
+            KahenProfileResponse(
+                educationalStages = it.educationalStages.map { stage ->
+                    val stageName = if (lang.startsWith("en", ignoreCase = true)) stage.nameEn else stage.nameAr
+                    LookupResponse(stage.id, stageName)
                 }
             )
         },

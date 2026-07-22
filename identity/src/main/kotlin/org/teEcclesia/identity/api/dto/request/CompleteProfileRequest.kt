@@ -8,5 +8,6 @@ data class CompleteProfileRequest(
     val ordinationProfile: OrdinationProfileRequest? = null,
     val makhdoomProfile: MakhdoomProfileRequest? = null,
     val khademProfile: KhademProfileRequest? = null,
+    val kahenProfile: KahenProfileRequest? = null,
     val parentProfile: ParentProfileRequest? = null
 )

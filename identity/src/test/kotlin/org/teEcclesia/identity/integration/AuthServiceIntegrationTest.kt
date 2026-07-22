@@ -16,12 +16,14 @@ import org.teEcclesia.identity.exception.DuplicatePhoneException
 import org.teEcclesia.identity.security.JwtUtil
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.transaction.annotation.Transactional
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.util.ReflectionTestUtils
 import org.teEcclesia.identity.api.dto.request.CompleteProfileRequest
 import org.teEcclesia.identity.api.dto.request.ForgotPasswordRequest
 import org.teEcclesia.identity.api.dto.request.LoginRequest
+import org.teEcclesia.identity.api.dto.request.KahenProfileRequest
 import org.teEcclesia.identity.api.dto.request.MakhdoomProfileRequest
 import org.teEcclesia.identity.api.dto.request.ParentProfileRequest
 import org.teEcclesia.identity.api.dto.request.RegisterRequest
@@ -378,6 +380,28 @@ class AuthServiceIntegrationTest {
         val updatedUser = userRepository.findById(user.id).get()
         assertThat(updatedUser.role).isEqualTo(UserRole.MAKHDOOM)
         assertThat(updatedUser.makhdoomProfile).isNotNull()
+    }
+
+    @Test
+    @Transactional
+    fun `completeProfile creates KahenProfile correctly`() {
+        var user = createUser(email = "kahen-complete@mail.com", isVerified = false)
+        user = userRepository.save(user.copy(status = UserStatus.PROFILE_INCOMPLETE))
+        val stage1 = educationalStageRepository.save(EducationalStage(nameAr = "Stage 1", nameEn = "Stage 1"))
+        val stage2 = educationalStageRepository.save(EducationalStage(nameAr = "Stage 2", nameEn = "Stage 2"))
+        val request = CompleteProfileRequest(
+            role = UserRole.KAHEN,
+            kahenProfile = KahenProfileRequest(
+                educationalStageIds = listOf(stage1.id, stage2.id)
+            )
+        )
+
+        authService.completeProfile(user.id, request)
+
+        val updatedUser = userRepository.findById(user.id).get()
+        assertThat(updatedUser.role).isEqualTo(UserRole.KAHEN)
+        assertThat(updatedUser.kahenProfile).isNotNull()
+        assertThat(updatedUser.kahenProfile?.educationalStages?.map { it.id }).containsExactly(stage1.id, stage2.id)
     }
 
     @Test

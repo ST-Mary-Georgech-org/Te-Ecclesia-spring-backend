@@ -140,6 +140,9 @@ data class User(
     val khademProfile: KhademProfile? = null,
 
     @OneToOne(mappedBy = "user", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
+    val kahenProfile: KahenProfile? = null,
+
+    @OneToOne(mappedBy = "user", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
     var parentProfile: ParentProfile? = null,
 
     @Column(nullable = false)

@@ -180,9 +180,11 @@ class AuthService(
 
         val ordinationProfile = request.ordinationProfile?.let { createOrdinationProfile(userToSave, it, finalCertificateUrl) }
         val makhdoomProfile = request.makhdoomProfile?.let { createMakhdoomProfile(userToSave, it) }
+        val kahenProfile = request.kahenProfile?.let { createKahenProfile(userToSave, it) }
         val savedUser = userRepository.save(userToSave.copy(
             ordinationProfile = ordinationProfile ?: userToSave.ordinationProfile,
-            makhdoomProfile = makhdoomProfile ?: userToSave.makhdoomProfile
+            makhdoomProfile = makhdoomProfile ?: userToSave.makhdoomProfile,
+            kahenProfile = kahenProfile ?: userToSave.kahenProfile
         ))
 
         request.parentProfile?.let { parentProfileService.createOrUpdateProfile(savedUser, it) }
@@ -212,13 +214,15 @@ class AuthService(
         val ordinationProfile = request.ordinationProfile?.let { createOrdinationProfile(user, it, finalCertificateUrl) }
         val makhdoomProfile = request.makhdoomProfile?.let { createMakhdoomProfile(user, it) }
         val khademProfile = request.khademProfile?.let { createKhademProfile(user, it) }
+        val kahenProfile = request.kahenProfile?.let { createKahenProfile(user, it) }
 
         val savedUser = userRepository.save(user.copy(
             status = UserStatus.UNVERIFIED,
             role = request.role,
             ordinationProfile = ordinationProfile ?: user.ordinationProfile,
             makhdoomProfile = makhdoomProfile ?: user.makhdoomProfile,
-            khademProfile = khademProfile ?: user.khademProfile
+            khademProfile = khademProfile ?: user.khademProfile,
+            kahenProfile = kahenProfile ?: user.kahenProfile
         ))
 
         request.parentProfile?.let { parentProfileService.createOrUpdateProfile(savedUser, it) }
@@ -566,6 +570,18 @@ class AuthService(
             motherWhatsapp = dto.motherWhatsapp,
             isFatherDeceased = dto.isFatherDeceased,
             isMotherDeceased = dto.isMotherDeceased
+        )
+    }
+
+    private fun createKahenProfile(user: User, dto: KahenProfileRequest): KahenProfile {
+        val stages = if (dto.educationalStageIds.isNotEmpty()) {
+            educationalStageRepository.findAllById(dto.educationalStageIds)
+        } else {
+            emptyList()
+        }
+        return KahenProfile(
+            user = user,
+            educationalStages = stages.toMutableList()
         )
     }
 
