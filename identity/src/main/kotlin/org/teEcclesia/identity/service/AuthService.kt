@@ -463,7 +463,11 @@ class AuthService(
         if (jwtUtil.validateRefreshToken(request.refreshToken) &&
             jwtUtil.validateTokenForUser(request.refreshToken, user.id)) {
 
-            val newAccessToken = jwtUtil.generateAccessToken(user.id)
+            val newAccessToken = if (!user.isPhoneVerified || user.status == UserStatus.PROFILE_INCOMPLETE) {
+                jwtUtil.generateRegistrationToken(user.id)
+            } else {
+                jwtUtil.generateAccessToken(user.id)
+            }
             val newRefreshToken = jwtUtil.generateRefreshToken(user.id)
 
             val finalDeviceToken = request.deviceToken ?: oldDeviceToken
