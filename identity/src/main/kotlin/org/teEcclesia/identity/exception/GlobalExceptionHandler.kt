@@ -53,8 +53,13 @@ class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(PhoneNotVerifiedException::class)
-    fun handlePhoneNotVerified(ex: PhoneNotVerifiedException): ResponseEntity<ErrorResponse> {
-        val error = ErrorResponse(ex.message ?: "Phone not verified", HttpStatus.PRECONDITION_FAILED.value())
+    fun handlePhoneNotVerified(ex: PhoneNotVerifiedException): ResponseEntity<IncompleteProfileResponse> {
+        val error = IncompleteProfileResponse(
+            message = ex.message ?: "Phone not verified",
+            status = HttpStatus.PRECONDITION_FAILED.value(),
+            token = ex.token,
+            refreshToken = ex.refreshToken
+        )
         return ResponseEntity.status(HttpStatus.PRECONDITION_FAILED).body(error)
     }
 

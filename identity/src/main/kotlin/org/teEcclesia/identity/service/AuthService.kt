@@ -431,7 +431,10 @@ class AuthService(
             UserStatus.PENDING_APPROVAL -> throw AccountPendingApprovalException()
             UserStatus.UNVERIFIED -> {
                 if (!user.isPhoneVerified) {
-                    throw PhoneNotVerifiedException()
+                    val tempToken = jwtUtil.generateRegistrationToken(user.id)
+                    val refreshToken = jwtUtil.generateRefreshToken(user.id)
+                    saveRefreshToken(user, refreshToken, request.deviceToken)
+                    throw PhoneNotVerifiedException(token = tempToken, refreshToken = refreshToken)
                 }
             }
             UserStatus.REJECTED -> throw UnauthorizedException("Account rejected")
@@ -439,7 +442,10 @@ class AuthService(
             UserStatus.APPROVED -> {
                 // If it's approved but somehow phone is not verified, block them.
                 if (!user.isPhoneVerified) {
-                    throw PhoneNotVerifiedException()
+                    val tempToken = jwtUtil.generateRegistrationToken(user.id)
+                    val refreshToken = jwtUtil.generateRefreshToken(user.id)
+                    saveRefreshToken(user, refreshToken, request.deviceToken)
+                    throw PhoneNotVerifiedException(token = tempToken, refreshToken = refreshToken)
                 }
             }
         }

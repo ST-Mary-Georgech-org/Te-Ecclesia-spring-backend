@@ -28,6 +28,9 @@ class IncompleteProfileException(
 ) : RuntimeException(message)
 
 class PhoneNotVerifiedException(
-    message: String = "User phone number is not verified") : RuntimeException(message)
+    message: String = "User phone number is not verified",
+    val token: String? = null,
+    val refreshToken: String? = null
+) : RuntimeException(message)
 
 class ResourceNotFoundException(message: String) : RuntimeException(message)
