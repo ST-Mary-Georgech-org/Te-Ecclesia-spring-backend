@@ -425,6 +425,7 @@ class AuthService(
         }
 
         val user = matchingUsers[0]
+        val isEmailIdentifier = user.email != null && identifier.equals(user.email, ignoreCase = true)
 
         when (user.status) {
             UserStatus.PROFILE_INCOMPLETE -> {
@@ -441,7 +442,7 @@ class AuthService(
                     saveRefreshToken(user, refreshToken, request.deviceToken)
                     throw PhoneNotVerifiedException(token = tempToken, refreshToken = refreshToken)
                 }
-                if (user.email != null && !user.isEmailVerified) {
+                if (isEmailIdentifier && !user.isEmailVerified) {
                     throw EmailNotVerifiedException()
                 }
             }
@@ -455,7 +456,7 @@ class AuthService(
                     saveRefreshToken(user, refreshToken, request.deviceToken)
                     throw PhoneNotVerifiedException(token = tempToken, refreshToken = refreshToken)
                 }
-                if (user.email != null && !user.isEmailVerified) {
+                if (isEmailIdentifier && !user.isEmailVerified) {
                     throw EmailNotVerifiedException()
                 }
             }
