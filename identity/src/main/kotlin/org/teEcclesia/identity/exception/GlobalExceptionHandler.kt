@@ -46,7 +46,8 @@ class GlobalExceptionHandler {
         val error = IncompleteProfileResponse(
             message = ex.message ?: "Profile incomplete",
             status = HttpStatus.PRECONDITION_REQUIRED.value(),
-            token = ex.token
+            token = ex.token,
+            refreshToken = ex.refreshToken
         )
         return ResponseEntity.status(HttpStatus.PRECONDITION_REQUIRED).body(error)
     }

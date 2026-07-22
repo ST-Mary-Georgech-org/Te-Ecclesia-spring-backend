@@ -185,10 +185,14 @@ class AuthService(
         ))
 
         request.parentProfile?.let { parentProfileService.createOrUpdateProfile(savedUser, it) }
-        
+
         addAreaIfNotExists(savedUser.area)
 
-        return TokenResponse(jwtUtil.generateRegistrationToken(savedUser.id))
+        val regToken = jwtUtil.generateRegistrationToken(savedUser.id)
+        val refreshToken = jwtUtil.generateRefreshToken(savedUser.id)
+        saveRefreshToken(savedUser, refreshToken)
+
+        return TokenResponse(token = regToken, refreshToken = refreshToken)
     }
 
     fun completeProfile(userId: UUID, request: CompleteProfileRequest, certificateImage: MultipartFile? = null): RegisterResponse {
@@ -420,7 +424,9 @@ class AuthService(
         when (user.status) {
             UserStatus.PROFILE_INCOMPLETE -> {
                 val tempToken = jwtUtil.generateRegistrationToken(user.id)
-                throw IncompleteProfileException(token = tempToken)
+                val refreshToken = jwtUtil.generateRefreshToken(user.id)
+                saveRefreshToken(user, refreshToken, request.deviceToken)
+                throw IncompleteProfileException(token = tempToken, refreshToken = refreshToken)
             }
             UserStatus.PENDING_APPROVAL -> throw AccountPendingApprovalException()
             UserStatus.UNVERIFIED -> {
@@ -463,11 +469,7 @@ class AuthService(
         if (jwtUtil.validateRefreshToken(request.refreshToken) &&
             jwtUtil.validateTokenForUser(request.refreshToken, user.id)) {
 
-            val newAccessToken = if (!user.isPhoneVerified || user.status == UserStatus.PROFILE_INCOMPLETE) {
-                jwtUtil.generateRegistrationToken(user.id)
-            } else {
-                jwtUtil.generateAccessToken(user.id)
-            }
+            val newAccessToken = jwtUtil.generateAccessToken(user.id)
             val newRefreshToken = jwtUtil.generateRefreshToken(user.id)
 
             val finalDeviceToken = request.deviceToken ?: oldDeviceToken
@@ -475,6 +477,34 @@ class AuthService(
             teEcclesiaEventPublisher.publish(UserLoggedInEvent(user.id))
 
             return AuthResponse(newAccessToken, newRefreshToken)
+        } else {
+            throw UnauthorizedException("Invalid refresh token")
+        }
+    }
+
+    fun refreshRegistrationToken(request: RefreshTokenRequest): AuthResponse {
+        val refreshTokenEntity = refreshTokenRepository.findByToken(request.refreshToken)
+            ?: throw UnauthorizedException("Invalid refresh token")
+
+        val user = refreshTokenEntity.user
+        val oldDeviceToken = refreshTokenEntity.deviceToken
+
+        refreshTokenRepository.delete(refreshTokenEntity)
+
+        if (refreshTokenEntity.expiryDate.isBefore(Instant.now())) {
+            throw TokenExpiredException("Refresh token is expired. Please login again.")
+        }
+
+        if (jwtUtil.validateRefreshToken(request.refreshToken) &&
+            jwtUtil.validateTokenForUser(request.refreshToken, user.id)) {
+
+            val newRegistrationToken = jwtUtil.generateRegistrationToken(user.id)
+            val newRefreshToken = jwtUtil.generateRefreshToken(user.id)
+
+            val finalDeviceToken = request.deviceToken ?: oldDeviceToken
+            saveRefreshToken(user, newRefreshToken, finalDeviceToken)
+
+            return AuthResponse(newRegistrationToken, newRefreshToken)
         } else {
             throw UnauthorizedException("Invalid refresh token")
         }

@@ -23,7 +23,8 @@ class AccountPendingApprovalException(
 
 class IncompleteProfileException(
     message: String = "User profile is incomplete",
-    val token: String? = null
+    val token: String? = null,
+    val refreshToken: String? = null
 ) : RuntimeException(message)
 
 class PhoneNotVerifiedException(

@@ -128,6 +128,13 @@ class AuthController (
     }
 
     @Tag(name = "Authentication")
+    @PostMapping("/refresh-registration")
+    fun refreshRegistration (@Valid @RequestBody request: RefreshTokenRequest): ResponseEntity<AuthResponse> {
+        val response = authService.refreshRegistrationToken(request)
+        return ResponseEntity.ok(response)
+    }
+
+    @Tag(name = "Authentication")
     @PostMapping("/logout")
     fun logout(
         @AuthenticationPrincipal userId: UUID,

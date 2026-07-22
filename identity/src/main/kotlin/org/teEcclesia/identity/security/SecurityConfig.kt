@@ -42,6 +42,7 @@ class SecurityConfig(
                     "/api/v1/lookups/**",
                     "/api/v1/identity/auth/login",
                     "/api/v1/identity/auth/refresh",
+                    "/api/v1/identity/auth/refresh-registration",
                     "/api/v1/identity/auth/forgot-password",
                     "/api/v1/identity/auth/reset-password",
                     "/api/v1/identity/auth/verify-otp",
