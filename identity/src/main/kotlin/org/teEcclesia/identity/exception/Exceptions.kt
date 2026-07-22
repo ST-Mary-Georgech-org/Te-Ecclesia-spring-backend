@@ -33,4 +33,8 @@ class PhoneNotVerifiedException(
     val refreshToken: String? = null
 ) : RuntimeException(message)
 
+class EmailNotVerifiedException(
+    message: String = "User email is not verified"
+) : RuntimeException(message)
+
 class ResourceNotFoundException(message: String) : RuntimeException(message)

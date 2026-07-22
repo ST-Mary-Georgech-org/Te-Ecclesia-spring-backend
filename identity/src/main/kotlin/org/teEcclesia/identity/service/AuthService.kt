@@ -20,6 +20,7 @@ import org.teEcclesia.identity.exception.UnauthorizedException
 import org.teEcclesia.identity.exception.UserAlreadyExistsException
 import org.teEcclesia.identity.exception.IncompleteProfileException
 import org.teEcclesia.identity.exception.PhoneNotVerifiedException
+import org.teEcclesia.identity.exception.EmailNotVerifiedException
 import org.teEcclesia.identity.exception.AccountPendingApprovalException
 import org.teEcclesia.identity.exception.DuplicatePhoneException
 import org.teEcclesia.identity.entity.enums.UserStatus
@@ -436,16 +437,22 @@ class AuthService(
                     saveRefreshToken(user, refreshToken, request.deviceToken)
                     throw PhoneNotVerifiedException(token = tempToken, refreshToken = refreshToken)
                 }
+                if (user.email != null && !user.isEmailVerified) {
+                    throw EmailNotVerifiedException()
+                }
             }
             UserStatus.REJECTED -> throw UnauthorizedException("Account rejected")
             UserStatus.BANNED -> throw UnauthorizedException("Account banned")
             UserStatus.APPROVED -> {
-                // If it's approved but somehow phone is not verified, block them.
+                // If it's approved but phone or email is not verified, block them.
                 if (!user.isPhoneVerified) {
                     val tempToken = jwtUtil.generateRegistrationToken(user.id)
                     val refreshToken = jwtUtil.generateRefreshToken(user.id)
                     saveRefreshToken(user, refreshToken, request.deviceToken)
                     throw PhoneNotVerifiedException(token = tempToken, refreshToken = refreshToken)
+                }
+                if (user.email != null && !user.isEmailVerified) {
+                    throw EmailNotVerifiedException()
                 }
             }
         }
