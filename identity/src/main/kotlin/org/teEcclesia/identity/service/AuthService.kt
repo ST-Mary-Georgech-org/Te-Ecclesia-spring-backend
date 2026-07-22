@@ -180,7 +180,7 @@ class AuthService(
     fun completeProfile(userId: UUID, request: CompleteProfileRequest, certificateImage: MultipartFile? = null): RegisterResponse {
         val user = userRepository.findById(userId).orElseThrow { EntityNotFoundException("User not found") }
 
-        if (user.status != UserStatus.PROFILE_INCOMPLETE) {
+        if (user.isPhoneVerified) {
             throw RuntimeException("Profile is already completed")
         }
 
