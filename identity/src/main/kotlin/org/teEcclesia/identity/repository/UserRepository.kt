@@ -49,11 +49,11 @@ interface UserRepository : JpaRepository<User, UUID> {
         AND (:yearId IS NULL OR mp.educationalYear.id = :yearId OR kp.educationalYear.id = :yearId)
         AND (cast(:role as string) IS NULL OR u.role = :role)
         AND (cast(:search as string) IS NULL OR 
-             LOWER(CONCAT(u.firstName, ' ', u.secondName, ' ', u.thirdName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', :search, '%')) OR 
-             u.phone LIKE CONCAT('%', :search, '%') OR 
-             u.nationalId LIKE CONCAT('%', :search, '%') OR 
-             LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')) OR 
-             LOWER(u.code) LIKE LOWER(CONCAT('%', :search, '%')))
+             LOWER(CONCAT(u.firstName, ' ', u.secondName, ' ', u.thirdName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR 
+             u.phone LIKE CONCAT('%', cast(:search as string), '%') OR 
+             u.nationalId LIKE CONCAT('%', cast(:search as string), '%') OR 
+             LOWER(u.email) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR 
+             LOWER(u.code) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))
     """)
     fun findByStatusAndFilters(
         @Param("status") status: UserStatus,

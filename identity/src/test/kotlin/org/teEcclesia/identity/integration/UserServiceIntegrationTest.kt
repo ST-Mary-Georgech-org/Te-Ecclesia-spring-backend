@@ -279,4 +279,22 @@ class UserServiceIntegrationTest {
         assertThat(updated.makhdoomProfile).isNotNull()
         assertThat(updated.makhdoomProfile?.educationalStage?.id).isEqualTo(stage.id)
     }
+
+    @Test
+    fun `getUsersByStatus with null search executes without error`() {
+        val user = createUser(email = "pending-search-null@mail.com")
+        userRepository.save(user.copy(status = UserStatus.PENDING_APPROVAL))
+
+        val page = userService.getUsersByStatus(
+            status = UserStatus.PENDING_APPROVAL,
+            stageId = null,
+            yearId = null,
+            role = null,
+            search = null,
+            pageable = org.springframework.data.domain.PageRequest.of(0, 20)
+        )
+
+        assertThat(page.content).isNotEmpty()
+    }
 }
+
