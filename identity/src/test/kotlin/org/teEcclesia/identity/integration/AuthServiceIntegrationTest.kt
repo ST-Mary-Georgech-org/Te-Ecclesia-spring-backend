@@ -34,7 +34,11 @@ import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.entity.lookups.EducationalStage
 import org.teEcclesia.identity.entity.lookups.EducationalYear
+import org.teEcclesia.identity.entity.lookups.Rank
 import org.teEcclesia.identity.repository.AreaRepository
+import org.teEcclesia.identity.repository.RankRepository
+import org.teEcclesia.identity.api.dto.request.OrdinationProfileRequest
+import org.teEcclesia.identity.api.dto.request.KhademProfileRequest
 import org.teEcclesia.identity.repository.EducationalStageRepository
 import org.teEcclesia.identity.repository.EducationalYearRepository
 import org.teEcclesia.identity.repository.EmailVerificationRepository
@@ -74,7 +78,8 @@ class AuthServiceIntegrationTest {
     @Autowired private lateinit var parentProfileService: ParentProfileService
     @Autowired private lateinit var educationalStageRepository: EducationalStageRepository
     @Autowired private lateinit var educationalYearRepository: EducationalYearRepository
-
+    @Autowired private lateinit var rankRepository: RankRepository
+    
     @Autowired
     private lateinit var areaRepository: AreaRepository
 
@@ -84,6 +89,9 @@ class AuthServiceIntegrationTest {
         refreshTokenRepository.deleteAll()
         otpRepository.deleteAll()
         userRepository.deleteAll()
+        educationalYearRepository.deleteAll()
+        educationalStageRepository.deleteAll()
+        rankRepository.deleteAll()
         every { emailService.generateOtp() } returns "12345"
         every { jwtUtil.generateAccessToken(any()) } returns "access-token"
         every { jwtUtil.generateRefreshToken(any()) } returns "refresh-token"
@@ -510,6 +518,87 @@ class AuthServiceIntegrationTest {
         val response = authService.forgotPassword(request)
         assertThat(response).isNotNull()
         assertThat(response?.link).startsWith("https://wa.me/")
+    }
+
+    @Test
+    fun `completeProfile updates existing profiles correctly instead of throwing duplicate key exception`() {
+        var user = createUser(email = "khadem-update@mail.com", isVerified = false)
+        user = userRepository.save(user.copy(status = UserStatus.PROFILE_INCOMPLETE))
+        
+        val stage1 = educationalStageRepository.save(EducationalStage(nameAr = "Stage 1", nameEn = "Stage 1"))
+        val year1 = educationalYearRepository.save(EducationalYear(nameAr = "Year 1", nameEn = "Year 1", stage = stage1))
+        val rank1 = rankRepository.save(Rank(nameAr = "Rank 1", nameEn = "Rank 1", codeLetter = 'A'))
+        
+        val request1 = CompleteProfileRequest(
+            role = UserRole.KHADEM,
+            ordinationProfile = OrdinationProfileRequest(
+                rankId = rank1.id,
+                isOrdinationInAnotherChurch = false,
+                ordinationYear = 2020,
+                bishopName = "Bishop 1",
+                ordinationPlace = "Church 1",
+                certificateImageUrl = "img1.png"
+            ),
+            khademProfile = KhademProfileRequest(
+                educationalStageId = stage1.id,
+                educationalYearId = year1.id
+            )
+        )
+
+        // First completion
+        authService.completeProfile(user.id, request1)
+
+        val userAfterFirst = userRepository.findById(user.id).get()
+        assertThat(userAfterFirst.ordinationProfile).isNotNull()
+        assertThat(userAfterFirst.khademProfile).isNotNull()
+        
+        val firstOrdinationId = userAfterFirst.ordinationProfile!!.id
+        val firstKhademId = userAfterFirst.khademProfile!!.id
+
+        // Make user profile incomplete again so completeProfile is allowed to run
+        userRepository.save(userAfterFirst.copy(isPhoneVerified = false, status = UserStatus.PROFILE_INCOMPLETE))
+
+        // Second completion with updated details
+        val stage2 = educationalStageRepository.save(EducationalStage(nameAr = "Stage 2", nameEn = "Stage 2"))
+        val year2 = educationalYearRepository.save(EducationalYear(nameAr = "Year 2", nameEn = "Year 2", stage = stage2))
+        val rank2 = rankRepository.save(Rank(nameAr = "Rank 2", nameEn = "Rank 2", codeLetter = 'B'))
+
+        val request2 = CompleteProfileRequest(
+            role = UserRole.KHADEM,
+            ordinationProfile = OrdinationProfileRequest(
+                rankId = rank2.id,
+                isOrdinationInAnotherChurch = true,
+                ordinationYear = 2021,
+                bishopName = "Bishop 2",
+                ordinationPlace = "Church 2",
+                certificateImageUrl = "img2.png"
+            ),
+            khademProfile = KhademProfileRequest(
+                educationalStageId = stage2.id,
+                educationalYearId = year2.id
+            )
+        )
+
+        authService.completeProfile(user.id, request2)
+
+        val userAfterSecond = userRepository.findById(user.id).get()
+        assertThat(userAfterSecond.ordinationProfile).isNotNull()
+        assertThat(userAfterSecond.khademProfile).isNotNull()
+        
+        // Assert IDs remain the same (meaning they were updated, not re-inserted)
+        assertThat(userAfterSecond.ordinationProfile!!.id).isEqualTo(firstOrdinationId)
+        assertThat(userAfterSecond.khademProfile!!.id).isEqualTo(firstKhademId)
+
+        // Assert values were updated correctly
+        assertThat(userAfterSecond.ordinationProfile!!.rank.id).isEqualTo(rank2.id)
+        assertThat(userAfterSecond.ordinationProfile!!.isOrdinationInAnotherChurch).isTrue()
+        assertThat(userAfterSecond.ordinationProfile!!.ordinationYear).isEqualTo(2021)
+        assertThat(userAfterSecond.ordinationProfile!!.bishopName).isEqualTo("Bishop 2")
+        assertThat(userAfterSecond.ordinationProfile!!.ordinationPlace).isEqualTo("Church 2")
+        assertThat(userAfterSecond.ordinationProfile!!.certificateImageUrl).isEqualTo("img2.png")
+
+        assertThat(userAfterSecond.khademProfile!!.educationalStage.id).isEqualTo(stage2.id)
+        assertThat(userAfterSecond.khademProfile!!.educationalYear?.id).isEqualTo(year2.id)
     }
 
     private fun createUser(

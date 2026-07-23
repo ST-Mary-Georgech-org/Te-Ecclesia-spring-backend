@@ -208,7 +208,7 @@ class AuthService(
         val finalCertificateUrl = if (certificateImage != null) {
             imageStorageService.uploadImage(certificateImage, "cert_${user.id}", documentsDirectory)
         } else {
-            request.ordinationProfile?.certificateImageUrl
+            request.ordinationProfile?.certificateImageUrl ?: user.ordinationProfile?.certificateImageUrl
         }
 
         val ordinationProfile = request.ordinationProfile?.let { createOrdinationProfile(user, it, finalCertificateUrl) }
@@ -541,6 +541,7 @@ class AuthService(
             EntityNotFoundException("Rank not found")
         }
         return OrdinationProfile(
+            id = user.ordinationProfile?.id ?: 0,
             user = user,
             rank = rank,
             isOrdinationInAnotherChurch = dto.isOrdinationInAnotherChurch,
@@ -561,6 +562,7 @@ class AuthService(
             }
         }
         return MakhdoomProfile(
+            id = user.makhdoomProfile?.id ?: 0,
             user = user,
             shamamsaStudyStatus = dto.shamamsaStudyStatus,
             educationalStage = educationalStage,
@@ -570,7 +572,8 @@ class AuthService(
             motherPhone = dto.motherPhone,
             motherWhatsapp = dto.motherWhatsapp,
             isFatherDeceased = dto.isFatherDeceased,
-            isMotherDeceased = dto.isMotherDeceased
+            isMotherDeceased = dto.isMotherDeceased,
+            identityDocumentImageUrl = dto.identityDocumentImageUrl ?: user.makhdoomProfile?.identityDocumentImageUrl
         )
     }
 
@@ -581,6 +584,7 @@ class AuthService(
             emptyList()
         }
         return KahenProfile(
+            id = user.kahenProfile?.id ?: 0,
             user = user,
             educationalStages = stages.toMutableList()
         )
@@ -596,9 +600,13 @@ class AuthService(
             }
         }
         return KhademProfile(
+            id = user.khademProfile?.id ?: 0,
             user = user,
             educationalStage = educationalStage,
-            educationalYear = educationalYear
+            educationalYear = educationalYear,
+            canApproveRequests = user.khademProfile?.canApproveRequests ?: false,
+            responsibleStages = user.khademProfile?.responsibleStages ?: mutableListOf(),
+            responsibleYears = user.khademProfile?.responsibleYears ?: mutableListOf()
         )
     }
 
