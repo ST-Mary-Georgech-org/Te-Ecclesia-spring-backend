@@ -13,6 +13,7 @@ import org.teEcclesia.identity.exception.UnauthorizedException
 import org.teEcclesia.identity.exception.UserAlreadyExistsException
 import org.teEcclesia.identity.exception.PhoneNotVerifiedException
 import org.teEcclesia.identity.exception.DuplicatePhoneException
+import org.teEcclesia.identity.exception.EmailNotVerifiedException
 import org.teEcclesia.identity.security.JwtUtil
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -599,6 +600,54 @@ class AuthServiceIntegrationTest {
 
         assertThat(userAfterSecond.khademProfile!!.educationalStage.id).isEqualTo(stage2.id)
         assertThat(userAfterSecond.khademProfile!!.educationalYear?.id).isEqualTo(year2.id)
+    }
+
+    @Test
+    fun `completeProfile allows updates when pending approval and phone is verified`() {
+        var user = createUser(email = "pending-update@mail.com", isVerified = false)
+        user = userRepository.save(user.copy(
+            isPhoneVerified = true,
+            status = UserStatus.PENDING_APPROVAL
+        ))
+
+        val stage = educationalStageRepository.save(EducationalStage(nameAr = "Stage", nameEn = "Stage"))
+        val request = CompleteProfileRequest(
+            role = UserRole.KHADEM,
+            khademProfile = KhademProfileRequest(
+                educationalStageId = stage.id,
+                educationalYearId = null
+            )
+        )
+
+        val response = authService.completeProfile(user.id, request)
+
+        assertThat(response.message).isEqualTo("Profile updated successfully.")
+        assertThat(response.whatsappDeepLink).isNull()
+        assertThat(response.token).isNull()
+
+        val updatedUser = userRepository.findById(user.id).get()
+        assertThat(updatedUser.role).isEqualTo(UserRole.KHADEM)
+        assertThat(updatedUser.status).isEqualTo(UserStatus.PENDING_APPROVAL)
+    }
+
+    @Test
+    fun `login throws EmailNotVerifiedException when email is unverified even if status is PENDING_APPROVAL`() {
+        var user = createUser(email = "unverified-email@mail.com", isVerified = false)
+        user = userRepository.save(user.copy(
+            isPhoneVerified = true,
+            isEmailVerified = false,
+            status = UserStatus.PENDING_APPROVAL
+        ))
+
+        val request = LoginRequest(
+            identifier = "unverified-email@mail.com",
+            password = "Password@1",
+            deviceToken = null
+        )
+
+        assertThrows<EmailNotVerifiedException> {
+            authService.login(request)
+        }
     }
 
     private fun createUser(

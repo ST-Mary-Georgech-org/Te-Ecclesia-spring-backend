@@ -201,7 +201,7 @@ class AuthService(
     fun completeProfile(userId: UUID, request: CompleteProfileRequest, certificateImage: MultipartFile? = null): RegisterResponse {
         val user = userRepository.findById(userId).orElseThrow { EntityNotFoundException("User not found") }
 
-        if (user.isPhoneVerified) {
+        if (user.status == UserStatus.APPROVED) {
             throw RuntimeException("Profile is already completed")
         }
 
@@ -216,8 +216,10 @@ class AuthService(
         val khademProfile = request.khademProfile?.let { createKhademProfile(user, it) }
         val kahenProfile = request.kahenProfile?.let { createKahenProfile(user, it) }
 
+        val newStatus = if (user.isPhoneVerified) UserStatus.PENDING_APPROVAL else UserStatus.UNVERIFIED
+
         val savedUser = userRepository.save(user.copy(
-            status = UserStatus.UNVERIFIED,
+            status = newStatus,
             role = request.role,
             ordinationProfile = ordinationProfile ?: user.ordinationProfile,
             makhdoomProfile = makhdoomProfile ?: user.makhdoomProfile,
@@ -427,6 +429,10 @@ class AuthService(
         val user = matchingUsers[0]
         val isEmailIdentifier = user.email != null && identifier.equals(user.email, ignoreCase = true)
 
+        if (isEmailIdentifier && !user.isEmailVerified) {
+            throw EmailNotVerifiedException()
+        }
+
         when (user.status) {
             UserStatus.PROFILE_INCOMPLETE -> {
                 val tempToken = jwtUtil.generateRegistrationToken(user.id)
@@ -447,9 +453,6 @@ class AuthService(
                     saveRefreshToken(user, refreshToken, request.deviceToken)
                     throw PhoneNotVerifiedException(token = tempToken, refreshToken = refreshToken)
                 }
-                if (isEmailIdentifier && !user.isEmailVerified) {
-                    throw EmailNotVerifiedException()
-                }
             }
             UserStatus.REJECTED -> throw UnauthorizedException("Account rejected")
             UserStatus.BANNED -> throw UnauthorizedException("Account banned")
@@ -460,9 +463,6 @@ class AuthService(
                     val refreshToken = jwtUtil.generateRefreshToken(user.id)
                     saveRefreshToken(user, refreshToken, request.deviceToken)
                     throw PhoneNotVerifiedException(token = tempToken, refreshToken = refreshToken)
-                }
-                if (isEmailIdentifier && !user.isEmailVerified) {
-                    throw EmailNotVerifiedException()
                 }
             }
         }
