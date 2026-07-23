@@ -49,7 +49,7 @@ interface UserRepository : JpaRepository<User, UUID> {
         AND (:yearId IS NULL OR mp.educationalYear.id = :yearId OR kp.educationalYear.id = :yearId)
         AND (cast(:role as string) IS NULL OR u.role = :role)
         AND (:search IS NULL OR 
-             LOWER(u.name) LIKE LOWER(CONCAT('%', :search, '%')) OR 
+             LOWER(CONCAT(u.firstName, ' ', u.secondName, ' ', u.thirdName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', :search, '%')) OR 
              u.phone LIKE CONCAT('%', :search, '%') OR 
              u.nationalId LIKE CONCAT('%', :search, '%') OR 
              LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')) OR 

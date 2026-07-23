@@ -621,9 +621,9 @@ class AuthServiceIntegrationTest {
 
         val response = authService.completeProfile(user.id, request)
 
-        assertThat(response.message).isEqualTo("Profile updated successfully.")
-        assertThat(response.whatsappDeepLink).isNull()
-        assertThat(response.token).isNull()
+        assertThat(response.message).isEqualTo("Profile completed successfully. Please verify your phone number via WhatsApp.")
+        assertThat(response.whatsappDeepLink).isNotNull()
+        assertThat(response.token).isNotNull()
 
         val updatedUser = userRepository.findById(user.id).get()
         assertThat(updatedUser.role).isEqualTo(UserRole.KHADEM)
