@@ -47,11 +47,20 @@ interface UserRepository : JpaRepository<User, UUID> {
         WHERE u.status = :status 
         AND (:stageId IS NULL OR mp.educationalStage.id = :stageId OR kp.educationalStage.id = :stageId) 
         AND (:yearId IS NULL OR mp.educationalYear.id = :yearId OR kp.educationalYear.id = :yearId)
+        AND (cast(:role as string) IS NULL OR u.role = :role)
+        AND (:search IS NULL OR 
+             LOWER(u.name) LIKE LOWER(CONCAT('%', :search, '%')) OR 
+             u.phone LIKE CONCAT('%', :search, '%') OR 
+             u.nationalId LIKE CONCAT('%', :search, '%') OR 
+             LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')) OR 
+             LOWER(u.code) LIKE LOWER(CONCAT('%', :search, '%')))
     """)
-    fun findByStatusAndEducationalFilters(
+    fun findByStatusAndFilters(
         @Param("status") status: UserStatus,
         @Param("stageId") stageId: Long?,
         @Param("yearId") yearId: Long?,
+        @Param("role") role: UserRole?,
+        @Param("search") search: String?,
         pageable: Pageable
     ): Page<User>
     

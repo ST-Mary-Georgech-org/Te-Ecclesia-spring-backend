@@ -46,10 +46,12 @@ class UserController(
         @PathVariable status: UserStatus,
         @RequestParam(required = false) stageId: Long?,
         @RequestParam(required = false) yearId: Long?,
+        @RequestParam(required = false) role: UserRole?,
+        @RequestParam(required = false) search: String?,
         pageable: Pageable
     ): ResponseEntity<Page<ProfileResponse>> {
         authorizeAdminOrKhadem(callerId, requireApprovePermission = true)
-        return ResponseEntity.ok(userService.getUsersByStatus(status, stageId, yearId, pageable))
+        return ResponseEntity.ok(userService.getUsersByStatus(status, stageId, yearId, role, search, pageable))
     }
 
     @PostMapping("/{userId}/approve")

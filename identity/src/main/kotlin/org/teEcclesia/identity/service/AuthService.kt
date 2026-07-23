@@ -252,7 +252,7 @@ class AuthService(
         val formattedPhone = formatPhone(phone)
         val users = userRepository.findUsersByPhone(formattedPhone)
         val user = users.find { !it.isPhoneVerified }
-            ?: throw EntityNotFoundException("User not found with this phone number")
+            ?: if (users.isEmpty()) throw EntityNotFoundException("User not found with this phone number") else users[0]
 
         otpRepository.deleteAllByUserAndMethod(user, VerificationMethod.PHONE)
 

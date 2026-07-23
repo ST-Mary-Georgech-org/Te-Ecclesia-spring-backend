@@ -138,8 +138,8 @@ class UserService(
         return users.associate { it.id.toString() to (it.email ?: "") }
     }
 
-    fun getUsersByStatus(status: UserStatus, stageId: Long?, yearId: Long?, pageable: Pageable): Page<ProfileResponse> {
-        return userRepository.findByStatusAndEducationalFilters(status, stageId, yearId, pageable).map { it.toProfileResponse(imagesBaseUrl) }
+    fun getUsersByStatus(status: UserStatus, stageId: Long?, yearId: Long?, role: UserRole?, search: String?, pageable: Pageable): Page<ProfileResponse> {
+        return userRepository.findByStatusAndFilters(status, stageId, yearId, role, search, pageable).map { it.toProfileResponse(imagesBaseUrl) }
     }
 
     @Transactional
