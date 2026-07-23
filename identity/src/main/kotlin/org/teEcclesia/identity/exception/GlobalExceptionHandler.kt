@@ -70,8 +70,13 @@ class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(AccountPendingApprovalException::class)
-    fun handleAccountPendingApproval(ex: AccountPendingApprovalException): ResponseEntity<ErrorResponse> {
-        val error = ErrorResponse(ex.message ?: "Account pending approval", HttpStatus.LOCKED.value())
+    fun handleAccountPendingApproval(ex: AccountPendingApprovalException): ResponseEntity<IncompleteProfileResponse> {
+        val error = IncompleteProfileResponse(
+            message = ex.message ?: "Account pending approval",
+            status = HttpStatus.LOCKED.value(),
+            token = ex.token,
+            refreshToken = ex.refreshToken
+        )
         return ResponseEntity.status(HttpStatus.LOCKED).body(error)
     }
 

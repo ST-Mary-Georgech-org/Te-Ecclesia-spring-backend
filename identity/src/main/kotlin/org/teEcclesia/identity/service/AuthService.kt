@@ -434,7 +434,12 @@ class AuthService(
                 saveRefreshToken(user, refreshToken, request.deviceToken)
                 throw IncompleteProfileException(token = tempToken, refreshToken = refreshToken)
             }
-            UserStatus.PENDING_APPROVAL -> throw AccountPendingApprovalException()
+            UserStatus.PENDING_APPROVAL -> {
+                val tempToken = jwtUtil.generateRegistrationToken(user.id)
+                val refreshToken = jwtUtil.generateRefreshToken(user.id)
+                saveRefreshToken(user, refreshToken, request.deviceToken)
+                throw AccountPendingApprovalException(token = tempToken, refreshToken = refreshToken)
+            }
             UserStatus.UNVERIFIED -> {
                 if (!user.isPhoneVerified) {
                     val tempToken = jwtUtil.generateRegistrationToken(user.id)

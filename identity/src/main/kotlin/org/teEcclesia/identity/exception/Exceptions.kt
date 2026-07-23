@@ -19,7 +19,10 @@ class UserAlreadyExistsException(
 class UserNotFoundException(message: String) : AuthenticationException(message)
 
 class AccountPendingApprovalException(
-    message: String = "User account is pending approval") : RuntimeException(message)
+    message: String = "User account is pending approval",
+    val token: String? = null,
+    val refreshToken: String? = null
+) : RuntimeException(message)
 
 class IncompleteProfileException(
     message: String = "User profile is incomplete",
