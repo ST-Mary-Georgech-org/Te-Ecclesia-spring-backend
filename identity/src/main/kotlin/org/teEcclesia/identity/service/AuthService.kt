@@ -29,7 +29,9 @@ import org.teEcclesia.identity.repository.*
 import org.teEcclesia.identity.security.JwtUtil
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
@@ -319,6 +321,7 @@ class AuthService(
             else -> {
                 val wasUnverified = user.status == UserStatus.UNVERIFIED
                 user.copy(
+                    createdAt = Instant.now(),
                     isPhoneVerified = true,
                     status = if (wasUnverified) UserStatus.PENDING_APPROVAL else user.status
                 )
@@ -581,7 +584,8 @@ class AuthService(
         return KahenProfile(
             id = user.kahenProfile?.id ?: 0,
             user = user,
-            educationalStages = stages.toMutableList()
+            educationalStages = stages.toMutableList(),
+            ordinationDate = dto.ordinationDate
         )
     }
 
@@ -799,11 +803,14 @@ class AuthService(
     }
 
     fun getConfessionPriests(pageable: Pageable): Page<PriestResponse> {
-        val priestsPage = userRepository.findByRoleAndStatusIs(UserRole.KAHEN, UserStatus.APPROVED, pageable)
+        val sort = if (pageable.sort.isUnsorted) Sort.by(Sort.Direction.ASC, "kahenProfile.ordinationDate") else pageable.sort
+        val effectivePageable = PageRequest.of(pageable.pageNumber, pageable.pageSize, sort)
+        val priestsPage = userRepository.findByRoleAndStatusIs(UserRole.KAHEN, UserStatus.APPROVED, effectivePageable)
         return priestsPage.map { priest ->
             PriestResponse(
                 id = priest.id,
-                name = priest.displayName
+                name = priest.displayName,
+                ordinationDate = priest.kahenProfile?.ordinationDate
             )
         }
     }

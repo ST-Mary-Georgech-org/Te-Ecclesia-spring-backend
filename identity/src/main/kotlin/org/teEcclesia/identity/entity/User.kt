@@ -57,7 +57,7 @@ data class User(
     @Column(nullable = true)
     val imageUrl: String? = null,
 
-    @Column(nullable = false, updatable = false)
+    @Column(nullable = false)
     val createdAt: Instant = Instant.now(),
 
     @Column(nullable = false)
@@ -97,6 +97,9 @@ data class User(
 
     @Column(nullable = true)
     val statusReason: String? = null,
+
+    @Column(nullable = true)
+    val actionTakenAt: Instant? = null,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

@@ -23,6 +23,7 @@ import org.teEcclesia.identity.exception.UserAlreadyExistsException
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.teEcclesia.identity.api.dto.request.RegisterRequest
+import java.time.Instant
 import org.teEcclesia.identity.utils.extractBirthDate
 import org.teEcclesia.identity.utils.extractGender
 import org.teEcclesia.identity.api.dto.request.toEntity
@@ -200,7 +201,8 @@ class UserService(
         
         val updatedUser = user.copy(
             status = UserStatus.APPROVED,
-            code = code
+            code = code,
+            actionTakenAt = Instant.now()
         )
         val savedUser = userRepository.save(updatedUser)
         
@@ -219,14 +221,14 @@ class UserService(
         if (user.status != UserStatus.PENDING_APPROVAL) {
             throw RuntimeException("Only users pending approval can be rejected")
         }
-        val updatedUser = userRepository.save(user.copy(status = UserStatus.REJECTED, statusReason = reason))
+        val updatedUser = userRepository.save(user.copy(status = UserStatus.REJECTED, statusReason = reason, actionTakenAt = Instant.now()))
         eventPublisher.publish(updatedUser.toUserUpdatedEvent())
     }
 
     @Transactional
     fun banUser(userId: UUID, reason: String) {
         val user = findById(userId)
-        val updatedUser = userRepository.save(user.copy(status = UserStatus.BANNED, statusReason = reason))
+        val updatedUser = userRepository.save(user.copy(status = UserStatus.BANNED, statusReason = reason, actionTakenAt = Instant.now()))
         eventPublisher.publish(updatedUser.toUserUpdatedEvent())
     }
 

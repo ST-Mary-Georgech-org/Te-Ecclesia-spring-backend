@@ -3,6 +3,7 @@ package org.teEcclesia.identity.entity
 import jakarta.persistence.*
 import org.teEcclesia.identity.entity.lookups.EducationalStage
 import org.hibernate.envers.Audited
+import java.time.LocalDate
 
 @Audited
 @Entity
@@ -23,5 +24,8 @@ data class KahenProfile(
         joinColumns = [JoinColumn(name = "kahen_profile_id")],
         inverseJoinColumns = [JoinColumn(name = "educational_stage_id")]
     )
-    var educationalStages: MutableList<EducationalStage> = mutableListOf()
+    var educationalStages: MutableList<EducationalStage> = mutableListOf(),
+
+    @Column(name = "ordination_date", nullable = true)
+    val ordinationDate: LocalDate? = null
 )

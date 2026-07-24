@@ -107,7 +107,8 @@ fun User.toProfileResponse(imageBaseUrl: String): ProfileResponse {
                 educationalStages = it.educationalStages.map { stage ->
                     val stageName = if (lang.startsWith("en", ignoreCase = true)) stage.nameEn else stage.nameAr
                     LookupResponse(stage.id, stageName)
-                }
+                },
+                ordinationDate = it.ordinationDate
             )
         },
         parentProfile = this.parentProfile?.let {
