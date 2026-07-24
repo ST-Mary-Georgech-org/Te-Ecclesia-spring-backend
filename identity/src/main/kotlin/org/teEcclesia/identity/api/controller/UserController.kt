@@ -27,7 +27,7 @@ class UserController(
 ) {
 
     private fun authorizeAdminOrKhadem(callerId: UUID, requireApprovePermission: Boolean = false) {
-        val caller = userService.findById(callerId)
+        val caller = userService.findProfileById(callerId)
         if (caller.role == UserRole.ADMIN) return
         
         if (caller.role == UserRole.KHADEM) {

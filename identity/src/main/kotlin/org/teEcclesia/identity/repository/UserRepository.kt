@@ -12,6 +12,8 @@ import org.teEcclesia.identity.entity.enums.UserStatus
 import org.springframework.stereotype.Repository
 import org.teEcclesia.identity.entity.enums.UserRole
 
+import org.springframework.data.jpa.repository.EntityGraph
+
 interface UserRepository : JpaRepository<User, UUID> {
     fun findByCode(code: String): User?
     fun existsByCodeLike(codePattern: String): Boolean
@@ -24,6 +26,19 @@ interface UserRepository : JpaRepository<User, UUID> {
     @Query("SELECT MAX(u.code) FROM User u WHERE u.code LIKE concat(:prefix, '%')")
     fun findMaxCodeByPrefix(prefix: String): String?
     fun findByStatus(status: UserStatus, pageable: Pageable): Page<User>
+
+    @EntityGraph(
+        attributePaths = [
+            "confessionPriest",
+            "khademProfile", "khademProfile.educationalStage", "khademProfile.educationalYear",
+            "kahenProfile",
+            "parentProfile", "parentProfile.partner",
+            "ordinationProfile", "ordinationProfile.rank",
+            "makhdoomProfile", "makhdoomProfile.educationalStage", "makhdoomProfile.educationalYear"
+        ]
+    )
+    @Query("SELECT u FROM User u WHERE u.id = :id")
+    fun findProfileById(@Param("id") id: UUID): User?
     
     @Query("""
         SELECT u FROM User u 
@@ -40,6 +55,16 @@ interface UserRepository : JpaRepository<User, UUID> {
     """)
     fun findUsersByIdentifier(@Param("id") id: String): List<User>
     
+    @EntityGraph(
+        attributePaths = [
+            "confessionPriest",
+            "khademProfile", "khademProfile.educationalStage", "khademProfile.educationalYear",
+            "kahenProfile",
+            "parentProfile", "parentProfile.partner",
+            "ordinationProfile", "ordinationProfile.rank",
+            "makhdoomProfile", "makhdoomProfile.educationalStage", "makhdoomProfile.educationalYear"
+        ]
+    )
     @Query("""
         SELECT u FROM User u 
         LEFT JOIN u.makhdoomProfile mp 
@@ -65,14 +90,19 @@ interface UserRepository : JpaRepository<User, UUID> {
     ): Page<User>
     
     fun findByRole(role: UserRole, pageable: Pageable): Page<User>
+    fun findByRoleAndStatusIs(role: UserRole, status: UserStatus, pageable: Pageable): Page<User>
     fun countByRole(role: UserRole): Long
 
     @Query("""
         SELECT u FROM User u 
-        WHERE u.role = :role AND u.isPhoneVerified
+        WHERE u.role = :role AND u.status = :status
         AND (u.email = :query OR u.nationalId = :query OR u.code = :query OR u.phone = :query)
     """)
-    fun findByRoleAndIdentifier(@Param("role") role: UserRole, @Param("query") query: String): List<User>
+    fun findByRoleAndIdentifier(
+        @Param("role") role: UserRole,
+        @Param("status") status: UserStatus,
+        @Param("query") query: String
+    ): List<User>
     
     @Query("SELECT u FROM User u JOIN u.khademProfile kp WHERE u.role = :role AND kp.canApproveRequests = true")
     fun findByRoleAndCanApproveRequestsTrue(@Param("role") role: UserRole, pageable: Pageable): Page<User>

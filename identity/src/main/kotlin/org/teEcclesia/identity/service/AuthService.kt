@@ -27,19 +27,12 @@ import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.entity.lookups.Area
 import org.teEcclesia.identity.repository.*
 import org.teEcclesia.identity.security.JwtUtil
-import org.teEcclesia.identity.service.mapper.WhatsAppWebhookMapper
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
-import java.util.concurrent.Executors
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
-import org.springframework.http.HttpMethod
-import org.teEcclesia.client.ApiClient
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
-import java.security.MessageDigest
 import java.net.URLEncoder
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -51,7 +44,6 @@ import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.utils.formatPhone
 import org.teEcclesia.storage.service.ImageStorageService
 import java.util.*
-import java.util.concurrent.CompletableFuture
 
 @Service
 @Transactional
@@ -63,8 +55,6 @@ class AuthService(
     private val passwordEncoder: PasswordEncoder,
     private val jwtUtil: JwtUtil,
     private val teEcclesiaEventPublisher: TeEcclesiaEventPublisher,
-    private val whatsAppWebhookMapper: WhatsAppWebhookMapper,
-    private val apiClient: ApiClient,
     private val parentProfileService: ParentProfileService,
     private val rankRepository: RankRepository,
     private val educationalStageRepository: EducationalStageRepository,
@@ -809,7 +799,7 @@ class AuthService(
     }
 
     fun getConfessionPriests(pageable: Pageable): Page<PriestResponse> {
-        val priestsPage = userRepository.findByRole(UserRole.KAHEN, pageable)
+        val priestsPage = userRepository.findByRoleAndStatusIs(UserRole.KAHEN, UserStatus.APPROVED, pageable)
         return priestsPage.map { priest ->
             PriestResponse(
                 id = priest.id,
@@ -819,7 +809,8 @@ class AuthService(
     }
 
     fun searchParents(query: String, imagesBaseUrl: String): UserSummaryResponse? {
-        val user = userRepository.findByRoleAndIdentifier(UserRole.PARENT, query).firstOrNull() ?: return null
+        val user = userRepository.findByRoleAndIdentifier(UserRole.PARENT, UserStatus.APPROVED, query).firstOrNull()
+            ?: return null
         val fullImageUrl = user.imageUrl?.let { "$imagesBaseUrl/$it" }
         return UserSummaryResponse(
             id = user.id,
@@ -830,7 +821,8 @@ class AuthService(
     }
 
     fun searchMakhdooms(query: String, imagesBaseUrl: String): UserSummaryResponse? {
-        val user = userRepository.findByRoleAndIdentifier(UserRole.MAKHDOOM, query).firstOrNull() ?: return null
+        val user = userRepository.findByRoleAndIdentifier(UserRole.MAKHDOOM, UserStatus.APPROVED, query).firstOrNull()
+            ?: return null
         val fullImageUrl = user.imageUrl?.let { "$imagesBaseUrl/$it" }
         return UserSummaryResponse(
             id = user.id,

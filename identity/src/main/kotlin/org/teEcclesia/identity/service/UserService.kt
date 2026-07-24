@@ -61,9 +61,14 @@ class UserService(
             ?: throw UserNotFoundException("User with id: $userId not found")
     }
 
-    @Transactional
+    fun findProfileById(userId: UUID): User {
+        return userRepository.findProfileById(userId)
+            ?: throw UserNotFoundException("User with id: $userId not found")
+    }
+
+    @Transactional(readOnly = true)
     fun getUserProfile(userId: UUID, imageBaseUrl: String): ProfileResponse {
-        val user = findById(userId)
+        val user = findProfileById(userId)
         return user.toProfileResponse(imageBaseUrl)
     }
 
@@ -138,6 +143,7 @@ class UserService(
         return users.associate { it.id.toString() to (it.email ?: "") }
     }
 
+    @Transactional(readOnly = true)
     fun getUsersByStatus(status: UserStatus, stageId: Long?, yearId: Long?, role: UserRole?, search: String?, pageable: Pageable): Page<ProfileResponse> {
         return userRepository.findByStatusAndFilters(status, stageId, yearId, role, search, pageable).map { it.toProfileResponse(imagesBaseUrl) }
     }

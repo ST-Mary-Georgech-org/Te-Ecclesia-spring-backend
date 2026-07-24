@@ -296,5 +296,15 @@ class UserServiceIntegrationTest {
 
         assertThat(page.content).isNotEmpty()
     }
+
+    @Test
+    fun `getUserProfile executes without error and returns ProfileResponse`() {
+        val user = createUser(email = "get-user-profile@mail.com")
+
+        val profile = userService.getUserProfile(user.id, "http://cdn.test")
+
+        assertThat(profile).isNotNull()
+        assertThat(profile.id).isEqualTo(user.id.toString())
+    }
 }
 

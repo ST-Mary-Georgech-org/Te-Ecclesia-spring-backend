@@ -10,7 +10,6 @@ import org.teEcclesia.identity.service.AuthService
 import org.teEcclesia.identity.service.EmailService
 import org.teEcclesia.identity.service.UserService
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.teEcclesia.identity.service.mapper.WhatsAppWebhookMapper
 import org.teEcclesia.storage.service.ImageStorageService
 import org.teEcclesia.client.ApiClient
 import org.springframework.beans.factory.annotation.Value
@@ -61,11 +60,6 @@ class IdentityTestApplication {
     }
 
     @Bean
-    fun whatsAppWebhookMapper(objectMapper: ObjectMapper): WhatsAppWebhookMapper {
-        return WhatsAppWebhookMapper(objectMapper)
-    }
-
-    @Bean
     fun authService(
         userRepository: UserRepository,
         refreshTokenRepository: RefreshTokenRepository,
@@ -74,8 +68,6 @@ class IdentityTestApplication {
         passwordEncoder: PasswordEncoder,
         jwtUtil: JwtUtil,
         teEcclesiaEventPublisher: TeEcclesiaEventPublisher,
-        whatsAppWebhookMapper: WhatsAppWebhookMapper,
-        apiClient: ApiClient,
         @Value("\${whatsapp.business-number}") whatsappBusinessNumber: String,
         @Value("\${whatsapp.business-phone}") whatsappBusinessPhone: String,
         @Value("\${whatsapp.app-secret:}") whatsappAppSecret: String,
@@ -94,8 +86,6 @@ class IdentityTestApplication {
             passwordEncoder = passwordEncoder,
             jwtUtil = jwtUtil,
             teEcclesiaEventPublisher = teEcclesiaEventPublisher,
-            whatsAppWebhookMapper = whatsAppWebhookMapper,
-            apiClient = apiClient,
             whatsappBusinessNumber = whatsappBusinessNumber,
             whatsappBusinessPhone = whatsappBusinessPhone,
             whatsappAppSecret = whatsappAppSecret,
