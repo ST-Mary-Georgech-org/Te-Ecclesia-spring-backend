@@ -1,0 +1,85 @@
+name: Deploy Spring Boot to Hugging Face
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Firebase Credentials
+        run: |
+          mkdir -p app/src/main/resources
+          echo "${{ secrets.FIREBASE_CREDENTIALS_BASE64 }}" | base64 -d > app/src/main/resources/teEcclesia-firebase-adminsdk.json
+
+      - name: Build Docker image
+        run: docker build -t josephsameh/teecclesia-backend:latest .
+
+      - name: Push Docker image
+        run: |
+          echo ${{ secrets.DOCKER_HUB_PASSWORD }} | docker login -u ${{ secrets.DOCKER_HUB_USERNAME }} --password-stdin
+          docker push josephsameh/teecclesia-backend:latest
+
+      - name: Sync Secrets to Hugging Face
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Hugging Face Hub
+        run: pip install huggingface_hub
+
+      - name: Push Secrets to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_REPO_ID: ${{ secrets.HF_REPO_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
+          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          PROFILE_IMAGE_DIRECTORY: ${{ secrets.PROFILE_IMAGE_DIRECTORY }}
+          STORAGE_TEECCLESIA_BUCKET: ${{ secrets.STORAGE_TEECCLESIA_BUCKET }}
+          STORAGE_TEECCLESIA_CDN_ENDPOINT: ${{ secrets.STORAGE_TEECCLESIA_CDN_ENDPOINT }}
+          STORAGE_TEECCLESIA_ENDPOINT: ${{ secrets.STORAGE_TEECCLESIA_ENDPOINT }}
+          STORAGE_TEECCLESIA_KEY: ${{ secrets.STORAGE_TEECCLESIA_KEY }}
+          STORAGE_TEECCLESIA_SECRET: ${{ secrets.STORAGE_TEECCLESIA_SECRET }}
+          INTERNAL_API_BASE_URL: ${{ secrets.INTERNAL_API_BASE_URL }}
+          EMAIL_SERVICE_URL: ${{ secrets.EMAIL_SERVICE_URL }}
+          TEECCLESIA_HMAC_SECRET_KEY: ${{ secrets.TEECCLESIA_HMAC_SECRET_KEY }}
+          WHATSAPP_WEBHOOK_VERIFY_TOKEN: ${{ secrets.WHATSAPP_WEBHOOK_VERIFY_TOKEN }}
+          WHATSAPP_BUSINESS_NUMBER: ${{ secrets.WHATSAPP_BUSINESS_NUMBER }}
+          WHATSAPP_BUSINESS_PHONE: ${{ secrets.WHATSAPP_BUSINESS_PHONE }}
+          WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_APP_SECRET }}
+          WHATSAPP_ACCESS_TOKEN: ${{ secrets.WHATSAPP_ACCESS_TOKEN }}
+        run: |
+          python -c '
+          import os
+          from huggingface_hub import HfApi
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          repo_id = os.environ.get("HF_REPO_ID")
+          keys = [
+              "DATABASE_URL", "DATABASE_USERNAME", "DATABASE_PASSWORD", "JWT_SECRET",
+              "PROFILE_IMAGE_DIRECTORY", "STORAGE_TEECCLESIA_BUCKET", "STORAGE_TEECCLESIA_CDN_ENDPOINT",
+              "STORAGE_TEECCLESIA_ENDPOINT", "STORAGE_TEECCLESIA_KEY", "STORAGE_TEECCLESIA_SECRET",
+              "INTERNAL_API_BASE_URL", "EMAIL_SERVICE_URL", "TEECCLESIA_HMAC_SECRET_KEY",
+              "WHATSAPP_WEBHOOK_VERIFY_TOKEN", "WHATSAPP_BUSINESS_NUMBER", "WHATSAPP_BUSINESS_PHONE",
+              "WHATSAPP_APP_SECRET", "WHATSAPP_ACCESS_TOKEN"
+          ]
+          for key in keys:
+              val = os.environ.get(key)
+              if val:
+                  print(f"Syncing secret: {key}")
+                  api.add_space_secret(repo_id, key, val)
+          '
+
+      - name: Restart Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_REPO_ID: ${{ secrets.HF_REPO_ID }}
+        run: |
+          curl -X POST https://huggingface.co/api/spaces/$HF_REPO_ID/restart \
+            -H "Authorization: Bearer $HF_TOKEN"

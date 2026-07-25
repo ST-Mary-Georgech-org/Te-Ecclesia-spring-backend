@@ -1,0 +1,40 @@
+.gradle
+**/build/
+build/
+.gradle/
+.gradle
+target/
+**/out/
+out/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.classpath
+*.project
+**/.idea/
+*.iml
+.vscode
+
+# Logs
+*.log
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Git metadata
+.git
+.git/
+.gitignore
+
+local.properties
+
+# Keep gradlew and the gradle wrapper
+!gradlew
+!gradlew.bat
+!gradle/wrapper/
+
+
+# Maven local repository (if inside project)
+.mvn/wrapper/dists/
