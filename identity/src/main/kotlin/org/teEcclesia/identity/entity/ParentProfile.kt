@@ -18,7 +18,7 @@ data class ParentProfile(
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "partner_id")
-    var partner: User? = null,
+    val partner: User? = null,
 
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
@@ -27,8 +27,8 @@ data class ParentProfile(
         joinColumns = [JoinColumn(name = "parent_profile_id")],
         inverseJoinColumns = [JoinColumn(name = "child_id")]
     )
-    var children: MutableList<User> = mutableListOf(),
+    val children: List<User> = emptyList(),
 
     @Column(nullable = true)
-    var nationalIdImageUrl: String? = null
+    val nationalIdImageUrl: String? = null
 )

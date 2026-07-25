@@ -28,6 +28,8 @@ import org.teEcclesia.identity.utils.extractBirthDate
 import org.teEcclesia.identity.utils.extractGender
 import org.teEcclesia.identity.api.dto.request.toEntity
 import org.teEcclesia.identity.entity.MakhdoomProfile
+import org.teEcclesia.identity.entity.KhademProfile
+import org.teEcclesia.identity.entity.ParentProfile
 import org.teEcclesia.identity.repository.EducationalStageRepository
 import org.teEcclesia.identity.repository.EducationalYearRepository
 import org.teEcclesia.identity.repository.AreaRepository
@@ -72,6 +74,13 @@ class UserService(
         val user = findProfileById(userId)
         return user.toProfileResponse(imageBaseUrl)
     }
+
+    @Transactional(readOnly = true)
+    fun getUserProfile(userId: UUID): ProfileResponse {
+        val user = findProfileById(userId)
+        return user.toProfileResponse(imagesBaseUrl)
+    }
+
 
     fun updateUserImage(
         userId: UUID,
@@ -173,6 +182,11 @@ class UserService(
                 }
             }
 
+            var confessionPriest: User? = user.confessionPriest
+            if (updateData.confessionPriestId != null && updateData.confessionPriestId != user.confessionPriest?.id) {
+                confessionPriest = findById(updateData.confessionPriestId)
+            }
+
             user = user.copy(
                 firstName = updateData.firstName,
                 secondName = updateData.secondName,
@@ -181,8 +195,10 @@ class UserService(
                 displayName = updateData.displayName,
                 nationalId = updateData.nationalId,
                 phone = formattedPhone,
+                homePhone = formatHomePhone(updateData.homePhone),
                 isPhoneVerified = if (formattedPhone != user.phone) false else user.isPhoneVerified,
                 email = updateData.email,
+                imageUrl = updateData.imageUrl ?: user.imageUrl,
                 job = updateData.job,
                 buildingNo = updateData.buildingNo,
                 street = updateData.street,
@@ -191,10 +207,84 @@ class UserService(
                 floor = updateData.floor,
                 apartment = updateData.apartment,
                 specialMark = updateData.specialMark,
+                confessionPriest = confessionPriest,
                 externalConfessionPriestName = updateData.externalConfessionPriestName,
                 externalConfessionChurch = updateData.externalConfessionChurch,
                 externalConfessionPhone = updateData.externalConfessionPhone
             )
+
+            if (user.role == UserRole.MAKHDOOM && updateData.makhdoomProfile != null) {
+                val educationalStage = educationalStageRepository.findById(updateData.makhdoomProfile.educationalStageId).orElseThrow {
+                    java.lang.IllegalArgumentException("Educational stage not found")
+                }
+                val educationalYear = updateData.makhdoomProfile.educationalYearId?.let {
+                    educationalYearRepository.findById(it).orElseThrow {
+                        java.lang.IllegalArgumentException("Educational year not found")
+                    }
+                }
+                val currentProfile = user.makhdoomProfile
+                val updatedMakhdoomProfile = currentProfile?.copy(
+                    shamamsaStudyStatus = updateData.makhdoomProfile.shamamsaStudyStatus,
+                    educationalStage = educationalStage,
+                    educationalYear = educationalYear,
+                    fatherPhone = updateData.makhdoomProfile.fatherPhone,
+                    fatherWhatsapp = updateData.makhdoomProfile.fatherWhatsapp,
+                    motherPhone = updateData.makhdoomProfile.motherPhone,
+                    motherWhatsapp = updateData.makhdoomProfile.motherWhatsapp,
+                    isFatherDeceased = updateData.makhdoomProfile.isFatherDeceased,
+                    isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased,
+                    identityDocumentImageUrl = updateData.makhdoomProfile.identityDocumentImageUrl ?: currentProfile.identityDocumentImageUrl
+                ) ?: MakhdoomProfile(
+                    user = user,
+                    shamamsaStudyStatus = updateData.makhdoomProfile.shamamsaStudyStatus,
+                    educationalStage = educationalStage,
+                    educationalYear = educationalYear,
+                    fatherPhone = updateData.makhdoomProfile.fatherPhone,
+                    fatherWhatsapp = updateData.makhdoomProfile.fatherWhatsapp,
+                    motherPhone = updateData.makhdoomProfile.motherPhone,
+                    motherWhatsapp = updateData.makhdoomProfile.motherWhatsapp,
+                    isFatherDeceased = updateData.makhdoomProfile.isFatherDeceased,
+                    isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased,
+                    identityDocumentImageUrl = updateData.makhdoomProfile.identityDocumentImageUrl
+                )
+                user = user.copy(makhdoomProfile = updatedMakhdoomProfile)
+            }
+
+            if (user.role == UserRole.KHADEM) {
+                updateData.khademProfile?.let { khademDto ->
+                    val educationalStage = educationalStageRepository.findById(khademDto.educationalStageId).orElseThrow {
+                        java.lang.IllegalArgumentException("Educational stage not found")
+                    }
+                    val educationalYear = khademDto.educationalYearId?.let {
+                        educationalYearRepository.findById(it).orElseThrow {
+                            java.lang.IllegalArgumentException("Educational year not found")
+                        }
+                    }
+                    val currentKhadem = user.khademProfile
+                    val updatedKhadem = currentKhadem?.copy(
+                        educationalStage = educationalStage,
+                        educationalYear = educationalYear
+                    ) ?: KhademProfile(
+                        user = user,
+                        educationalStage = educationalStage,
+                        educationalYear = educationalYear
+                    )
+                    user = user.copy(khademProfile = updatedKhadem)
+                }
+                updateData.adminKhademProfile?.let { adminKhademDto ->
+                    val responsibleStages = educationalStageRepository.findAllById(adminKhademDto.responsibleStageIds)
+                    val responsibleYears = educationalYearRepository.findAllById(adminKhademDto.responsibleYearIds)
+                    val currentKhadem = user.khademProfile
+                    if (currentKhadem != null) {
+                        val updatedKhadem = currentKhadem.copy(
+                            canApproveRequests = adminKhademDto.canApproveRequests,
+                            responsibleStages = responsibleStages,
+                            responsibleYears = responsibleYears
+                        )
+                        user = user.copy(khademProfile = updatedKhadem)
+                    }
+                }
+            }
         }
 
         val code = request?.customCode ?: user.code ?: userCodeGenerator.generateCode(user)
@@ -422,10 +512,10 @@ class UserService(
 
         request.parentProfile?.let {
             val parentProfile = parentProfileService.createOrUpdateProfile(savedUser, it)
-            parentProfile.nationalIdImageUrl = finalDocumentUrl
-            savedUser.parentProfile = parentProfile
-            userRepository.save(savedUser)
-            parentProfileService.syncPartner(parentProfile)
+            val updatedParentProfile = parentProfile.copy(nationalIdImageUrl = finalDocumentUrl)
+            val userWithParent = savedUser.copy(parentProfile = updatedParentProfile)
+            userRepository.save(userWithParent)
+            parentProfileService.syncPartner(updatedParentProfile)
         }
 
         addAreaIfNotExists(savedUser.area)
@@ -441,8 +531,8 @@ class UserService(
         }
 
         val parentProfile = parentProfileService.createOrUpdateProfile(user, request)
-        user.parentProfile = parentProfile
-        val savedUser = userRepository.save(user)
+        val updatedUser = user.copy(parentProfile = parentProfile)
+        val savedUser = userRepository.save(updatedUser)
         
         if (savedUser.status == UserStatus.APPROVED) {
             parentProfileService.syncPartner(parentProfile)

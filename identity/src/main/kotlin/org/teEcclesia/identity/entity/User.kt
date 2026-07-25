@@ -146,10 +146,10 @@ data class User(
     val kahenProfile: KahenProfile? = null,
 
     @OneToOne(mappedBy = "user", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
-    var parentProfile: ParentProfile? = null,
+    val parentProfile: ParentProfile? = null,
 
     @Column(nullable = false)
-    var deleted: Boolean = false
+    val deleted: Boolean = false
 ) {
     val fullName: String
         get() = "$firstName $secondName $thirdName $lastName"

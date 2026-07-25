@@ -24,7 +24,7 @@ data class KahenProfile(
         joinColumns = [JoinColumn(name = "kahen_profile_id")],
         inverseJoinColumns = [JoinColumn(name = "educational_stage_id")]
     )
-    var educationalStages: MutableList<EducationalStage> = mutableListOf(),
+    val educationalStages: List<EducationalStage> = emptyList(),
 
     @Column(name = "ordination_date", nullable = true)
     val ordinationDate: LocalDate? = null

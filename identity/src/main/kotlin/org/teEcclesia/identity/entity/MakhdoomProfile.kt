@@ -50,5 +50,5 @@ data class MakhdoomProfile(
     val isMotherDeceased: Boolean = false,
 
     @Column(nullable = true)
-    var identityDocumentImageUrl: String? = null
+    val identityDocumentImageUrl: String? = null
 )

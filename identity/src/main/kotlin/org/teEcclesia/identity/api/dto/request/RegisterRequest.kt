@@ -82,8 +82,11 @@ data class RegisterRequest(
     val ordinationProfile: OrdinationProfileRequest? = null,
     val makhdoomProfile: MakhdoomProfileRequest? = null,
     val kahenProfile: KahenProfileRequest? = null,
-    val parentProfile: ParentProfileRequest? = null
+    val parentProfile: ParentProfileRequest? = null,
+    val khademProfile: KhademProfileRequest? = null,
+    val adminKhademProfile: AdminKhademProfileRequest? = null
 )
+
 
 fun RegisterRequest.toEntity(
     hashedPassword: String, 
