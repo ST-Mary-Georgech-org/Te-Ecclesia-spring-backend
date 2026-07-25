@@ -88,21 +88,15 @@ class AuthService(
         val formattedPhone = formatPhone(request.phone)
         var existingUser: User? = userRepository.findByNationalId(request.nationalId)
 
-        if (existingUser != null) {
-            if (existingUser.isPhoneVerified) {
-                throw UserAlreadyExistsException("National ID is already registered.")
-            }
+        if (existingUser != null && existingUser.status == UserStatus.APPROVED) {
+            throw UserAlreadyExistsException("National ID is already registered.")
         }
 
         val existingUsersByPhone = userRepository.findUsersByPhone(formattedPhone)
-        val verifiedPhoneUsers = existingUsersByPhone.filter { it.isPhoneVerified }
+        val verifiedPhoneUsers = existingUsersByPhone.filter { it.isPhoneVerified && it.id != existingUser?.id }
 
         if (verifiedPhoneUsers.size >= 2) {
             throw UserAlreadyExistsException("Phone number is already registered and verified twice.")
-        }
-
-        if (verifiedPhoneUsers.any { it.nationalId == request.nationalId }) {
-            throw UserAlreadyExistsException("National ID is already registered.")
         }
 
         val matchingUnverifiedPhone = existingUsersByPhone.find { !it.isPhoneVerified && it.nationalId == request.nationalId }
@@ -115,11 +109,11 @@ class AuthService(
 
         if (!request.email.isNullOrBlank()) {
             val existingByEmail = userRepository.findByEmail(request.email.lowercase())
-            if (existingByEmail != null) {
-                if (existingByEmail.isPhoneVerified) {
+            if (existingByEmail != null && existingByEmail.id != existingUser?.id) {
+                if (existingByEmail.status == UserStatus.APPROVED || existingByEmail.isPhoneVerified) {
                     throw UserAlreadyExistsException("Email is already registered and verified.")
                 } else {
-                    if (existingUser != null && existingUser.id != existingByEmail.id) {
+                    if (existingUser != null) {
                         userRepository.delete(existingByEmail)
                     } else {
                         existingUser = existingByEmail
@@ -151,6 +145,10 @@ class AuthService(
         ).let {
             if (existingUser != null) {
                 it.copy(
+                    isPhoneVerified = if (formattedPhone == existingUser.phone) existingUser.isPhoneVerified else false,
+                    isEmailVerified = if (!request.email.isNullOrBlank() && request.email.equals(existingUser.email, ignoreCase = true)) existingUser.isEmailVerified else false,
+                    status = existingUser.status,
+                    role = existingUser.role.takeIf { r -> r != UserRole.GUEST } ?: (request.role ?: UserRole.GUEST),
                     ordinationProfile = existingUser.ordinationProfile,
                     makhdoomProfile = existingUser.makhdoomProfile,
                     khademProfile = existingUser.khademProfile,
