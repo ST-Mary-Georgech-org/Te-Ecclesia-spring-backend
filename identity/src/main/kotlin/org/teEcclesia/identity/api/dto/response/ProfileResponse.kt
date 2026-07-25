@@ -2,6 +2,7 @@ package org.teEcclesia.identity.api.dto.response
 
 import org.springframework.context.i18n.LocaleContextHolder
 import org.teEcclesia.identity.entity.User
+import java.time.Instant
 import org.teEcclesia.identity.entity.enums.Gender
 import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.entity.enums.UserRole
@@ -41,7 +42,9 @@ data class ProfileResponse(
     val kahenProfile: KahenProfileResponse? = null,
     val parentProfile: ParentProfileResponse? = null,
     val ordinationProfile: OrdinationProfileResponse? = null,
-    val makhdoomProfile: MakhdoomProfileResponse? = null
+    val makhdoomProfile: MakhdoomProfileResponse? = null,
+    val createdAt: Instant? = null,
+    val actionTakenAt: Instant? = null
 )
 
 fun User.toUserSummaryResponse(imageBaseUrl: String): UserSummaryResponse {
@@ -145,6 +148,8 @@ fun User.toProfileResponse(imageBaseUrl: String): ProfileResponse {
                 isMotherDeceased = it.isMotherDeceased,
                 identityDocumentImageUrl = if (it.identityDocumentImageUrl.isNullOrBlank()) null else "$imageBaseUrl/${it.identityDocumentImageUrl}"
             )
-        }
+        },
+        createdAt = this.createdAt,
+        actionTakenAt = this.actionTakenAt
     )
 }
