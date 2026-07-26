@@ -52,6 +52,7 @@ class UserService(
     private val educationalYearRepository: EducationalYearRepository,
     private val areaRepository: AreaRepository,
     private val authService: AuthService,
+    private val userValidationHelper: UserValidationHelper,
     @param:Value("\${storage.teEcclesia.cdn-endpoint}") private val cdnEndpoint: String,
     @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String,
     @param:Value("\${identity.resources.documents-directory}") private val documentsDirectory: String
@@ -100,13 +101,18 @@ class UserService(
     fun updateProfile(userId: UUID, request: UpdateProfileRequest) {
         val user = findById(userId)
 
+        if (!request.email.isNullOrBlank() && !request.email.equals(user.email, ignoreCase = true)) {
+            userValidationHelper.validateEmail(request.email, currentUserId = userId)
+        }
+
         val updatedUser = user.copy(
             firstName = request.firstName,
             secondName = request.secondName,
             thirdName = request.thirdName,
             lastName = request.lastName,
             displayName = request.displayName,
-            email = request.email
+            email = request.email,
+            isEmailVerified = if (!request.email.isNullOrBlank() && request.email.equals(user.email, ignoreCase = true)) user.isEmailVerified else false
         )
 
         val savedUser = userRepository.save(updatedUser)
@@ -121,16 +127,8 @@ class UserService(
             throw IllegalArgumentException("New phone number must be different from current phone number.")
         }
 
-        val existingUsersByPhone = userRepository.findUsersByPhone(formattedPhone)
-        val otherVerifiedPhoneUsers = existingUsersByPhone.filter { it.id != userId && it.isPhoneVerified }
+        userValidationHelper.validatePhone(phone = phone, nationalId = user.nationalId, currentUserId = userId)
 
-        if (otherVerifiedPhoneUsers.size >= 2) {
-            throw UserAlreadyExistsException("Phone number is already registered and verified twice.")
-        }
-
-        if (otherVerifiedPhoneUsers.any { it.nationalId == user.nationalId }) {
-            throw UserAlreadyExistsException("National ID is already registered.")
-        }
 
         val (deepLink, token) = authService.initiateWhatsAppPhoneChangeVerification(user, formattedPhone)
         return InitiateWhatsAppVerificationResponse(deepLink, token)
@@ -163,24 +161,14 @@ class UserService(
         var user = findById(userId)
         
         request?.updateProfileData?.let { updateData ->
+            userValidationHelper.validateUserUniqueness(
+                phone = updateData.phone,
+                nationalId = updateData.nationalId,
+                email = updateData.email,
+                currentUserId = user.id
+            )
             val formattedPhone = formatPhone(updateData.phone)
-            if (formattedPhone != user.phone || updateData.nationalId != user.nationalId) {
-                val existingUsersByPhone = userRepository.findUsersByPhone(formattedPhone)
-                val otherVerifiedPhoneUsers = existingUsersByPhone.filter { it.id != user.id && it.isPhoneVerified }
 
-                if (otherVerifiedPhoneUsers.size >= 2) {
-                    throw UserAlreadyExistsException("Phone number is already registered and verified twice.")
-                }
-
-                if (otherVerifiedPhoneUsers.any { it.nationalId == updateData.nationalId }) {
-                    throw UserAlreadyExistsException("National ID is already registered.")
-                }
-
-                val existingByNationalId = userRepository.findByNationalId(updateData.nationalId)
-                if (existingByNationalId != null && existingByNationalId.id != user.id) {
-                    throw UserAlreadyExistsException("National ID is already registered.")
-                }
-            }
 
             var confessionPriest: User? = user.confessionPriest
             if (updateData.confessionPriestId != null && updateData.confessionPriestId != user.confessionPriest?.id) {
@@ -287,6 +275,10 @@ class UserService(
             }
         }
 
+        if (user.isEmailVerified) {
+            userValidationHelper.validateEmail(user.email, currentUserId = user.id)
+        }
+
         val code = request?.customCode ?: user.code ?: userCodeGenerator.generateCode(user)
         
         val updatedUser = user.copy(
@@ -385,22 +377,12 @@ class UserService(
             request.imageUrl
         }
 
-        val existingByNationalId = userRepository.findByNationalId(request.nationalId)
-        if (existingByNationalId != null) {
-            throw UserAlreadyExistsException("National ID is already registered.")
-        }
+        userValidationHelper.validateUserUniqueness(
+            phone = request.phone,
+            nationalId = request.nationalId,
+            email = request.email
+        )
 
-        val formattedPhone = formatPhone(request.phone)
-        val existingUsersByPhone = userRepository.findUsersByPhone(formattedPhone)
-        val verifiedPhoneUsers = existingUsersByPhone.filter { it.isPhoneVerified }
-
-        if (verifiedPhoneUsers.size >= 2) {
-            throw UserAlreadyExistsException("Phone number is already registered and verified twice.")
-        }
-
-        if (verifiedPhoneUsers.any { it.nationalId == request.nationalId }) {
-            throw UserAlreadyExistsException("National ID is already registered.")
-        }
 
         val userEntity = request.toEntity(
             hashedPassword = encodedPassword, 
@@ -472,22 +454,12 @@ class UserService(
             request.imageUrl
         }
 
-        val existingByNationalId = userRepository.findByNationalId(request.nationalId)
-        if (existingByNationalId != null) {
-            throw UserAlreadyExistsException("National ID is already registered.")
-        }
+        userValidationHelper.validateUserUniqueness(
+            phone = request.phone,
+            nationalId = request.nationalId,
+            email = request.email
+        )
 
-        val formattedPhone = formatPhone(request.phone)
-        val existingUsersByPhone = userRepository.findUsersByPhone(formattedPhone)
-        val verifiedPhoneUsers = existingUsersByPhone.filter { it.isPhoneVerified }
-
-        if (verifiedPhoneUsers.size >= 2) {
-            throw UserAlreadyExistsException("Phone number is already registered and verified twice.")
-        }
-
-        if (verifiedPhoneUsers.any { it.nationalId == request.nationalId }) {
-            throw UserAlreadyExistsException("National ID is already registered.")
-        }
 
         val userEntity = request.toEntity(
             hashedPassword = encodedPassword, 
@@ -565,26 +537,14 @@ class UserService(
             }
         }
 
+        userValidationHelper.validateUserUniqueness(
+            phone = request.phone,
+            nationalId = request.nationalId,
+            email = request.email,
+            currentUserId = targetUserId
+        )
         val formattedPhone = formatPhone(request.phone)
-        if (formattedPhone != target.phone) {
-            val existingUsersByPhone = userRepository.findUsersByPhone(formattedPhone)
-            val otherVerifiedPhoneUsers = existingUsersByPhone.filter { it.id != targetUserId && it.isPhoneVerified }
 
-            if (otherVerifiedPhoneUsers.size >= 2) {
-                throw UserAlreadyExistsException("Phone number is already registered and verified twice.")
-            }
-
-            if (otherVerifiedPhoneUsers.any { it.nationalId == request.nationalId }) {
-                throw UserAlreadyExistsException("National ID is already registered.")
-            }
-        }
-
-        if (request.nationalId != target.nationalId) {
-            val existingByNationalId = userRepository.findByNationalId(request.nationalId)
-            if (existingByNationalId != null && existingByNationalId.id != targetUserId) {
-                throw UserAlreadyExistsException("National ID is already registered.")
-            }
-        }
 
         var confessionPriest: User? = target.confessionPriest
         if (request.confessionPriestId != null && request.confessionPriestId != target.confessionPriest?.id) {

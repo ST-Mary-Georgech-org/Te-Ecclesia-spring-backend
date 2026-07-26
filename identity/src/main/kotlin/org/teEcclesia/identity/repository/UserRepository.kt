@@ -22,6 +22,23 @@ interface UserRepository : JpaRepository<User, UUID> {
     fun findByPhone(phone: String): User?
     fun findUsersByPhone(phone: String): List<User>
     fun findByEmail(email: String): User?
+    fun findUsersByEmail(email: String): List<User>
+    fun findByEmailIgnoreCase(email: String): List<User>
+
+    @Query(
+        """
+            SELECT CASE WHEN COUNT(u) > 0 THEN true ELSE false END 
+            FROM User u 
+                WHERE LOWER(u.email) = LOWER(:email)
+                    AND u.status = :status
+                    AND u.isEmailVerified = true
+                    AND (:excludeUserId IS NULL OR u.id != :excludeUserId)"""
+    )
+    fun existsVerifiedApprovedEmail(
+        @Param("email") email: String,
+        @Param("status") status: UserStatus = UserStatus.APPROVED,
+        @Param("excludeUserId") excludeUserId: UUID? = null
+    ): Boolean
     
     @Query("SELECT MAX(u.code) FROM User u WHERE u.code LIKE concat(:prefix, '%')")
     fun findMaxCodeByPrefix(prefix: String): String?

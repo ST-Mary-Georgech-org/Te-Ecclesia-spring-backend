@@ -69,8 +69,11 @@ class AuthController (
 
     @Tag(name = "Registration")
     @PostMapping("/verify-email")
-    fun verifyEmail(@Valid @RequestBody request: VerifyEmailRequest): ResponseEntity<AuthResponse> {
-        val response = authService.verifyEmail(request)
+    fun verifyEmail(
+        @AuthenticationPrincipal userId: UUID,
+        @Valid @RequestBody request: VerifyEmailRequest
+    ): ResponseEntity<AuthResponse> {
+        val response = authService.verifyEmail(userId, request)
         return ResponseEntity.ok(response)
     }
 

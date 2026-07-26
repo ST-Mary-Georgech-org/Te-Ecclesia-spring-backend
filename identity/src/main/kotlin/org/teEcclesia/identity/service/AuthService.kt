@@ -63,6 +63,7 @@ class AuthService(
     private val educationalYearRepository: EducationalYearRepository,
     private val imageStorageService: ImageStorageService,
     private val areaRepository: AreaRepository,
+    private val userValidationHelper: UserValidationHelper,
     @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String,
     @param:Value("\${whatsapp.business-number}") private val whatsappBusinessNumber: String,
     @param:Value("\${whatsapp.business-phone}") private val whatsappBusinessPhone: String,
@@ -107,20 +108,8 @@ class AuthService(
             userRepository.delete(matchingUnverifiedPhone)
         }
 
-        if (!request.email.isNullOrBlank()) {
-            val existingByEmail = userRepository.findByEmail(request.email.lowercase())
-            if (existingByEmail != null && existingByEmail.id != existingUser?.id) {
-                if (existingByEmail.status == UserStatus.APPROVED || existingByEmail.isPhoneVerified) {
-                    throw UserAlreadyExistsException("Email is already registered and verified.")
-                } else {
-                    if (existingUser != null) {
-                        userRepository.delete(existingByEmail)
-                    } else {
-                        existingUser = existingByEmail
-                    }
-                }
-            }
-        }
+        userValidationHelper.validateEmail(request.email, existingUser?.id)
+
 
         var confessionPriest: User? = null
         if (request.confessionPriestId != null) {
@@ -372,9 +361,14 @@ class AuthService(
         return AuthResponse(accessToken, refreshToken)
     }
 
-    fun verifyEmail(request: VerifyEmailRequest): AuthResponse {
-        val user = userRepository.findByEmail(request.email.lowercase())
-            ?: throw EntityNotFoundException("User not found with this email")
+    fun verifyEmail(userId: UUID, request: VerifyEmailRequest): AuthResponse {
+        val user = userRepository.findById(userId).orElseThrow {
+            EntityNotFoundException("User not found with id: $userId")
+        }
+
+        val targetEmail = (if (!request.email.isNullOrBlank()) request.email else user.email)
+            ?.lowercase()?.trim()
+            ?: throw IllegalArgumentException("Email is required for verification")
 
         val token = otpRepository.findTopByOtpAndUserAndMethod(request.otp, user, VerificationMethod.EMAIL)
             ?: throw RuntimeException("Invalid or expired OTP")
@@ -384,13 +378,18 @@ class AuthService(
             throw RuntimeException("OTP has expired")
         }
 
-        val verifiedUser = user.copy(isEmailVerified = true)
+        userValidationHelper.validateEmail(targetEmail, currentUserId = userId)
+
+        val verifiedUser = user.copy(
+            email = targetEmail,
+            isEmailVerified = true
+        )
         userRepository.save(verifiedUser)
         otpRepository.delete(token)
 
         val accessToken = jwtUtil.generateAccessToken(verifiedUser.id)
         val refreshToken = jwtUtil.generateRefreshToken(verifiedUser.id)
-        saveRefreshToken(verifiedUser, refreshToken)
+        saveRefreshToken(verifiedUser, refreshToken, request.deviceToken)
 
         return AuthResponse(accessToken, refreshToken)
     }

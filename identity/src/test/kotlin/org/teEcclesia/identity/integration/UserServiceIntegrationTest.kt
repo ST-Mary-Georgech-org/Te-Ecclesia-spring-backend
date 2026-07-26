@@ -306,5 +306,63 @@ class UserServiceIntegrationTest {
         assertThat(profile).isNotNull()
         assertThat(profile.id).isEqualTo(user.id.toString())
     }
+
+    @Test
+    fun `createMakhdoomDirectly throws UserAlreadyExistsException when email is already approved and verified`() {
+        val admin = createUser(email = "admin-makhdoom-test@mail.com")
+        userRepository.save(admin.copy(role = UserRole.ADMIN, status = UserStatus.APPROVED))
+
+        val existingUser = createUser(email = "verified-makhdoom-email@mail.com")
+        userRepository.save(existingUser.copy(status = UserStatus.APPROVED, isEmailVerified = true))
+
+        val stage = educationalStageRepository.save(EducationalStage(nameAr = "Stage", nameEn = "Stage"))
+
+        val request = RegisterRequest(
+            firstName = "Direct", secondName = "Makhdoom", thirdName = "Test", lastName = "Case",
+            displayName = "Direct Makhdoom", nationalId = "29901010101099",
+            phone = "01118295999", homePhone = "0223456789",
+            email = "verified-makhdoom-email@mail.com", password = "Password@1",
+            job = "Student", buildingNo = "1", street = "Street", area = "Area",
+            floor = "1", apartment = "1", specialMark = "Mark",
+            makhdoomProfile = MakhdoomProfileRequest(
+                shamamsaStudyStatus = ShamamsaStudyStatus.NO,
+                educationalStageId = stage.id,
+                educationalYearId = null
+            )
+        )
+
+        org.junit.jupiter.api.assertThrows<org.teEcclesia.identity.exception.UserAlreadyExistsException> {
+            userService.createMakhdoomDirectly(admin.id, request)
+        }
+    }
+
+    @Test
+    fun `createMakhdoomDirectly succeeds when duplicate email belongs to an unverified non-approved user`() {
+        val admin = createUser(email = "admin-makhdoom-test2@mail.com")
+        userRepository.save(admin.copy(role = UserRole.ADMIN, status = UserStatus.APPROVED))
+
+        val unverifiedUser = createUser(email = "unverified-shared-email@mail.com")
+        userRepository.save(unverifiedUser.copy(status = UserStatus.UNVERIFIED, isEmailVerified = false))
+
+        val stage = educationalStageRepository.save(EducationalStage(nameAr = "Stage", nameEn = "Stage"))
+
+        val request = RegisterRequest(
+            firstName = "Direct", secondName = "Makhdoom", thirdName = "Test", lastName = "Case",
+            displayName = "Direct Makhdoom", nationalId = "29901010101088",
+            phone = "01118295888", homePhone = "0223456789",
+            email = "unverified-shared-email@mail.com", password = "Password@1",
+            job = "Student", buildingNo = "1", street = "Street", area = "Area",
+            floor = "1", apartment = "1", specialMark = "Mark",
+            makhdoomProfile = MakhdoomProfileRequest(
+                shamamsaStudyStatus = ShamamsaStudyStatus.NO,
+                educationalStageId = stage.id,
+                educationalYearId = null
+            )
+        )
+
+        val created = userService.createMakhdoomDirectly(admin.id, request)
+        assertThat(created.email).isEqualTo("unverified-shared-email@mail.com")
+    }
 }
+
 
