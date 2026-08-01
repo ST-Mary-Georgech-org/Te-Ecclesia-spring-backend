@@ -355,9 +355,7 @@ class AuthServiceIntegrationTest {
         val updatedUser = userRepository.findById(user.id).get()
         assertThat(updatedUser.role).isEqualTo(UserRole.PARENT)
         
-        val profile = ReflectionTestUtils.invokeMethod<ParentProfile>(
-            parentProfileService, "createOrUpdateProfile", updatedUser, request.parentProfile!!
-        )
+        val profile = parentProfileService.createOrUpdateProfile(updatedUser, request.parentProfile!!)
         // Since it's saved in the service but the user entity might be cached
         // The real test is that the DB has it, which we verify by calling the service again or using a native query/repo if we expose it
         // Or simply checking the service doesn't crash is enough for this Integration test as it asserts flow completion
