@@ -24,16 +24,23 @@ class ImageStorageService(
         fileName: String,
         folderName: String
     ): String {
-        val mimeType = file.contentType ?: throw InvalidImageException("null")
-        val extension = allowedMimeTypes[mimeType] ?: throw InvalidImageException(mimeType)
+        val originalExtension = file.originalFilename?.substringAfterLast('.', "")?.lowercase()
+        val mimeType = file.contentType ?: "image/jpeg"
+        val extension = if (!originalExtension.isNullOrBlank() && originalExtension in listOf("pdf", "png", "jpg", "jpeg", "webp")) {
+            if (originalExtension == "jpeg") "jpg" else originalExtension
+        } else {
+            allowedMimeTypes[mimeType] ?: "jpg"
+        }
+
+        val effectiveMimeType = if (extension == "pdf") "application/pdf" else mimeType
+
         try {
             val fullFileName = "${fileName}.$extension"
             val randomParameter = Instant.now().toString()
             val key = "$folderName/$fullFileName"
-            val putReq = createObjectRequest(key, mimeType)
+            val putReq = createObjectRequest(key, effectiveMimeType)
             teEcclesiaS3Client.putObject(putReq, RequestBody.fromBytes(file.bytes))
-            val imageUri = "$fullFileName?time=$randomParameter"
-            return imageUri
+            return "$folderName/$fullFileName?time=$randomParameter"
         } catch (e: Exception) {
             throw UnknownErrorException(e.message ?: "Unknown error occurred", e)
         }
@@ -45,15 +52,14 @@ class ImageStorageService(
         fileName: String,
         folderName: String
     ): String {
-        val extension = allowedMimeTypes[contentType] ?: throw InvalidImageException(contentType)
+        val extension = allowedMimeTypes[contentType] ?: "jpg"
         try {
             val fullFileName = "${fileName}.$extension"
             val randomParameter = Instant.now().toString()
             val key = "$folderName/$fullFileName"
             val putReq = createObjectRequest(key, contentType)
             teEcclesiaS3Client.putObject(putReq, RequestBody.fromBytes(bytes))
-            val imageUri = "$fullFileName?time=$randomParameter"
-            return imageUri
+            return "$folderName/$fullFileName?time=$randomParameter"
         } catch (e: Exception) {
             throw UnknownErrorException(e.message ?: "Unknown error occurred", e)
         }
@@ -90,6 +96,8 @@ class ImageStorageService(
             "image/jpg" to "jpg",
             "image/png" to "png",
             "image/webp" to "webp",
+            "application/pdf" to "pdf",
+            "application/octet-stream" to "jpg"
         )
     }
 }

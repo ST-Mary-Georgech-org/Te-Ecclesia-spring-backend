@@ -522,6 +522,23 @@ class AuthServiceIntegrationTest {
     }
 
     @Test
+    fun `forgotPassword returns null for non-approved users`() {
+        val unapprovedUser = createUser(email = "unapproved-forgot@mail.com", isVerified = false)
+        
+        val emailRequest = ForgotPasswordRequest(key = unapprovedUser.email!!, method = VerificationMethod.EMAIL)
+        val emailResponse = authService.forgotPassword(emailRequest)
+        assertThat(emailResponse).isNull()
+
+        val phoneRequest = ForgotPasswordRequest(key = unapprovedUser.phone, method = VerificationMethod.PHONE)
+        val phoneResponse = authService.forgotPassword(phoneRequest)
+        assertThat(phoneResponse).isNull()
+
+        val nationalIdRequest = ForgotPasswordRequest(key = unapprovedUser.nationalId, method = VerificationMethod.PHONE)
+        val nationalIdResponse = authService.forgotPassword(nationalIdRequest)
+        assertThat(nationalIdResponse).isNull()
+    }
+
+    @Test
     fun `completeProfile updates existing profiles correctly instead of throwing duplicate key exception`() {
         var user = createUser(email = "khadem-update@mail.com", isVerified = false)
         user = userRepository.save(user.copy(status = UserStatus.PROFILE_INCOMPLETE))

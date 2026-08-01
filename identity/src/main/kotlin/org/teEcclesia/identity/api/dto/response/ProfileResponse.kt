@@ -9,6 +9,7 @@ import org.teEcclesia.identity.entity.enums.UserRole
 
 data class ProfileResponse(
     val id: String,
+    val code: String? = null,
     val firstName: String,
     val secondName: String,
     val thirdName: String,
@@ -47,8 +48,19 @@ data class ProfileResponse(
     val actionTakenAt: Instant? = null
 )
 
+private fun resolveUrl(cdnBaseUrl: String, imageBaseUrl: String, relativePath: String?, defaultDirectory: String): String? {
+    if (relativePath.isNullOrBlank()) return null
+    if (relativePath.startsWith("http://") || relativePath.startsWith("https://")) return relativePath
+    return if (relativePath.contains("/")) {
+        "$cdnBaseUrl/$relativePath"
+    } else {
+        "$cdnBaseUrl/$defaultDirectory/$relativePath"
+    }
+}
+
 fun User.toUserSummaryResponse(imageBaseUrl: String): UserSummaryResponse {
-    val resolvedImageUrl = if (imageUrl.isNullOrBlank()) null else "$imageBaseUrl/$imageUrl"
+    val cdnBaseUrl = imageBaseUrl.substringBeforeLast('/')
+    val resolvedImageUrl = resolveUrl(cdnBaseUrl, imageBaseUrl, imageUrl, "profile")
     return UserSummaryResponse(
         id = id,
         name = displayName,
@@ -59,13 +71,11 @@ fun User.toUserSummaryResponse(imageBaseUrl: String): UserSummaryResponse {
 
 fun User.toProfileResponse(imageBaseUrl: String): ProfileResponse {
     val lang = LocaleContextHolder.getLocale().language
-    val resolvedImageUrl = if (imageUrl.isNullOrBlank()) {
-        null
-    } else {
-        "$imageBaseUrl/$imageUrl"
-    }
+    val cdnBaseUrl = imageBaseUrl.substringBeforeLast('/')
+    val resolvedImageUrl = resolveUrl(cdnBaseUrl, imageBaseUrl, imageUrl, "profile")
     return ProfileResponse(
         id = id.toString(),
+        code = this.code,
         firstName = firstName,
         secondName = secondName,
         thirdName = thirdName,
@@ -102,6 +112,15 @@ fun User.toProfileResponse(imageBaseUrl: String): ProfileResponse {
                 educationalYear = it.educationalYear?.let { year -> 
                     val yearName = if (lang.startsWith("en", ignoreCase = true)) year.nameEn else year.nameAr
                     LookupResponse(year.id, yearName)
+                },
+                canApproveRequests = it.canApproveRequests,
+                responsibleStages = it.responsibleStages.map { stage ->
+                    val sName = if (lang.startsWith("en", ignoreCase = true)) stage.nameEn else stage.nameAr
+                    LookupResponse(stage.id, sName)
+                },
+                responsibleYears = it.responsibleYears.map { year ->
+                    val yName = if (lang.startsWith("en", ignoreCase = true)) year.nameEn else year.nameAr
+                    LookupResponse(year.id, yName)
                 }
             )
         },
@@ -117,7 +136,8 @@ fun User.toProfileResponse(imageBaseUrl: String): ProfileResponse {
         parentProfile = this.parentProfile?.let {
             ParentProfileResponse(
                 partner = it.partner?.toUserSummaryResponse(imageBaseUrl),
-                children = it.children.map { child -> child.toUserSummaryResponse(imageBaseUrl) }
+                children = it.children.map { child -> child.toUserSummaryResponse(imageBaseUrl) },
+                nationalIdImageUrl = resolveUrl(cdnBaseUrl, imageBaseUrl, it.nationalIdImageUrl, "identity-documents")
             )
         },
         ordinationProfile = this.ordinationProfile?.let {
@@ -128,7 +148,7 @@ fun User.toProfileResponse(imageBaseUrl: String): ProfileResponse {
                 ordinationYear = it.ordinationYear,
                 bishopName = it.bishopName,
                 ordinationPlace = it.ordinationPlace,
-                certificateImageUrl = if (it.certificateImageUrl.isNullOrBlank()) null else "$imageBaseUrl/${it.certificateImageUrl}"
+                certificateImageUrl = resolveUrl(cdnBaseUrl, imageBaseUrl, it.certificateImageUrl, "identity-documents")
             )
         },
         makhdoomProfile = this.makhdoomProfile?.let {
@@ -146,7 +166,7 @@ fun User.toProfileResponse(imageBaseUrl: String): ProfileResponse {
                 motherWhatsapp = it.motherWhatsapp,
                 isFatherDeceased = it.isFatherDeceased,
                 isMotherDeceased = it.isMotherDeceased,
-                identityDocumentImageUrl = if (it.identityDocumentImageUrl.isNullOrBlank()) null else "$imageBaseUrl/${it.identityDocumentImageUrl}"
+                identityDocumentImageUrl = resolveUrl(cdnBaseUrl, imageBaseUrl, it.identityDocumentImageUrl, "identity-documents")
             )
         },
         createdAt = this.createdAt,

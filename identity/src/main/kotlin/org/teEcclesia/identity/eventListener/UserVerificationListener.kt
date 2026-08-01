@@ -6,13 +6,11 @@ import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
 import org.springframework.data.domain.PageRequest
 import org.teEcclesia.events.identity.UserPendingApprovalEvent
-import org.teEcclesia.events.notifications.PushNotificationEvent
 import org.teEcclesia.events.notifications.UserNotificationsEvent
 import org.teEcclesia.events.notifications.utils.NotificationMedium
 import org.teEcclesia.events.notifications.utils.NotificationType
 import org.teEcclesia.events.notifications.NotificationDetails
 import org.teEcclesia.events.publisher.TeEcclesiaEventPublisher
-import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.repository.UserRepository
 
 @Component
@@ -32,16 +30,16 @@ class UserVerificationListener(
 
         while (hasMore) {
             val pageable = PageRequest.of(page, batchSize)
-            val khademsPage = userRepository.findByRoleAndCanApproveRequestsTrue(UserRole.KHADEM, pageable)
+            val approversPage = userRepository.findApprovers(pageable)
 
-            if (khademsPage.isEmpty) {
+            if (approversPage.isEmpty) {
                 hasMore = false
                 break
             }
 
-            val notifications = khademsPage.content.map { khadem ->
+            val notifications = approversPage.content.map { approver ->
                 NotificationDetails(
-                    userId = khadem.id,
+                    userId = approver.id,
                     subject = "New User Verification",
                     message = "User ${event.userName} has verified their phone and is awaiting your review.",
                     type = NotificationType.SYSTEM,
@@ -52,7 +50,7 @@ class UserVerificationListener(
             publisher.publish(UserNotificationsEvent(notifications))
             
             page++
-            hasMore = khademsPage.hasNext()
+            hasMore = approversPage.hasNext()
         }
     }
 }

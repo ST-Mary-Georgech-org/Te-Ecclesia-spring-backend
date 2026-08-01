@@ -19,9 +19,12 @@ interface UserRepository : JpaRepository<User, UUID> {
     fun existsByCodeLike(codePattern: String): Boolean
     fun findAllByCodeIn(codes: List<String>): List<User>
     fun findByNationalId(nationalId: String): User?
+    fun findByNationalIdAndStatus(nationalId: String, status: UserStatus): User?
     fun findByPhone(phone: String): User?
     fun findUsersByPhone(phone: String): List<User>
+    fun findUsersByPhoneAndStatus(phone: String, status: UserStatus): List<User>
     fun findByEmail(email: String): User?
+    fun findByEmailAndStatus(email: String, status: UserStatus): User?
     fun findUsersByEmail(email: String): List<User>
     fun findByEmailIgnoreCase(email: String): List<User>
 
@@ -125,6 +128,13 @@ interface UserRepository : JpaRepository<User, UUID> {
     
     @Query("SELECT u FROM User u JOIN u.khademProfile kp WHERE u.role = :role AND kp.canApproveRequests = true")
     fun findByRoleAndCanApproveRequestsTrue(@Param("role") role: UserRole, pageable: Pageable): Page<User>
+
+    @Query("""
+        SELECT u FROM User u 
+        LEFT JOIN u.khademProfile kp 
+        WHERE u.role = 'ADMIN' OR (u.role = 'KHADEM' AND kp.canApproveRequests = true)
+    """)
+    fun findApprovers(pageable: Pageable): Page<User>
     
     fun deleteAllByIsPhoneVerifiedIsFalseAndCreatedAtBefore(date: Instant)
 }

@@ -15,7 +15,7 @@ class ParentProfileService(
     private val parentProfileRepository: ParentProfileRepository
 ) {
     @Transactional
-    fun createOrUpdateProfile(user: User, request: ParentProfileRequest): ParentProfile {
+    fun createOrUpdateProfile(user: User, request: ParentProfileRequest, finalIdentityDocumentUrl: String? = null): ParentProfile {
         var profile = user.parentProfile ?: ParentProfile(user = user)
 
         // Handle Partner
@@ -23,8 +23,6 @@ class ParentProfileService(
             userRepository.findByCode(request.partnerCode)
                 ?: throw ResourceNotFoundException("Partner code ${request.partnerCode} is invalid")
         } else null
-
-        profile = profile.copy(partner = partner)
 
         // Handle Children
         val children = if (!request.childrenCodes.isNullOrEmpty()) {
@@ -35,7 +33,13 @@ class ParentProfileService(
             fetchedChildren
         } else emptyList()
 
-        profile = profile.copy(children = children)
+        val finalNationalIdUrl = finalIdentityDocumentUrl ?: request.nationalIdImageUrl ?: profile.nationalIdImageUrl
+
+        profile = profile.copy(
+            partner = partner,
+            children = children,
+            nationalIdImageUrl = finalNationalIdUrl
+        )
 
         return parentProfileRepository.save(profile)
     }

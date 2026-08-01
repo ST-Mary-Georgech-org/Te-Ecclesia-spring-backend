@@ -1,6 +1,7 @@
 package org.teEcclesia.identity.integration
 
 import com.google.common.truth.Truth.assertThat
+import io.mockk.called
 import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.verify
@@ -26,6 +27,7 @@ import org.teEcclesia.identity.service.UserService
 import org.teEcclesia.storage.service.ImageStorageService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.data.domain.PageRequest
 import org.springframework.mock.web.MockMultipartFile
 import org.springframework.test.context.ActiveProfiles
 import org.teEcclesia.identity.entity.enums.ShamamsaStudyStatus
@@ -170,7 +172,7 @@ class UserServiceIntegrationTest {
         assertThat(thrownException).hasMessageThat().contains("User with id: $missingUserId not found")
     }
 
-    private fun createUser(email: String, imageUrl: String? = null): User {
+    private fun createUser(email: String, imageUrl: String? = null, role: UserRole = UserRole.GUEST): User {
         val username = email.substringBefore("@")
         return userRepository.save(
             User(
@@ -194,7 +196,7 @@ class UserServiceIntegrationTest {
                 specialMark = "Near hospital",
                 gender = Gender.MALE,
                 status = UserStatus.APPROVED,
-                role = UserRole.GUEST,
+                role = role,
                 createdAt = Instant.now().minus(2, ChronoUnit.DAYS),
                 imageUrl = imageUrl
             )
@@ -282,16 +284,17 @@ class UserServiceIntegrationTest {
 
     @Test
     fun `getUsersByStatus with null search executes without error`() {
-        val user = createUser(email = "pending-search-null@mail.com")
+        val user = createUser(email = "pending-search-null@mail.com", role = UserRole.ADMIN)
         userRepository.save(user.copy(status = UserStatus.PENDING_APPROVAL))
 
         val page = userService.getUsersByStatus(
+            callerId = user.id,
             status = UserStatus.PENDING_APPROVAL,
             stageId = null,
             yearId = null,
             role = null,
             search = null,
-            pageable = org.springframework.data.domain.PageRequest.of(0, 20)
+            pageable = PageRequest.of(0, 20)
         )
 
         assertThat(page.content).isNotEmpty()

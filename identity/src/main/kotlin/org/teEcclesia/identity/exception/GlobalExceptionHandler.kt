@@ -12,6 +12,8 @@ import org.springframework.web.server.ResponseStatusException
 import org.teEcclesia.identity.api.dto.response.IncompleteProfileResponse
 
 
+import jakarta.persistence.EntityNotFoundException
+
 @RestControllerAdvice
 class GlobalExceptionHandler {
 
@@ -106,10 +108,25 @@ class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error)
     }
 
+    @ExceptionHandler(
+        IllegalArgumentException::class,
+        IllegalStateException::class,
+        EntityNotFoundException::class,
+        NoSuchElementException::class,
+        RuntimeException::class
+    )
+    fun handleBadRequestExceptions(ex: Exception): ResponseEntity<ErrorResponse> {
+        if (ex is NullPointerException) {
+            return handleGenericException(ex)
+        }
+        val error = ErrorResponse(ex.message ?: "Bad request", HttpStatus.BAD_REQUEST.value())
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error)
+    }
+
     @ExceptionHandler(Exception::class)
     fun handleGenericException(ex: Exception): ResponseEntity<ErrorResponse> {
-        logger.error("Unexpected error occurred", ex)
-        val error = ErrorResponse(ex.message ?: "Internal Server Error", HttpStatus.INTERNAL_SERVER_ERROR.value()) // 500
+        logger.error("Unexpected server error occurred", ex)
+        val error = ErrorResponse("Internal Server Error", HttpStatus.INTERNAL_SERVER_ERROR.value())
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error)
     }
 }

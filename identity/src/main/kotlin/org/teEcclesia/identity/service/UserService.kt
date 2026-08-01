@@ -17,9 +17,12 @@ import org.teEcclesia.identity.api.dto.response.InitiateWhatsAppVerificationResp
 import org.teEcclesia.identity.api.dto.response.toProfileResponse
 import org.teEcclesia.identity.exception.UnauthorizedException
 import org.teEcclesia.identity.entity.enums.UserStatus
+import org.teEcclesia.events.notifications.UserNotificationsEvent
+import org.teEcclesia.events.notifications.NotificationDetails
+import org.teEcclesia.events.notifications.utils.NotificationMedium
+import org.teEcclesia.events.notifications.utils.NotificationType
 import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.entity.toUserUpdatedEvent
-import org.teEcclesia.identity.exception.UserAlreadyExistsException
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.teEcclesia.identity.api.dto.request.RegisterRequest
@@ -29,7 +32,6 @@ import org.teEcclesia.identity.utils.extractGender
 import org.teEcclesia.identity.api.dto.request.toEntity
 import org.teEcclesia.identity.entity.MakhdoomProfile
 import org.teEcclesia.identity.entity.KhademProfile
-import org.teEcclesia.identity.entity.ParentProfile
 import org.teEcclesia.identity.repository.EducationalStageRepository
 import org.teEcclesia.identity.repository.EducationalYearRepository
 import org.teEcclesia.identity.repository.AreaRepository
@@ -152,8 +154,36 @@ class UserService(
     }
 
     @Transactional(readOnly = true)
-    fun getUsersByStatus(status: UserStatus, stageId: Long?, yearId: Long?, role: UserRole?, search: String?, pageable: Pageable): Page<ProfileResponse> {
-        return userRepository.findByStatusAndFilters(status, stageId, yearId, role, search, pageable).map { it.toProfileResponse(imagesBaseUrl) }
+    fun getUsersByStatus(callerId: UUID, status: UserStatus, stageId: Long?, yearId: Long?, role: UserRole?, search: String?, pageable: Pageable): Page<ProfileResponse> {
+        val caller = findById(callerId)
+        var finalStageId = stageId
+        var finalYearId = yearId
+
+        if (caller.role == UserRole.KHADEM) {
+            val khademProfile = caller.khademProfile
+            val callerYear = khademProfile?.educationalYear
+            val callerStage = khademProfile?.educationalStage
+
+            if (callerYear != null) {
+                finalYearId = callerYear.id
+                finalStageId = callerStage?.id
+            } else if (callerStage != null) {
+                finalStageId = callerStage.id
+            } else {
+                throw UnauthorizedException("Khadem does not have an assigned stage or class")
+            }
+        } else if (caller.role != UserRole.ADMIN) {
+            throw UnauthorizedException("Only Admin or Khadem with stage/class can view users")
+        }
+
+        return userRepository.findByStatusAndFilters(
+            status = status,
+            stageId = finalStageId,
+            yearId = finalYearId,
+            role = role,
+            search = search,
+            pageable = pageable
+        ).map { it.toProfileResponse(imagesBaseUrl) }
     }
 
     @Transactional
@@ -248,14 +278,22 @@ class UserService(
                             java.lang.IllegalArgumentException("Educational year not found")
                         }
                     }
+                    val respStages = educationalStageRepository.findAllById(khademDto.responsibleStageIds)
+                    val respYears = educationalYearRepository.findAllById(khademDto.responsibleYearIds)
                     val currentKhadem = user.khademProfile
                     val updatedKhadem = currentKhadem?.copy(
                         educationalStage = educationalStage,
-                        educationalYear = educationalYear
+                        educationalYear = educationalYear,
+                        canApproveRequests = khademDto.canApproveRequests,
+                        responsibleStages = respStages.toMutableList(),
+                        responsibleYears = respYears.toMutableList()
                     ) ?: KhademProfile(
                         user = user,
                         educationalStage = educationalStage,
-                        educationalYear = educationalYear
+                        educationalYear = educationalYear,
+                        canApproveRequests = khademDto.canApproveRequests,
+                        responsibleStages = respStages.toMutableList(),
+                        responsibleYears = respYears.toMutableList()
                     )
                     user = user.copy(khademProfile = updatedKhadem)
                 }
@@ -266,8 +304,8 @@ class UserService(
                     if (currentKhadem != null) {
                         val updatedKhadem = currentKhadem.copy(
                             canApproveRequests = adminKhademDto.canApproveRequests,
-                            responsibleStages = responsibleStages,
-                            responsibleYears = responsibleYears
+                            responsibleStages = responsibleStages.toMutableList(),
+                            responsibleYears = responsibleYears.toMutableList()
                         )
                         user = user.copy(khademProfile = updatedKhadem)
                     }
@@ -295,6 +333,20 @@ class UserService(
         addAreaIfNotExists(savedUser.area)
         
         eventPublisher.publish(savedUser.toUserUpdatedEvent())
+
+        eventPublisher.publish(
+            UserNotificationsEvent(
+                listOf(
+                    NotificationDetails(
+                        userId = savedUser.id,
+                        subject = "تم تفعيل الحساب",
+                        message = "تمت الموافقة على حسابك بنجاح. يمكنك الآن استخدام كل مميزات التطبيق.",
+                        type = NotificationType.SYSTEM,
+                        medium = NotificationMedium.PUSH
+                    )
+                )
+            )
+        )
     }
 
     @Transactional
@@ -305,6 +357,20 @@ class UserService(
         }
         val updatedUser = userRepository.save(user.copy(status = UserStatus.REJECTED, statusReason = reason, actionTakenAt = Instant.now()))
         eventPublisher.publish(updatedUser.toUserUpdatedEvent())
+
+        eventPublisher.publish(
+            UserNotificationsEvent(
+                listOf(
+                    NotificationDetails(
+                        userId = updatedUser.id,
+                        subject = "تم رفض طلب التسجيل",
+                        message = "تم رفض طلب التسجيل الخاص بك: $reason",
+                        type = NotificationType.SYSTEM,
+                        medium = NotificationMedium.PUSH
+                    )
+                )
+            )
+        )
     }
 
     @Transactional
@@ -349,17 +415,20 @@ class UserService(
         val caller = findById(callerId)
         if (caller.role == UserRole.KHADEM) {
             val khademProfile = caller.khademProfile
+            if (khademProfile == null || (khademProfile.responsibleStages.isEmpty() && khademProfile.responsibleYears.isEmpty())) {
+                throw UnauthorizedException("Only Khadems responsible for a stage or year can add a student")
+            }
             val reqStageId = request.makhdoomProfile?.educationalStageId
             val reqYearId = request.makhdoomProfile?.educationalYearId
             
-            if (khademProfile != null) {
-                val hasStage = reqStageId != null && khademProfile.responsibleStages.any { it.id == reqStageId }
-                val hasYear = reqYearId != null && khademProfile.responsibleYears.any { it.id == reqYearId }
-                
-                if (!hasStage && !hasYear) {
-                    throw UnauthorizedException("You are not responsible for this educational stage or year")
-                }
+            val hasStage = reqStageId != null && khademProfile.responsibleStages.any { it.id == reqStageId }
+            val hasYear = reqYearId != null && khademProfile.responsibleYears.any { it.id == reqYearId }
+            
+            if (!hasStage && !hasYear) {
+                throw UnauthorizedException("You are not responsible for this educational stage or year")
             }
+        } else if (caller.role != UserRole.ADMIN) {
+            throw UnauthorizedException("Only Admin or responsible Khadem can add a student")
         }
 
         var confessionPriest: User? = null
@@ -367,7 +436,7 @@ class UserService(
             confessionPriest = findById(request.confessionPriestId)
         }
 
-        val rawPassword = request.password
+        val rawPassword = request.password?.ifBlank { null } ?: generateRandomPassword()
         val encodedPassword = passwordEncoder.encode(rawPassword)!!
         val userId = UUID.randomUUID()
         
@@ -444,7 +513,7 @@ class UserService(
             confessionPriest = findById(request.confessionPriestId)
         }
 
-        val rawPassword = request.password
+        val rawPassword = request.password?.ifBlank { null } ?: generateRandomPassword()
         val encodedPassword = passwordEncoder.encode(rawPassword)!!
         val userId = UUID.randomUUID()
 
@@ -638,5 +707,9 @@ class UserService(
                 areaRepository.save(Area(name = area, suggestedCount = 1))
             }
         }
+    }
+
+    private fun generateRandomPassword(): String {
+        return UUID.randomUUID().toString().replace("-", "") + "A1@a"
     }
 }
