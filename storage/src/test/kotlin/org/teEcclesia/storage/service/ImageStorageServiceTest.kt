@@ -66,22 +66,24 @@ class ImageStorageServiceTest {
     }
 
     @Test
-    fun `uploadImageFromBytes with invalid content type throws InvalidImageException`() {
-        val bytes = byteArrayOf(0x00, 0x01, 0x02, 0x03)
+    fun `uploadImageFromBytes with PDF content type succeeds`() {
+        val bytes = byteArrayOf(0x25.toByte(), 0x50, 0x44, 0x46)
         val contentType = "application/pdf"
         val fileName = "test-file"
         val folderName = "documents"
 
-        val exception = assertThrows<InvalidImageException> {
-            imageStorageService.uploadImageFromBytes(bytes, contentType, fileName, folderName)
-        }
+        val requestSlot = slot<PutObjectRequest>()
+        every { s3Client.putObject(capture(requestSlot), any<RequestBody>()) } returns PutObjectResponse.builder().build()
 
-        assertThat(exception.message).contains("application/pdf")
-        verify(exactly = 0) { s3Client.putObject(any<PutObjectRequest>(), any<RequestBody>()) }
+        val result = imageStorageService.uploadImageFromBytes(bytes, contentType, fileName, folderName)
+
+        assertThat(result).contains("test-file.pdf")
+        assertThat(result).contains("?time=")
+        assertThat(requestSlot.captured.key()).isEqualTo("documents/test-file.pdf")
     }
 
     @Test
-    fun `uploadImageFromBytes return format does not include folder path`() {
+    fun `uploadImageFromBytes return format includes folder path`() {
         val bytes = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47)
         val contentType = "image/png"
         val fileName = "chart-12345"
@@ -91,8 +93,8 @@ class ImageStorageServiceTest {
 
         val result = imageStorageService.uploadImageFromBytes(bytes, contentType, fileName, folderName)
 
-        assertThat(result).matches(".*\\.png\\?time=.*")
-        assertThat(result).doesNotContain("statistics/")
+        assertThat(result).matches("statistics/.*\\.png\\?time=.*")
+        assertThat(result).contains("statistics/")
     }
 
     @Test
