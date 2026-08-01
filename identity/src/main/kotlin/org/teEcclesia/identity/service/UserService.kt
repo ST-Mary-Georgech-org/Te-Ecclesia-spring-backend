@@ -233,11 +233,14 @@ class UserService(
 
             if (user.role == UserRole.MAKHDOOM && updateData.makhdoomProfile != null) {
                 val educationalStage = educationalStageRepository.findById(updateData.makhdoomProfile.educationalStageId).orElseThrow {
-                    java.lang.IllegalArgumentException("Educational stage not found")
+                    IllegalArgumentException("Educational stage not found")
+                }
+                if (educationalStage.isKhademOnly) {
+                    throw IllegalArgumentException("Educational stage is reserved for Khadem role")
                 }
                 val educationalYear = updateData.makhdoomProfile.educationalYearId?.let {
                     educationalYearRepository.findById(it).orElseThrow {
-                        java.lang.IllegalArgumentException("Educational year not found")
+                        IllegalArgumentException("Educational year not found")
                     }
                 }
                 val currentProfile = user.makhdoomProfile
@@ -271,39 +274,47 @@ class UserService(
             if (user.role == UserRole.KHADEM) {
                 updateData.khademProfile?.let { khademDto ->
                     val educationalStage = educationalStageRepository.findById(khademDto.educationalStageId).orElseThrow {
-                        java.lang.IllegalArgumentException("Educational stage not found")
+                        IllegalArgumentException("Educational stage not found")
                     }
                     val educationalYear = khademDto.educationalYearId?.let {
                         educationalYearRepository.findById(it).orElseThrow {
-                            java.lang.IllegalArgumentException("Educational year not found")
+                            IllegalArgumentException("Educational year not found")
                         }
                     }
-                    val respStages = educationalStageRepository.findAllById(khademDto.responsibleStageIds)
-                    val respYears = educationalYearRepository.findAllById(khademDto.responsibleYearIds)
+                    val respStages = khademDto.responsibleStageIds?.takeIf { it.isNotEmpty() }?.let {
+                        educationalStageRepository.findAllById(it)
+                    } ?: emptyList()
+                    val respYears = khademDto.responsibleYearIds?.takeIf { it.isNotEmpty() }?.let {
+                        educationalYearRepository.findAllById(it)
+                    } ?: emptyList()
                     val currentKhadem = user.khademProfile
                     val updatedKhadem = currentKhadem?.copy(
                         educationalStage = educationalStage,
                         educationalYear = educationalYear,
-                        canApproveRequests = khademDto.canApproveRequests,
+                        canApproveRequests = khademDto.canApproveRequests ?: false,
                         responsibleStages = respStages.toMutableList(),
                         responsibleYears = respYears.toMutableList()
                     ) ?: KhademProfile(
                         user = user,
                         educationalStage = educationalStage,
                         educationalYear = educationalYear,
-                        canApproveRequests = khademDto.canApproveRequests,
+                        canApproveRequests = khademDto.canApproveRequests ?: false,
                         responsibleStages = respStages.toMutableList(),
                         responsibleYears = respYears.toMutableList()
                     )
                     user = user.copy(khademProfile = updatedKhadem)
                 }
                 updateData.adminKhademProfile?.let { adminKhademDto ->
-                    val responsibleStages = educationalStageRepository.findAllById(adminKhademDto.responsibleStageIds)
-                    val responsibleYears = educationalYearRepository.findAllById(adminKhademDto.responsibleYearIds)
+                    val responsibleStages = adminKhademDto.responsibleStageIds?.takeIf { it.isNotEmpty() }?.let {
+                        educationalStageRepository.findAllById(it)
+                    } ?: emptyList()
+                    val responsibleYears = adminKhademDto.responsibleYearIds?.takeIf { it.isNotEmpty() }?.let {
+                        educationalYearRepository.findAllById(it)
+                    } ?: emptyList()
                     val currentKhadem = user.khademProfile
                     if (currentKhadem != null) {
                         val updatedKhadem = currentKhadem.copy(
-                            canApproveRequests = adminKhademDto.canApproveRequests,
+                            canApproveRequests = adminKhademDto.canApproveRequests ?: false,
                             responsibleStages = responsibleStages.toMutableList(),
                             responsibleYears = responsibleYears.toMutableList()
                         )
@@ -463,11 +474,14 @@ class UserService(
         // Add Makhdoom profile
         val makhdoomProfile = if (request.makhdoomProfile != null) {
             val educationalStage = educationalStageRepository.findById(request.makhdoomProfile.educationalStageId).orElseThrow {
-                java.lang.IllegalArgumentException("Educational stage not found")
+                IllegalArgumentException("Educational stage not found")
+            }
+            if (educationalStage.isKhademOnly) {
+                throw IllegalArgumentException("Educational stage is reserved for Khadem role")
             }
             val educationalYear = request.makhdoomProfile.educationalYearId?.let {
                 educationalYearRepository.findById(it).orElseThrow {
-                    java.lang.IllegalArgumentException("Educational year not found")
+                    IllegalArgumentException("Educational year not found")
                 }
             }
             val finalDocumentUrl = if (identityDocument != null) {
@@ -655,11 +669,14 @@ class UserService(
 
         val finalUser = if (target.role == UserRole.MAKHDOOM && request.makhdoomProfile != null) {
             val educationalStage = educationalStageRepository.findById(request.makhdoomProfile.educationalStageId).orElseThrow {
-                java.lang.IllegalArgumentException("Educational stage not found")
+                IllegalArgumentException("Educational stage not found")
+            }
+            if (educationalStage.isKhademOnly) {
+                throw IllegalArgumentException("Educational stage is reserved for Khadem role")
             }
             val educationalYear = request.makhdoomProfile.educationalYearId?.let {
                 educationalYearRepository.findById(it).orElseThrow {
-                    java.lang.IllegalArgumentException("Educational year not found")
+                    IllegalArgumentException("Educational year not found")
                 }
             }
 

@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*
 import java.util.UUID
 import org.teEcclesia.identity.api.dto.request.*
 import org.teEcclesia.identity.api.dto.response.LookupResponse
+import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.service.LookupService
 
 @RestController
@@ -28,9 +29,10 @@ class LookupController(
     fun getEducationalStages(
         @RequestHeader(value = "Accept-Language", defaultValue = "ar") language: String,
         @AuthenticationPrincipal userId: UUID?,
+        @RequestParam(value = "forRole", required = false) forRole: UserRole?,
         pageable: Pageable
     ): ResponseEntity<Page<LookupResponse>> {
-        return ResponseEntity.ok(lookupService.getEducationalStages(language, userId, pageable))
+        return ResponseEntity.ok(lookupService.getEducationalStages(language, userId, forRole, pageable))
     }
 
     @GetMapping("/areas")
