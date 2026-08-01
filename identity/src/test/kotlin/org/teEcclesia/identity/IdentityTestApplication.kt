@@ -26,6 +26,8 @@ import org.teEcclesia.identity.repository.EducationalYearRepository
 import org.teEcclesia.identity.repository.RankRepository
 import org.teEcclesia.identity.service.ParentProfileService
 import org.teEcclesia.identity.service.UserCodeGenerator
+import org.teEcclesia.identity.service.UserValidationHelper
+
 
 @SpringBootConfiguration
 @EnableAutoConfiguration
@@ -60,6 +62,11 @@ class IdentityTestApplication {
     }
 
     @Bean
+    fun userValidationHelper(userRepository: UserRepository): UserValidationHelper {
+        return UserValidationHelper(userRepository)
+    }
+
+    @Bean
     fun authService(
         userRepository: UserRepository,
         refreshTokenRepository: RefreshTokenRepository,
@@ -76,7 +83,8 @@ class IdentityTestApplication {
         rankRepository: RankRepository,
         educationalStageRepository: EducationalStageRepository,
         educationalYearRepository: EducationalYearRepository,
-        areaRepository: AreaRepository
+        areaRepository: AreaRepository,
+        userValidationHelper: UserValidationHelper
     ): AuthService {
         return AuthService(
             userRepository = userRepository,
@@ -97,6 +105,7 @@ class IdentityTestApplication {
             areaRepository = areaRepository,
             parentProfileService = parentProfileService(),
             imageStorageService = imageStorageService(),
+            userValidationHelper = userValidationHelper,
             profileImageDirectory = "test-profiles",
             documentsDirectory = "test-docs"
         )
@@ -118,7 +127,8 @@ class IdentityTestApplication {
         educationalStageRepository: EducationalStageRepository,
         educationalYearRepository: EducationalYearRepository,
         @Value("\${cdn.endpoint:}") cdnEndpoint: String,
-        authService: AuthService
+        authService: AuthService,
+        userValidationHelper: UserValidationHelper
     ): UserService {
         return UserService(
             userRepository = userRepository,
@@ -133,7 +143,8 @@ class IdentityTestApplication {
             cdnEndpoint = cdnEndpoint,
             parentProfileService = parentProfileService(),
             documentsDirectory = "test-docs",
-            authService = authService
+            authService = authService,
+            userValidationHelper = userValidationHelper
         )
     }
 

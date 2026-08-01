@@ -41,9 +41,10 @@ class AuthController (
     fun register(
         @RequestPart("request") @Valid request: RegisterRequest,
         @RequestPart("image", required = false) image: MultipartFile?,
-        @RequestPart("certificateImage", required = false) certificateImage: MultipartFile?
+        @RequestPart("certificateImage", required = false) certificateImage: MultipartFile?,
+        @RequestPart("identityDocument", required = false) identityDocument: MultipartFile?
     ): ResponseEntity<TokenResponse> {
-        val response = authService.register(request, image, certificateImage)
+        val response = authService.register(request, image, certificateImage, identityDocument)
         return ResponseEntity.status(HttpStatus.CREATED).body(response)
     }
 
@@ -52,9 +53,10 @@ class AuthController (
     fun completeProfile (
         @AuthenticationPrincipal userId: UUID,
         @RequestPart("request") @Valid request: CompleteProfileRequest,
-        @RequestPart("certificateImage", required = false) certificateImage: MultipartFile?
+        @RequestPart("certificateImage", required = false) certificateImage: MultipartFile?,
+        @RequestPart("identityDocument", required = false) identityDocument: MultipartFile?
     ): ResponseEntity<RegisterResponse> {
-        val response = authService.completeProfile(userId, request, certificateImage)
+        val response = authService.completeProfile(userId, request, certificateImage, identityDocument)
         return ResponseEntity.ok(response)
     }
 
@@ -69,8 +71,11 @@ class AuthController (
 
     @Tag(name = "Registration")
     @PostMapping("/verify-email")
-    fun verifyEmail(@Valid @RequestBody request: VerifyEmailRequest): ResponseEntity<AuthResponse> {
-        val response = authService.verifyEmail(request)
+    fun verifyEmail(
+        @AuthenticationPrincipal userId: UUID,
+        @Valid @RequestBody request: VerifyEmailRequest
+    ): ResponseEntity<AuthResponse> {
+        val response = authService.verifyEmail(userId, request)
         return ResponseEntity.ok(response)
     }
 
@@ -131,6 +136,13 @@ class AuthController (
     @PostMapping("/refresh-registration")
     fun refreshRegistration (@Valid @RequestBody request: RefreshTokenRequest): ResponseEntity<AuthResponse> {
         val response = authService.refreshRegistrationToken(request)
+        return ResponseEntity.ok(response)
+    }
+
+    @Tag(name = "Authentication")
+    @PostMapping("/upgrade-registration-token")
+    fun upgradeRegistrationToken(@AuthenticationPrincipal userId: UUID): ResponseEntity<AuthResponse> {
+        val response = authService.upgradeRegistrationToken(userId)
         return ResponseEntity.ok(response)
     }
 

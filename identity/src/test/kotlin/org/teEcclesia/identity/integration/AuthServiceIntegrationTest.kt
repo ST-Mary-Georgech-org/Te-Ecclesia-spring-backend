@@ -199,7 +199,7 @@ class AuthServiceIntegrationTest {
         val user = createUser(email = "email-otp-invalid@mail.com", isVerified = false)
         val request = VerifyEmailRequest(email = "email-otp-invalid@mail.com", otp = "9999")
 
-        val thrownException = assertThrows<RuntimeException> { authService.verifyEmail(request) }
+        val thrownException = assertThrows<RuntimeException> { authService.verifyEmail(user.id, request) }
         assertThat(thrownException).hasMessageThat().contains("Invalid or expired OTP")
     }
 
@@ -217,7 +217,7 @@ class AuthServiceIntegrationTest {
         )
         val request = VerifyEmailRequest(email = user.email!!, otp = "12345")
 
-        val thrownException = assertThrows<RuntimeException> { authService.verifyEmail(request) }
+        val thrownException = assertThrows<RuntimeException> { authService.verifyEmail(user.id, request) }
         assertThat(thrownException).hasMessageThat().contains("OTP has expired")
     }
 
@@ -235,7 +235,7 @@ class AuthServiceIntegrationTest {
         )
         val request = VerifyEmailRequest(email = user.email!!, otp = "12345")
 
-        val authResponse = authService.verifyEmail(request)
+        val authResponse = authService.verifyEmail(user.id, request)
 
         val verifiedUser = userRepository.findByEmail(user.email)
         val savedRefreshToken = refreshTokenRepository.findByToken("refresh-token")
@@ -355,9 +355,7 @@ class AuthServiceIntegrationTest {
         val updatedUser = userRepository.findById(user.id).get()
         assertThat(updatedUser.role).isEqualTo(UserRole.PARENT)
         
-        val profile = ReflectionTestUtils.invokeMethod<ParentProfile>(
-            parentProfileService, "createOrUpdateProfile", updatedUser, request.parentProfile!!
-        )
+        val profile = parentProfileService.createOrUpdateProfile(updatedUser, request.parentProfile!!)
         // Since it's saved in the service but the user entity might be cached
         // The real test is that the DB has it, which we verify by calling the service again or using a native query/repo if we expose it
         // Or simply checking the service doesn't crash is enough for this Integration test as it asserts flow completion
@@ -522,6 +520,23 @@ class AuthServiceIntegrationTest {
     }
 
     @Test
+    fun `forgotPassword returns null for non-approved users`() {
+        val unapprovedUser = createUser(email = "unapproved-forgot@mail.com", isVerified = false)
+        
+        val emailRequest = ForgotPasswordRequest(key = unapprovedUser.email!!, method = VerificationMethod.EMAIL)
+        val emailResponse = authService.forgotPassword(emailRequest)
+        assertThat(emailResponse).isNull()
+
+        val phoneRequest = ForgotPasswordRequest(key = unapprovedUser.phone, method = VerificationMethod.PHONE)
+        val phoneResponse = authService.forgotPassword(phoneRequest)
+        assertThat(phoneResponse).isNull()
+
+        val nationalIdRequest = ForgotPasswordRequest(key = unapprovedUser.nationalId, method = VerificationMethod.PHONE)
+        val nationalIdResponse = authService.forgotPassword(nationalIdRequest)
+        assertThat(nationalIdResponse).isNull()
+    }
+
+    @Test
     fun `completeProfile updates existing profiles correctly instead of throwing duplicate key exception`() {
         var user = createUser(email = "khadem-update@mail.com", isVerified = false)
         user = userRepository.save(user.copy(status = UserStatus.PROFILE_INCOMPLETE))
@@ -650,7 +665,82 @@ class AuthServiceIntegrationTest {
         }
     }
 
+    @Test
+    fun `register allows duplicate email when existing user with same email is not approved and verified`() {
+        val unverifiedUser = createUser(email = "shared-unverified@mail.com", isVerified = false)
+
+        val request = RegisterRequest(
+            firstName = "First", secondName = "Second", thirdName = "Third", lastName = "Last",
+            displayName = "Second User", nationalId = "29905051234567",
+            phone = "01199887766", homePhone = "0223456789",
+            email = "shared-unverified@mail.com", password = "Password@1",
+            job = "Job", buildingNo = "1", street = "Street", area = "Area",
+            floor = "1", apartment = "1", specialMark = "Mark"
+        )
+
+        val response = authService.register(request)
+        assertThat(response.token).isNotNull()
+
+        val usersWithEmail = userRepository.findByEmailIgnoreCase("shared-unverified@mail.com")
+        assertThat(usersWithEmail.size).isEqualTo(2)
+    }
+
+    @Test
+    fun `register throws UserAlreadyExistsException when existing user with same email is APPROVED and email verified`() {
+        val approvedVerifiedUser = createUser(email = "approved-verified@mail.com", isVerified = true)
+
+        val request = RegisterRequest(
+            firstName = "First", secondName = "Second", thirdName = "Third", lastName = "Last",
+            displayName = "Blocked User", nationalId = "29905051234568",
+            phone = "01199887765", homePhone = "0223456789",
+            email = "approved-verified@mail.com", password = "Password@1",
+            job = "Job", buildingNo = "1", street = "Street", area = "Area",
+            floor = "1", apartment = "1", specialMark = "Mark"
+        )
+
+        assertThrows<UserAlreadyExistsException> { authService.register(request) }
+    }
+
+    @Test
+    fun `verifyEmail throws UserAlreadyExistsException when another approved user has verified email`() {
+        val approvedUser = createUser(email = "competing@mail.com", isVerified = true)
+
+        var unverifiedUser = createUser(email = "competing@mail.com", isVerified = false)
+        unverifiedUser = userRepository.save(unverifiedUser.copy(isEmailVerified = false, status = UserStatus.PENDING_APPROVAL))
+
+        otpRepository.save(AccountVerification(
+            otp = "99999",
+            user = unverifiedUser,
+            email = "competing@mail.com",
+            method = VerificationMethod.EMAIL
+        ))
+
+        assertThrows<UserAlreadyExistsException> {
+            authService.verifyEmail(unverifiedUser.id, VerifyEmailRequest(email = "competing@mail.com", otp = "99999"))
+        }
+    }
+
+    @Test
+    fun `verifyEmail succeeds for authenticated user when email is not taken by another approved user`() {
+        var unverifiedUser = createUser(email = "valid-verify@mail.com", isVerified = false)
+        unverifiedUser = userRepository.save(unverifiedUser.copy(isEmailVerified = false, status = UserStatus.PENDING_APPROVAL))
+
+        otpRepository.save(AccountVerification(
+            otp = "12345",
+            user = unverifiedUser,
+            email = "valid-verify@mail.com",
+            method = VerificationMethod.EMAIL
+        ))
+
+        val response = authService.verifyEmail(unverifiedUser.id, VerifyEmailRequest(email = "valid-verify@mail.com", otp = "12345"))
+
+        assertThat(response.accessToken).isNotNull()
+        val updatedUser = userRepository.findById(unverifiedUser.id).get()
+        assertThat(updatedUser.isEmailVerified).isTrue()
+    }
+
     private fun createUser(
+
         email: String,
         isVerified: Boolean,
         plainPassword: String = "Password@1",

@@ -44,18 +44,22 @@ class ImageStorageServiceIntegrationTest {
         assertThat(requestSlot.captured.bucket()).isEqualTo("test-bucket")
         assertThat(requestSlot.captured.key()).isEqualTo("profiles/user-1.png")
         assertThat(requestSlot.captured.contentType()).isEqualTo("image/png")
-        assertThat(imageUrl).startsWith("user-1.png?time=")
+        assertThat(imageUrl).startsWith("profiles/user-1.png?time=")
     }
 
     @Test
-    fun `uploadImage throws InvalidImageException for unsupported mime type`() {
+    fun `uploadImage with unsupported mime type falls back to jpg extension`() {
+        val requestSlot = slot<PutObjectRequest>()
+        every {
+            s3Client.putObject(capture(requestSlot), any<RequestBody>())
+        } returns PutObjectResponse.builder().build()
         val file = MockMultipartFile("file", "avatar.gif", "image/gif", byteArrayOf(1, 2, 3))
 
-        val thrownException = assertThrows<InvalidImageException> {
-            imageStorageService.uploadImage(file, "user-1", "profiles")
-        }
+        val imageUrl = imageStorageService.uploadImage(file, "user-1", "profiles")
 
-        assertThat(thrownException.extension).isEqualTo("image/gif")
+        verify(exactly = 1) { s3Client.putObject(any<PutObjectRequest>(), any<RequestBody>()) }
+        assertThat(requestSlot.captured.key()).isEqualTo("profiles/user-1.jpg")
+        assertThat(imageUrl).startsWith("profiles/user-1.jpg?time=")
     }
 
     @Test

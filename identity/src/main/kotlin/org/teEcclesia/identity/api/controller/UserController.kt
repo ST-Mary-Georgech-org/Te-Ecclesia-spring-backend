@@ -50,9 +50,21 @@ class UserController(
         @RequestParam(required = false) search: String?,
         pageable: Pageable
     ): ResponseEntity<Page<ProfileResponse>> {
-        authorizeAdminOrKhadem(callerId, requireApprovePermission = true)
-        return ResponseEntity.ok(userService.getUsersByStatus(status, stageId, yearId, role, search, pageable))
+        if (status != UserStatus.APPROVED) {
+            authorizeAdminOrKhadem(callerId, requireApprovePermission = true)
+        }
+        return ResponseEntity.ok(userService.getUsersByStatus(callerId, status, stageId, yearId, role, search, pageable))
     }
+
+    @GetMapping("/{userId}")
+    fun getUserById(
+        @AuthenticationPrincipal callerId: UUID,
+        @PathVariable userId: UUID
+    ): ResponseEntity<ProfileResponse> {
+        authorizeAdminOrKhadem(callerId)
+        return ResponseEntity.ok(userService.getUserProfile(userId))
+    }
+
 
     @PostMapping("/{userId}/approve")
     fun approveUser(

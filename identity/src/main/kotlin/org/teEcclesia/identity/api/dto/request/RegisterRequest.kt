@@ -42,12 +42,11 @@ data class RegisterRequest(
     @field:Email(message = "Please provide a valid email address")
     val email: String? = null,
 
-    @field:NotBlank(message = "Password is required")
     @field:Pattern(
         regexp = """^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=!]).{8,}$""",
         message = "Password must contain at least 8 characters, one uppercase, one lowercase, one number and one special character"
     )
-    val password: String,
+    val password: String? = null,
 
     val imageUrl: String? = null,
 
@@ -82,8 +81,11 @@ data class RegisterRequest(
     val ordinationProfile: OrdinationProfileRequest? = null,
     val makhdoomProfile: MakhdoomProfileRequest? = null,
     val kahenProfile: KahenProfileRequest? = null,
-    val parentProfile: ParentProfileRequest? = null
+    val parentProfile: ParentProfileRequest? = null,
+    val khademProfile: KhademProfileRequest? = null,
+    val adminKhademProfile: AdminKhademProfileRequest? = null
 )
+
 
 fun RegisterRequest.toEntity(
     hashedPassword: String, 

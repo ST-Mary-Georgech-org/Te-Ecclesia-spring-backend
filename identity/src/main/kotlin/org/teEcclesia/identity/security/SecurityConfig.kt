@@ -32,7 +32,8 @@ class SecurityConfig(
                     "/api/v1/identity/auth/complete-profile",
                     "/api/v1/identity/auth/verify-phone",
                     "/api/v1/identity/auth/verify-email",
-                    "/api/v1/identity/auth/whatsapp/initiate"
+                    "/api/v1/identity/auth/whatsapp/initiate",
+                    "/api/v1/identity/auth/device-token"
                 ).authenticated()
                 it.requestMatchers(
                     "/api/v1/identity/auth/signup",

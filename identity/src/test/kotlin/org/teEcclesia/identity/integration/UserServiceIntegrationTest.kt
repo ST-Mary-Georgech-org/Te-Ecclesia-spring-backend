@@ -1,6 +1,7 @@
 package org.teEcclesia.identity.integration
 
 import com.google.common.truth.Truth.assertThat
+import io.mockk.called
 import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.verify
@@ -26,6 +27,7 @@ import org.teEcclesia.identity.service.UserService
 import org.teEcclesia.storage.service.ImageStorageService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.data.domain.PageRequest
 import org.springframework.mock.web.MockMultipartFile
 import org.springframework.test.context.ActiveProfiles
 import org.teEcclesia.identity.entity.enums.ShamamsaStudyStatus
@@ -170,7 +172,7 @@ class UserServiceIntegrationTest {
         assertThat(thrownException).hasMessageThat().contains("User with id: $missingUserId not found")
     }
 
-    private fun createUser(email: String, imageUrl: String? = null): User {
+    private fun createUser(email: String, imageUrl: String? = null, role: UserRole = UserRole.GUEST): User {
         val username = email.substringBefore("@")
         return userRepository.save(
             User(
@@ -194,7 +196,7 @@ class UserServiceIntegrationTest {
                 specialMark = "Near hospital",
                 gender = Gender.MALE,
                 status = UserStatus.APPROVED,
-                role = UserRole.GUEST,
+                role = role,
                 createdAt = Instant.now().minus(2, ChronoUnit.DAYS),
                 imageUrl = imageUrl
             )
@@ -282,16 +284,17 @@ class UserServiceIntegrationTest {
 
     @Test
     fun `getUsersByStatus with null search executes without error`() {
-        val user = createUser(email = "pending-search-null@mail.com")
+        val user = createUser(email = "pending-search-null@mail.com", role = UserRole.ADMIN)
         userRepository.save(user.copy(status = UserStatus.PENDING_APPROVAL))
 
         val page = userService.getUsersByStatus(
+            callerId = user.id,
             status = UserStatus.PENDING_APPROVAL,
             stageId = null,
             yearId = null,
             role = null,
             search = null,
-            pageable = org.springframework.data.domain.PageRequest.of(0, 20)
+            pageable = PageRequest.of(0, 20)
         )
 
         assertThat(page.content).isNotEmpty()
@@ -306,5 +309,63 @@ class UserServiceIntegrationTest {
         assertThat(profile).isNotNull()
         assertThat(profile.id).isEqualTo(user.id.toString())
     }
+
+    @Test
+    fun `createMakhdoomDirectly throws UserAlreadyExistsException when email is already approved and verified`() {
+        val admin = createUser(email = "admin-makhdoom-test@mail.com")
+        userRepository.save(admin.copy(role = UserRole.ADMIN, status = UserStatus.APPROVED))
+
+        val existingUser = createUser(email = "verified-makhdoom-email@mail.com")
+        userRepository.save(existingUser.copy(status = UserStatus.APPROVED, isEmailVerified = true))
+
+        val stage = educationalStageRepository.save(EducationalStage(nameAr = "Stage", nameEn = "Stage"))
+
+        val request = RegisterRequest(
+            firstName = "Direct", secondName = "Makhdoom", thirdName = "Test", lastName = "Case",
+            displayName = "Direct Makhdoom", nationalId = "29901010101099",
+            phone = "01118295999", homePhone = "0223456789",
+            email = "verified-makhdoom-email@mail.com", password = "Password@1",
+            job = "Student", buildingNo = "1", street = "Street", area = "Area",
+            floor = "1", apartment = "1", specialMark = "Mark",
+            makhdoomProfile = MakhdoomProfileRequest(
+                shamamsaStudyStatus = ShamamsaStudyStatus.NO,
+                educationalStageId = stage.id,
+                educationalYearId = null
+            )
+        )
+
+        org.junit.jupiter.api.assertThrows<org.teEcclesia.identity.exception.UserAlreadyExistsException> {
+            userService.createMakhdoomDirectly(admin.id, request)
+        }
+    }
+
+    @Test
+    fun `createMakhdoomDirectly succeeds when duplicate email belongs to an unverified non-approved user`() {
+        val admin = createUser(email = "admin-makhdoom-test2@mail.com")
+        userRepository.save(admin.copy(role = UserRole.ADMIN, status = UserStatus.APPROVED))
+
+        val unverifiedUser = createUser(email = "unverified-shared-email@mail.com")
+        userRepository.save(unverifiedUser.copy(status = UserStatus.UNVERIFIED, isEmailVerified = false))
+
+        val stage = educationalStageRepository.save(EducationalStage(nameAr = "Stage", nameEn = "Stage"))
+
+        val request = RegisterRequest(
+            firstName = "Direct", secondName = "Makhdoom", thirdName = "Test", lastName = "Case",
+            displayName = "Direct Makhdoom", nationalId = "29901010101088",
+            phone = "01118295888", homePhone = "0223456789",
+            email = "unverified-shared-email@mail.com", password = "Password@1",
+            job = "Student", buildingNo = "1", street = "Street", area = "Area",
+            floor = "1", apartment = "1", specialMark = "Mark",
+            makhdoomProfile = MakhdoomProfileRequest(
+                shamamsaStudyStatus = ShamamsaStudyStatus.NO,
+                educationalStageId = stage.id,
+                educationalYearId = null
+            )
+        )
+
+        val created = userService.createMakhdoomDirectly(admin.id, request)
+        assertThat(created.email).isEqualTo("unverified-shared-email@mail.com")
+    }
 }
+
 

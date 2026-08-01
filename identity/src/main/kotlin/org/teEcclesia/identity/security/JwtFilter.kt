@@ -77,6 +77,8 @@ class JwtFilter(
                         path.startsWith("/api/v1/identity/auth/priests") ||
                         path.startsWith("/api/v1/identity/auth/search-parents") ||
                         path.startsWith("/api/v1/identity/auth/search-makhdooms") ||
+                        path.startsWith("/api/v1/identity/auth/upgrade-registration-token") ||
+                        path.startsWith("/api/v1/identity/auth/device-token") ||
                         path.startsWith("/api/v1/lookups")
 
                     if (!isRegistrationAllowedPath) {
