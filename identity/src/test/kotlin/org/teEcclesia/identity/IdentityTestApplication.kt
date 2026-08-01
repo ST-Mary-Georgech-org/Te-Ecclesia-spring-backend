@@ -9,6 +9,7 @@ import org.teEcclesia.identity.security.JwtUtil
 import org.teEcclesia.identity.service.AuthService
 import org.teEcclesia.identity.service.EmailService
 import org.teEcclesia.identity.service.UserService
+import org.teEcclesia.identity.service.LookupService
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.teEcclesia.storage.service.ImageStorageService
 import org.teEcclesia.client.ApiClient
@@ -145,6 +146,23 @@ class IdentityTestApplication {
             documentsDirectory = "test-docs",
             authService = authService,
             userValidationHelper = userValidationHelper
+        )
+    }
+
+    @Bean
+    fun lookupService(
+        rankRepository: RankRepository,
+        educationalStageRepository: EducationalStageRepository,
+        educationalYearRepository: EducationalYearRepository,
+        areaRepository: AreaRepository,
+        userRepository: UserRepository
+    ): LookupService {
+        return LookupService(
+            rankRepository = rankRepository,
+            educationalStageRepository = educationalStageRepository,
+            educationalYearRepository = educationalYearRepository,
+            areaRepository = areaRepository,
+            userRepository = userRepository
         )
     }
 

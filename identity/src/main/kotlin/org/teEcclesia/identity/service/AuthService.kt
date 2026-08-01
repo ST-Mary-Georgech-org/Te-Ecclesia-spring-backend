@@ -586,7 +586,7 @@ class AuthService(
             id = user.ordinationProfile?.id ?: 0,
             user = user,
             rank = rank,
-            isOrdinationInAnotherChurch = dto.isOrdinationInAnotherChurch,
+            isOrdinationInAnotherChurch = dto.isOrdinationInAnotherChurch ?: false,
             ordinationYear = dto.ordinationYear,
             bishopName = dto.bishopName,
             ordinationPlace = dto.ordinationPlace,
@@ -597,6 +597,9 @@ class AuthService(
     private fun createMakhdoomProfile(user: User, dto: MakhdoomProfileRequest, finalIdentityDocumentUrl: String? = null): MakhdoomProfile {
         val educationalStage = educationalStageRepository.findById(dto.educationalStageId).orElseThrow {
             EntityNotFoundException("Educational stage not found")
+        }
+        if (educationalStage.isKhademOnly) {
+            throw IllegalArgumentException("Educational stage is reserved for Khadem role")
         }
         val educationalYear = dto.educationalYearId?.let {
             educationalYearRepository.findById(it).orElseThrow {
@@ -642,18 +645,18 @@ class AuthService(
                 EntityNotFoundException("Educational year not found")
             }
         }
-        val responsibleStages = if (dto.responsibleStageIds.isNotEmpty()) {
-            educationalStageRepository.findAllById(dto.responsibleStageIds)
-        } else emptyList()
-        val responsibleYears = if (dto.responsibleYearIds.isNotEmpty()) {
-            educationalYearRepository.findAllById(dto.responsibleYearIds)
-        } else emptyList()
+        val responsibleStages = dto.responsibleStageIds?.takeIf { it.isNotEmpty() }?.let {
+            educationalStageRepository.findAllById(it)
+        } ?: emptyList()
+        val responsibleYears = dto.responsibleYearIds?.takeIf { it.isNotEmpty() }?.let {
+            educationalYearRepository.findAllById(it)
+        } ?: emptyList()
         return KhademProfile(
             id = user.khademProfile?.id ?: 0,
             user = user,
             educationalStage = educationalStage,
             educationalYear = educationalYear,
-            canApproveRequests = dto.canApproveRequests,
+            canApproveRequests = dto.canApproveRequests ?: false,
             responsibleStages = responsibleStages.toMutableList(),
             responsibleYears = responsibleYears.toMutableList()
         )

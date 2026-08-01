@@ -17,6 +17,9 @@ data class EducationalStage(
 
     @Column(nullable = false)
     val nameEn: String,
+
+    @Column(name = "is_khadem_only", nullable = false, columnDefinition = "boolean default false")
+    val isKhademOnly: Boolean = false,
     
     @OneToMany(mappedBy = "stage", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
     val years: MutableList<EducationalYear> = mutableListOf()

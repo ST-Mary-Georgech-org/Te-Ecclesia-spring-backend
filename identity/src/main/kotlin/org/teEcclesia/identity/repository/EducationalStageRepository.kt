@@ -11,8 +11,13 @@ interface EducationalStageRepository : JpaRepository<EducationalStage, Long> {
     override fun findAll(pageable: Pageable): Page<EducationalStage>
 
     @EntityGraph(attributePaths = ["years"])
+    fun findByIsKhademOnlyFalse(pageable: Pageable): Page<EducationalStage>
+
+    @EntityGraph(attributePaths = ["years"])
     fun findByIdIn(ids: Set<Long>): List<EducationalStage>
 
     @EntityGraph(attributePaths = ["years"])
     fun findByYearsIdIn(ids: Set<Long>): List<EducationalStage>
+
+    fun existsByNameAr(nameAr: String): Boolean
 }

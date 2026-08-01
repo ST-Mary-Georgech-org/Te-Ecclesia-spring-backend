@@ -38,6 +38,7 @@ class LookupSeeder(
             val youth = EducationalStage(nameAr = "شباب", nameEn = "Youth")
             val graduate = EducationalStage(nameAr = "خريجين", nameEn = "Graduate")
             val families = EducationalStage(nameAr = "أسر", nameEn = "Families")
+            val deaconsSchool = EducationalStage(nameAr = "مدرسة الشمامسة", nameEn = "Deacons School", isKhademOnly = true)
 
             nursery.years.addAll(createYearsForStage(nursery, 3))
             primary.years.addAll(createYearsForStage(primary, 6))
@@ -45,8 +46,11 @@ class LookupSeeder(
             secondary.years.addAll(createYearsForStage(secondary, 3))
             youth.years.addAll(createYearsForStage(youth, 7))
 
-            val stages = listOf(nursery, primary, preparatory, secondary, youth, graduate, families)
+            val stages = listOf(nursery, primary, preparatory, secondary, youth, graduate, families, deaconsSchool)
             educationalStageRepository.saveAll(stages)
+        } else if (!educationalStageRepository.existsByNameAr("مدرسة الشمامسة")) {
+            val deaconsSchool = EducationalStage(nameAr = "مدرسة الشمامسة", nameEn = "Deacons School", isKhademOnly = true)
+            educationalStageRepository.save(deaconsSchool)
         }
     }
 

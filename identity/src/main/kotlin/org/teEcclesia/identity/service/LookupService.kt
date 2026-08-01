@@ -27,22 +27,40 @@ class LookupService(
         LookupResponse(it.id, if (lang.startsWith("en", ignoreCase = true)) it.nameEn else it.nameAr)
     }
 
-    fun getEducationalStages(lang: String, userId: UUID?, pageable: Pageable): Page<LookupResponse> {
+    fun getEducationalStages(
+        lang: String,
+        userId: UUID?,
+        forRole: UserRole?,
+        pageable: Pageable
+    ): Page<LookupResponse> {
         val user = userId?.let { userRepository.findById(it).orElse(null) }
-        return if (user?.role == UserRole.KHADEM && user.khademProfile != null) {
-            fetchEducationalStagesForKhadem(user.khademProfile, lang, pageable)
-        } else {
-            fetchEducationalStages(pageable, lang)
+        val targetRole = forRole ?: user?.role
+
+        return when {
+            forRole == null && user?.role == UserRole.KHADEM && user.khademProfile != null -> {
+                fetchEducationalStagesForKhadem(user.khademProfile, lang, pageable)
+            }
+            targetRole == UserRole.KHADEM || targetRole == UserRole.ADMIN || targetRole == UserRole.KAHEN -> {
+                fetchEducationalStages(pageable, lang, isKhademOnlyFilter = false)
+            }
+            else -> {
+                fetchEducationalStages(pageable, lang, isKhademOnlyFilter = true)
+            }
         }
     }
 
     private fun fetchEducationalStages(
         pageable: Pageable,
-        lang: String
+        lang: String,
+        isKhademOnlyFilter: Boolean
     ): Page<LookupResponse> {
-        val allStages = educationalStageRepository.findAll(pageable)
+        val stagesPage = if (isKhademOnlyFilter) {
+            educationalStageRepository.findByIsKhademOnlyFalse(pageable)
+        } else {
+            educationalStageRepository.findAll(pageable)
+        }
 
-        return allStages.map { stage ->
+        return stagesPage.map { stage ->
             LookupResponse(
                 id = stage.id,
                 name = if (lang.startsWith("en", ignoreCase = true)) stage.nameEn else stage.nameAr,
@@ -51,7 +69,8 @@ class LookupService(
                         id = year.id,
                         name = if (lang.startsWith("en", ignoreCase = true)) year.nameEn else year.nameAr
                     )
-                }
+                },
+                isKhademOnly = stage.isKhademOnly
             )
         }
     }
@@ -84,7 +103,8 @@ class LookupService(
                             id = year.id,
                             name = if (lang.startsWith("en", ignoreCase = true)) year.nameEn else year.nameAr
                         )
-                    }
+                    },
+                isKhademOnly = stage.isKhademOnly
             )
         }
         return PageImpl(result, pageable, result.size.toLong())
@@ -133,10 +153,11 @@ class LookupService(
     fun createEducationalStage(request: EducationalStageRequest): LookupResponse {
         val stage = EducationalStage(
             nameAr = request.nameAr,
-            nameEn = request.nameEn
+            nameEn = request.nameEn,
+            isKhademOnly = request.isKhademOnly ?: false
         )
         val saved = educationalStageRepository.save(stage)
-        return LookupResponse(saved.id, saved.nameAr)
+        return LookupResponse(saved.id, saved.nameAr, isKhademOnly = saved.isKhademOnly)
     }
 
     @Transactional
@@ -145,10 +166,11 @@ class LookupService(
         val updated = educationalStageRepository.save(
             stage.copy(
                 nameAr = request.nameAr,
-                nameEn = request.nameEn
+                nameEn = request.nameEn,
+                isKhademOnly = request.isKhademOnly ?: false
             )
         )
-        return LookupResponse(updated.id, updated.nameAr)
+        return LookupResponse(updated.id, updated.nameAr, isKhademOnly = updated.isKhademOnly)
     }
 
     @Transactional
