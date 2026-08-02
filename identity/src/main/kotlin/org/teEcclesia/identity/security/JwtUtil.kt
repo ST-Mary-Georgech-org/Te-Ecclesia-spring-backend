@@ -59,7 +59,12 @@ class JwtUtil(
         }
 
     fun extractUserId(token: String): UUID? {
-        return UUID.fromString(parseAllClaims(token)?.subject)
+        val subject = parseAllClaims(token)?.subject ?: return null
+        return try {
+            UUID.fromString(subject)
+        } catch (e: IllegalArgumentException) {
+            null
+        }
     }
 
     // ================== Validation ==================

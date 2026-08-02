@@ -252,8 +252,8 @@ class UserService(
                     fatherWhatsapp = updateData.makhdoomProfile.fatherWhatsapp,
                     motherPhone = updateData.makhdoomProfile.motherPhone,
                     motherWhatsapp = updateData.makhdoomProfile.motherWhatsapp,
-                    isFatherDeceased = updateData.makhdoomProfile.isFatherDeceased,
-                    isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased,
+                    isFatherDeceased = updateData.makhdoomProfile.isFatherDeceased ?: false,
+                    isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased ?: false,
                     identityDocumentImageUrl = updateData.makhdoomProfile.identityDocumentImageUrl ?: currentProfile.identityDocumentImageUrl
                 ) ?: MakhdoomProfile(
                     user = user,
@@ -264,8 +264,8 @@ class UserService(
                     fatherWhatsapp = updateData.makhdoomProfile.fatherWhatsapp,
                     motherPhone = updateData.makhdoomProfile.motherPhone,
                     motherWhatsapp = updateData.makhdoomProfile.motherWhatsapp,
-                    isFatherDeceased = updateData.makhdoomProfile.isFatherDeceased,
-                    isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased,
+                    isFatherDeceased = updateData.makhdoomProfile.isFatherDeceased ?: false,
+                    isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased ?: false,
                     identityDocumentImageUrl = updateData.makhdoomProfile.identityDocumentImageUrl
                 )
                 user = user.copy(makhdoomProfile = updatedMakhdoomProfile)
@@ -499,8 +499,8 @@ class UserService(
                 fatherWhatsapp = request.makhdoomProfile.fatherWhatsapp,
                 motherPhone = request.makhdoomProfile.motherPhone,
                 motherWhatsapp = request.makhdoomProfile.motherWhatsapp,
-                isFatherDeceased = request.makhdoomProfile.isFatherDeceased,
-                isMotherDeceased = request.makhdoomProfile.isMotherDeceased,
+                isFatherDeceased = request.makhdoomProfile.isFatherDeceased ?: false,
+                isMotherDeceased = request.makhdoomProfile.isMotherDeceased ?: false,
                 identityDocumentImageUrl = finalDocumentUrl
             )
         } else null
@@ -690,8 +690,8 @@ class UserService(
                     fatherWhatsapp = request.makhdoomProfile.fatherWhatsapp,
                     motherPhone = request.makhdoomProfile.motherPhone,
                     motherWhatsapp = request.makhdoomProfile.motherWhatsapp,
-                    isFatherDeceased = request.makhdoomProfile.isFatherDeceased,
-                    isMotherDeceased = request.makhdoomProfile.isMotherDeceased
+                    isFatherDeceased = request.makhdoomProfile.isFatherDeceased ?: false,
+                    isMotherDeceased = request.makhdoomProfile.isMotherDeceased ?: false
                 )
             } else {
                 MakhdoomProfile(
@@ -703,8 +703,8 @@ class UserService(
                     fatherWhatsapp = request.makhdoomProfile.fatherWhatsapp,
                     motherPhone = request.makhdoomProfile.motherPhone,
                     motherWhatsapp = request.makhdoomProfile.motherWhatsapp,
-                    isFatherDeceased = request.makhdoomProfile.isFatherDeceased,
-                    isMotherDeceased = request.makhdoomProfile.isMotherDeceased
+                    isFatherDeceased = request.makhdoomProfile.isFatherDeceased ?: false,
+                    isMotherDeceased = request.makhdoomProfile.isMotherDeceased ?: false
                 )
             }
             updatedUser.copy(makhdoomProfile = updatedMakhdoomProfile)

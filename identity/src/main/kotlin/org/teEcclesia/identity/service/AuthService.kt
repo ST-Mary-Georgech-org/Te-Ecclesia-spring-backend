@@ -616,8 +616,8 @@ class AuthService(
             fatherWhatsapp = dto.fatherWhatsapp,
             motherPhone = dto.motherPhone,
             motherWhatsapp = dto.motherWhatsapp,
-            isFatherDeceased = dto.isFatherDeceased,
-            isMotherDeceased = dto.isMotherDeceased,
+            isFatherDeceased = dto.isFatherDeceased ?: false,
+            isMotherDeceased = dto.isMotherDeceased ?: false,
             identityDocumentImageUrl = finalIdentityDocumentUrl ?: dto.identityDocumentImageUrl ?: user.makhdoomProfile?.identityDocumentImageUrl
         )
     }
