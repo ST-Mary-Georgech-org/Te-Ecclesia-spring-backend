@@ -681,7 +681,7 @@ class AuthService(
     }
 
     fun forgotPassword(request: ForgotPasswordRequest): ForgotPasswordResponse? {
-        val user = findUserForPasswordReset(request.key, request.method) ?: return null
+        val user = findUserForPasswordReset(request.key, request.method) ?: throw EntityNotFoundException("User not found or account is not approved yet")
 
         return if (request.method == VerificationMethod.PHONE) {
             val token = generateWhatsAppToken()
