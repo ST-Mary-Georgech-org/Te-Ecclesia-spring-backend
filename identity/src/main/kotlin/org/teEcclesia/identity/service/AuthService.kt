@@ -39,6 +39,7 @@ import java.net.URLEncoder
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import org.springframework.web.multipart.MultipartFile
+import org.teEcclesia.events.identity.UserApprovalRequestUpdatedEvent
 import org.teEcclesia.identity.api.dto.response.PriestResponse
 import org.teEcclesia.identity.api.dto.response.UserSummaryResponse
 import org.teEcclesia.identity.api.dto.response.VerifyTokenResponse
@@ -65,15 +66,9 @@ class AuthService(
     private val areaRepository: AreaRepository,
     private val userValidationHelper: UserValidationHelper,
     @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String,
-    @param:Value("\${whatsapp.business-number}") private val whatsappBusinessNumber: String,
     @param:Value("\${whatsapp.business-phone}") private val whatsappBusinessPhone: String,
-    @param:Value("\${whatsapp.app-secret:}") private val whatsappAppSecret: String,
-    @param:Value("\${whatsapp.webhook.verify-token}") private val expectedVerifyToken: String,
-    @param:Value("\${whatsapp.access-token:}") private val whatsappAccessToken: String,
     @param:Value("\${identity.resources.documents-directory}") private val documentsDirectory: String
 ) {
-
-    val logger: Logger = LoggerFactory.getLogger(javaClass)
 
     private fun addAreaIfNotExists(areaName: String) {
         val area = areaName.trim()
@@ -220,6 +215,7 @@ class AuthService(
         val khademProfile = request.khademProfile?.let { createKhademProfile(user, it) }
         val kahenProfile = request.kahenProfile?.let { createKahenProfile(user, it) }
 
+        val previousStatus = user.status
         val newStatus = if (user.isPhoneVerified) UserStatus.PENDING_APPROVAL else UserStatus.UNVERIFIED
 
         val savedUser = userRepository.save(user.copy(
@@ -232,6 +228,10 @@ class AuthService(
         ))
 
         request.parentProfile?.let { parentProfileService.createOrUpdateProfile(savedUser, it, finalIdentityDocumentUrl) }
+
+        if (previousStatus == UserStatus.PENDING_APPROVAL && newStatus == UserStatus.PENDING_APPROVAL) {
+            teEcclesiaEventPublisher.publish(UserApprovalRequestUpdatedEvent(savedUser.id, savedUser.fullName))
+        }
 
         val token = generateWhatsAppToken()
         val verificationToken = AccountVerification(
@@ -616,8 +616,8 @@ class AuthService(
             fatherWhatsapp = dto.fatherWhatsapp,
             motherPhone = dto.motherPhone,
             motherWhatsapp = dto.motherWhatsapp,
-            isFatherDeceased = dto.isFatherDeceased,
-            isMotherDeceased = dto.isMotherDeceased,
+            isFatherDeceased = dto.isFatherDeceased ?: false,
+            isMotherDeceased = dto.isMotherDeceased ?: false,
             identityDocumentImageUrl = finalIdentityDocumentUrl ?: dto.identityDocumentImageUrl ?: user.makhdoomProfile?.identityDocumentImageUrl
         )
     }
@@ -681,7 +681,7 @@ class AuthService(
     }
 
     fun forgotPassword(request: ForgotPasswordRequest): ForgotPasswordResponse? {
-        val user = findUserForPasswordReset(request.key, request.method) ?: return null
+        val user = findUserForPasswordReset(request.key, request.method) ?: throw EntityNotFoundException("User not found or account is not approved yet")
 
         return if (request.method == VerificationMethod.PHONE) {
             val token = generateWhatsAppToken()

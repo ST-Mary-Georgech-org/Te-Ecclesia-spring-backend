@@ -132,9 +132,13 @@ interface UserRepository : JpaRepository<User, UUID> {
     @Query("""
         SELECT u FROM User u 
         LEFT JOIN u.khademProfile kp 
-        WHERE u.role = 'ADMIN' OR (u.role = 'KHADEM' AND kp.canApproveRequests = true)
+        WHERE u.role = :adminRole OR (u.role = :khademRole AND kp.canApproveRequests = true)
     """)
-    fun findApprovers(pageable: Pageable): Page<User>
+    fun findApprovers(
+        @Param("adminRole") adminRole: UserRole = UserRole.ADMIN,
+        @Param("khademRole") khademRole: UserRole = UserRole.KHADEM,
+        pageable: Pageable
+    ): Page<User>
     
     fun deleteAllByIsPhoneVerifiedIsFalseAndCreatedAtBefore(date: Instant)
 }
