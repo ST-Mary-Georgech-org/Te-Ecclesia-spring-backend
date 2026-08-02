@@ -39,6 +39,7 @@ import java.net.URLEncoder
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import org.springframework.web.multipart.MultipartFile
+import org.teEcclesia.events.identity.UserApprovalRequestUpdatedEvent
 import org.teEcclesia.identity.api.dto.response.PriestResponse
 import org.teEcclesia.identity.api.dto.response.UserSummaryResponse
 import org.teEcclesia.identity.api.dto.response.VerifyTokenResponse
@@ -220,6 +221,7 @@ class AuthService(
         val khademProfile = request.khademProfile?.let { createKhademProfile(user, it) }
         val kahenProfile = request.kahenProfile?.let { createKahenProfile(user, it) }
 
+        val previousStatus = user.status
         val newStatus = if (user.isPhoneVerified) UserStatus.PENDING_APPROVAL else UserStatus.UNVERIFIED
 
         val savedUser = userRepository.save(user.copy(
@@ -232,6 +234,10 @@ class AuthService(
         ))
 
         request.parentProfile?.let { parentProfileService.createOrUpdateProfile(savedUser, it, finalIdentityDocumentUrl) }
+
+        if (previousStatus == UserStatus.PENDING_APPROVAL && newStatus == UserStatus.PENDING_APPROVAL) {
+            teEcclesiaEventPublisher.publish(UserApprovalRequestUpdatedEvent(savedUser.id, savedUser.fullName))
+        }
 
         val token = generateWhatsAppToken()
         val verificationToken = AccountVerification(

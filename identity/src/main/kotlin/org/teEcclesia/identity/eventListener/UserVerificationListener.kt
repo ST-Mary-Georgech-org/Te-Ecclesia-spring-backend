@@ -6,6 +6,7 @@ import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Component
 import org.springframework.data.domain.PageRequest
 import org.teEcclesia.events.identity.UserPendingApprovalEvent
+import org.teEcclesia.events.identity.UserApprovalRequestUpdatedEvent
 import org.teEcclesia.events.notifications.UserNotificationsEvent
 import org.teEcclesia.events.notifications.utils.NotificationMedium
 import org.teEcclesia.events.notifications.utils.NotificationType
@@ -30,7 +31,7 @@ class UserVerificationListener(
 
         while (hasMore) {
             val pageable = PageRequest.of(page, batchSize)
-            val approversPage = userRepository.findApprovers(pageable)
+            val approversPage = userRepository.findApprovers(pageable = pageable)
 
             if (approversPage.isEmpty) {
                 hasMore = false
@@ -42,6 +43,40 @@ class UserVerificationListener(
                     userId = approver.id,
                     subject = "New User Verification",
                     message = "User ${event.userName} has verified their phone and is awaiting your review.",
+                    type = NotificationType.SYSTEM,
+                    medium = NotificationMedium.PUSH
+                )
+            }
+
+            publisher.publish(UserNotificationsEvent(notifications))
+            
+            page++
+            hasMore = approversPage.hasNext()
+        }
+    }
+
+    @Async
+    @EventListener
+    fun handleUserApprovalRequestUpdated(event: UserApprovalRequestUpdatedEvent) {
+        log.info("Handling UserApprovalRequestUpdatedEvent for user: ${event.userId}")
+        val batchSize = 500
+        var page = 0
+        var hasMore = true
+
+        while (hasMore) {
+            val pageable = PageRequest.of(page, batchSize)
+            val approversPage = userRepository.findApprovers(pageable = pageable)
+
+            if (approversPage.isEmpty) {
+                hasMore = false
+                break
+            }
+
+            val notifications = approversPage.content.map { approver ->
+                NotificationDetails(
+                    userId = approver.id,
+                    subject = "Update to User Verification Request",
+                    message = "User ${event.userName} has updated their registration request details and is awaiting your review.",
                     type = NotificationType.SYSTEM,
                     medium = NotificationMedium.PUSH
                 )
