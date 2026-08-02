@@ -520,20 +520,23 @@ class AuthServiceIntegrationTest {
     }
 
     @Test
-    fun `forgotPassword returns null for non-approved users`() {
+    fun `forgotPassword throws EntityNotFoundException for non-approved users`() {
         val unapprovedUser = createUser(email = "unapproved-forgot@mail.com", isVerified = false)
         
         val emailRequest = ForgotPasswordRequest(key = unapprovedUser.email!!, method = VerificationMethod.EMAIL)
-        val emailResponse = authService.forgotPassword(emailRequest)
-        assertThat(emailResponse).isNull()
+        assertThrows<jakarta.persistence.EntityNotFoundException> {
+            authService.forgotPassword(emailRequest)
+        }
 
         val phoneRequest = ForgotPasswordRequest(key = unapprovedUser.phone, method = VerificationMethod.PHONE)
-        val phoneResponse = authService.forgotPassword(phoneRequest)
-        assertThat(phoneResponse).isNull()
+        assertThrows<jakarta.persistence.EntityNotFoundException> {
+            authService.forgotPassword(phoneRequest)
+        }
 
         val nationalIdRequest = ForgotPasswordRequest(key = unapprovedUser.nationalId, method = VerificationMethod.PHONE)
-        val nationalIdResponse = authService.forgotPassword(nationalIdRequest)
-        assertThat(nationalIdResponse).isNull()
+        assertThrows<jakarta.persistence.EntityNotFoundException> {
+            authService.forgotPassword(nationalIdRequest)
+        }
     }
 
     @Test

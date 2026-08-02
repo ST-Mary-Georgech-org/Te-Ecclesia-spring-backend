@@ -66,15 +66,9 @@ class AuthService(
     private val areaRepository: AreaRepository,
     private val userValidationHelper: UserValidationHelper,
     @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String,
-    @param:Value("\${whatsapp.business-number}") private val whatsappBusinessNumber: String,
     @param:Value("\${whatsapp.business-phone}") private val whatsappBusinessPhone: String,
-    @param:Value("\${whatsapp.app-secret:}") private val whatsappAppSecret: String,
-    @param:Value("\${whatsapp.webhook.verify-token}") private val expectedVerifyToken: String,
-    @param:Value("\${whatsapp.access-token:}") private val whatsappAccessToken: String,
     @param:Value("\${identity.resources.documents-directory}") private val documentsDirectory: String
 ) {
-
-    val logger: Logger = LoggerFactory.getLogger(javaClass)
 
     private fun addAreaIfNotExists(areaName: String) {
         val area = areaName.trim()
