@@ -19,7 +19,10 @@ interface UserRepository : JpaRepository<User, UUID> {
     fun existsByCodeLike(codePattern: String): Boolean
     fun findAllByCodeIn(codes: List<String>): List<User>
     fun findByNationalId(nationalId: String): User?
+    fun existsByNationalIdAndIdNotAndStatus(nationalId: String, id: UUID, status: UserStatus): Boolean
+    fun existsByNationalIdAndStatus(nationalId: String, status: UserStatus): Boolean
     fun findByNationalIdAndStatus(nationalId: String, status: UserStatus): User?
+    fun findFirstByNationalIdAndStatusNotIn(nationalId: String, statuses: Collection<UserStatus>): User?
     fun findByPhone(phone: String): User?
     fun findUsersByPhone(phone: String): List<User>
     fun findUsersByPhoneAndStatus(phone: String, status: UserStatus): List<User>

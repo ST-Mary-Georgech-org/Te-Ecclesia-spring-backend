@@ -161,19 +161,37 @@ class UserService(
 
         if (caller.role == UserRole.KHADEM) {
             val khademProfile = caller.khademProfile
-            val callerYear = khademProfile?.educationalYear
-            val callerStage = khademProfile?.educationalStage
+                ?: throw UnauthorizedException("Khadem profile not found")
 
-            if (callerYear != null) {
-                finalYearId = callerYear.id
-                finalStageId = callerStage?.id
-            } else if (callerStage != null) {
-                finalStageId = callerStage.id
-            } else {
-                throw UnauthorizedException("Khadem does not have an assigned stage or class")
+            val canApprove = khademProfile.canApproveRequests
+
+            if (status != UserStatus.APPROVED && !canApprove) {
+                throw UnauthorizedException("User does not have permission to view non-approved requests")
+            }
+
+            if (!canApprove) {
+                val allowedStageIds = mutableSetOf<Long>()
+                val allowedYearIds = mutableSetOf<Long>()
+
+                allowedStageIds.add(khademProfile.educationalStage.id)
+                khademProfile.educationalYear?.id?.let { allowedYearIds.add(it) }
+                allowedStageIds.addAll(khademProfile.responsibleStages.map { it.id })
+                allowedYearIds.addAll(khademProfile.responsibleYears.map { it.id })
+
+                if (finalStageId != null && !allowedStageIds.contains(finalStageId)) {
+                    throw UnauthorizedException("Khadem does not have permission to view this stage")
+                }
+                if (finalYearId != null && !allowedYearIds.contains(finalYearId)) {
+                    throw UnauthorizedException("Khadem does not have permission to view this year")
+                }
+
+                if (finalStageId == null && finalYearId == null) {
+                    finalYearId = khademProfile.educationalYear?.id
+                    finalStageId = khademProfile.educationalStage.id
+                }
             }
         } else if (caller.role != UserRole.ADMIN) {
-            throw UnauthorizedException("Only Admin or Khadem with stage/class can view users")
+            throw UnauthorizedException("Only Admin or Khadem can view users")
         }
 
         return userRepository.findByStatusAndFilters(
@@ -187,152 +205,51 @@ class UserService(
     }
 
     @Transactional
-    fun approveUser(userId: UUID, request: ApproveUserRequest?) {
+    fun approveUser(
+        userId: UUID, 
+        request: ApproveUserRequest?,
+        image: MultipartFile? = null,
+        identityDocument: MultipartFile? = null,
+        ordinationCertificate: MultipartFile? = null
+    ) {
         var user = findById(userId)
         
-        request?.updateProfileData?.let { updateData ->
-            userValidationHelper.validateUserUniqueness(
-                phone = updateData.phone,
-                nationalId = updateData.nationalId,
-                email = updateData.email,
-                currentUserId = user.id
-            )
-            val formattedPhone = formatPhone(updateData.phone)
-
-
-            var confessionPriest: User? = user.confessionPriest
-            if (updateData.confessionPriestId != null && updateData.confessionPriestId != user.confessionPriest?.id) {
-                confessionPriest = findById(updateData.confessionPriestId)
-            }
-
-            user = user.copy(
-                firstName = updateData.firstName,
-                secondName = updateData.secondName,
-                thirdName = updateData.thirdName,
-                lastName = updateData.lastName,
-                displayName = updateData.displayName,
-                nationalId = updateData.nationalId,
-                phone = formattedPhone,
-                homePhone = formatHomePhone(updateData.homePhone),
-                isPhoneVerified = if (formattedPhone != user.phone) false else user.isPhoneVerified,
-                email = updateData.email,
-                imageUrl = updateData.imageUrl ?: user.imageUrl,
-                job = updateData.job,
-                buildingNo = updateData.buildingNo,
-                street = updateData.street,
-                streetBranch = updateData.streetBranch,
-                area = updateData.area,
-                floor = updateData.floor,
-                apartment = updateData.apartment,
-                specialMark = updateData.specialMark,
-                confessionPriest = confessionPriest,
-                externalConfessionPriestName = updateData.externalConfessionPriestName,
-                externalConfessionChurch = updateData.externalConfessionChurch,
-                externalConfessionPhone = updateData.externalConfessionPhone
-            )
-
-            if (user.role == UserRole.MAKHDOOM && updateData.makhdoomProfile != null) {
-                val educationalStage = educationalStageRepository.findById(updateData.makhdoomProfile.educationalStageId).orElseThrow {
-                    IllegalArgumentException("Educational stage not found")
-                }
-                if (educationalStage.isKhademOnly) {
-                    throw IllegalArgumentException("Educational stage is reserved for Khadem role")
-                }
-                val educationalYear = updateData.makhdoomProfile.educationalYearId?.let {
-                    educationalYearRepository.findById(it).orElseThrow {
-                        IllegalArgumentException("Educational year not found")
-                    }
-                }
-                val currentProfile = user.makhdoomProfile
-                val updatedMakhdoomProfile = currentProfile?.copy(
-                    shamamsaStudyStatus = updateData.makhdoomProfile.shamamsaStudyStatus,
-                    educationalStage = educationalStage,
-                    educationalYear = educationalYear,
-                    fatherPhone = updateData.makhdoomProfile.fatherPhone,
-                    fatherWhatsapp = updateData.makhdoomProfile.fatherWhatsapp,
-                    motherPhone = updateData.makhdoomProfile.motherPhone,
-                    motherWhatsapp = updateData.makhdoomProfile.motherWhatsapp,
-                    isFatherDeceased = updateData.makhdoomProfile.isFatherDeceased ?: false,
-                    isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased ?: false,
-                    identityDocumentImageUrl = updateData.makhdoomProfile.identityDocumentImageUrl ?: currentProfile.identityDocumentImageUrl
-                ) ?: MakhdoomProfile(
-                    user = user,
-                    shamamsaStudyStatus = updateData.makhdoomProfile.shamamsaStudyStatus,
-                    educationalStage = educationalStage,
-                    educationalYear = educationalYear,
-                    fatherPhone = updateData.makhdoomProfile.fatherPhone,
-                    fatherWhatsapp = updateData.makhdoomProfile.fatherWhatsapp,
-                    motherPhone = updateData.makhdoomProfile.motherPhone,
-                    motherWhatsapp = updateData.makhdoomProfile.motherWhatsapp,
-                    isFatherDeceased = updateData.makhdoomProfile.isFatherDeceased ?: false,
-                    isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased ?: false,
-                    identityDocumentImageUrl = updateData.makhdoomProfile.identityDocumentImageUrl
-                )
-                user = user.copy(makhdoomProfile = updatedMakhdoomProfile)
-            }
-
-            if (user.role == UserRole.KHADEM) {
-                updateData.khademProfile?.let { khademDto ->
-                    val educationalStage = educationalStageRepository.findById(khademDto.educationalStageId).orElseThrow {
-                        IllegalArgumentException("Educational stage not found")
-                    }
-                    val educationalYear = khademDto.educationalYearId?.let {
-                        educationalYearRepository.findById(it).orElseThrow {
-                            IllegalArgumentException("Educational year not found")
-                        }
-                    }
-                    val respStages = khademDto.responsibleStageIds?.takeIf { it.isNotEmpty() }?.let {
-                        educationalStageRepository.findAllById(it)
-                    } ?: emptyList()
-                    val respYears = khademDto.responsibleYearIds?.takeIf { it.isNotEmpty() }?.let {
-                        educationalYearRepository.findAllById(it)
-                    } ?: emptyList()
-                    val currentKhadem = user.khademProfile
-                    val updatedKhadem = currentKhadem?.copy(
-                        educationalStage = educationalStage,
-                        educationalYear = educationalYear,
-                        canApproveRequests = khademDto.canApproveRequests ?: false,
-                        responsibleStages = respStages.toMutableList(),
-                        responsibleYears = respYears.toMutableList()
-                    ) ?: KhademProfile(
-                        user = user,
-                        educationalStage = educationalStage,
-                        educationalYear = educationalYear,
-                        canApproveRequests = khademDto.canApproveRequests ?: false,
-                        responsibleStages = respStages.toMutableList(),
-                        responsibleYears = respYears.toMutableList()
-                    )
-                    user = user.copy(khademProfile = updatedKhadem)
-                }
-                updateData.adminKhademProfile?.let { adminKhademDto ->
-                    val responsibleStages = adminKhademDto.responsibleStageIds?.takeIf { it.isNotEmpty() }?.let {
-                        educationalStageRepository.findAllById(it)
-                    } ?: emptyList()
-                    val responsibleYears = adminKhademDto.responsibleYearIds?.takeIf { it.isNotEmpty() }?.let {
-                        educationalYearRepository.findAllById(it)
-                    } ?: emptyList()
-                    val currentKhadem = user.khademProfile
-                    if (currentKhadem != null) {
-                        val updatedKhadem = currentKhadem.copy(
-                            canApproveRequests = adminKhademDto.canApproveRequests ?: false,
-                            responsibleStages = responsibleStages.toMutableList(),
-                            responsibleYears = responsibleYears.toMutableList()
-                        )
-                        user = user.copy(khademProfile = updatedKhadem)
-                    }
-                }
-            }
+        if (user.status == UserStatus.APPROVED) {
+            throw RuntimeException("User is already approved")
         }
-
+        
         if (user.isEmailVerified) {
             userValidationHelper.validateEmail(user.email, currentUserId = user.id)
         }
+        
+        if (request?.updateProfileData != null) {
+            user = updateUserData(user, request.updateProfileData)
+        }
+        
+        val finalImageUrl = if (image != null) {
+            imageStorageService.uploadImage(image, user.id.toString(), profileImageDirectory)
+        } else user.imageUrl
+        
+        val finalDocumentUrl = if (identityDocument != null) {
+            imageStorageService.uploadImage(identityDocument, "doc_${user.id}", documentsDirectory)
+        } else user.makhdoomProfile?.identityDocumentImageUrl
+        
+        val finalCertificateUrl = if (ordinationCertificate != null) {
+            imageStorageService.uploadImage(ordinationCertificate, "cert_${user.id}", documentsDirectory)
+        } else user.ordinationProfile?.certificateImageUrl
+        
+        user = user.copy(
+            imageUrl = finalImageUrl,
+            makhdoomProfile = user.makhdoomProfile?.copy(identityDocumentImageUrl = finalDocumentUrl),
+            ordinationProfile = user.ordinationProfile?.copy(certificateImageUrl = finalCertificateUrl)
+        )
 
         val code = request?.customCode ?: user.code ?: userCodeGenerator.generateCode(user)
         
         val updatedUser = user.copy(
             status = UserStatus.APPROVED,
             code = code,
+            isPhoneVerified = true,
             actionTakenAt = Instant.now()
         )
         val savedUser = userRepository.save(updatedUser)
@@ -359,6 +276,217 @@ class UserService(
             )
         )
     }
+
+    @Transactional
+    fun updateUserByAdminOrKhadem(
+        callerId: UUID, 
+        targetUserId: UUID, 
+        request: ApproveUserRequest,
+        image: MultipartFile? = null,
+        identityDocument: MultipartFile? = null,
+        ordinationCertificate: MultipartFile? = null
+    ) {
+        val caller = findById(callerId)
+        val target = findById(targetUserId)
+        
+        if (target.isEmailVerified) {
+            userValidationHelper.validateEmail(target.email, currentUserId = target.id)
+        }
+        
+        var user = target
+        if (request.updateProfileData != null) {
+            user = updateUserData(user, request.updateProfileData)
+            
+            if (!request.updateProfileData.password.isNullOrBlank()) {
+                user = user.copy(passwordHash = passwordEncoder.encode(request.updateProfileData.password)!!)
+            }
+            
+            if (request.updateProfileData.role != null && request.updateProfileData.role != target.role) {
+                if (caller.role != UserRole.ADMIN) {
+                    throw UnauthorizedException("Only admins can change user roles")
+                }
+                user = user.copy(role = request.updateProfileData.role)
+            }
+        }
+        
+        if (caller.role != UserRole.ADMIN) {
+            if (!isResponsibleFor(caller, target)) {
+                throw UnauthorizedException("User is not authorized to edit this profile")
+            }
+        }
+        
+        val finalImageUrl = if (image != null) {
+            imageStorageService.uploadImage(image, user.id.toString(), profileImageDirectory)
+        } else user.imageUrl
+        
+        val finalDocumentUrl = if (identityDocument != null) {
+            imageStorageService.uploadImage(identityDocument, "doc_${user.id}", documentsDirectory)
+        } else user.makhdoomProfile?.identityDocumentImageUrl
+        
+        val finalCertificateUrl = if (ordinationCertificate != null) {
+            imageStorageService.uploadImage(ordinationCertificate, "cert_${user.id}", documentsDirectory)
+        } else user.ordinationProfile?.certificateImageUrl
+        
+        user = user.copy(
+            imageUrl = finalImageUrl,
+            makhdoomProfile = user.makhdoomProfile?.copy(identityDocumentImageUrl = finalDocumentUrl),
+            ordinationProfile = user.ordinationProfile?.copy(certificateImageUrl = finalCertificateUrl)
+        )
+        
+        val code = request.customCode ?: user.code ?: userCodeGenerator.generateCode(user)
+        
+        val updatedUser = user.copy(
+            code = code,
+            actionTakenAt = Instant.now()
+        )
+        
+        val savedUser = userRepository.save(updatedUser)
+        
+        savedUser.parentProfile?.let {
+            parentProfileService.syncPartner(it)
+        }
+        
+        addAreaIfNotExists(savedUser.area)
+        
+        eventPublisher.publish(savedUser.toUserUpdatedEvent())
+    }
+
+    private fun updateUserData(originalUser: User, updateData: RegisterRequest): User {
+        var user = originalUser
+        userValidationHelper.validateUserUniqueness(
+            phone = updateData.phone,
+            nationalId = updateData.nationalId,
+            email = updateData.email,
+            currentUserId = user.id
+        )
+        val formattedPhone = formatPhone(updateData.phone)
+
+        var confessionPriest: User? = user.confessionPriest
+        if (updateData.confessionPriestId != null && updateData.confessionPriestId != user.confessionPriest?.id) {
+            confessionPriest = findById(updateData.confessionPriestId)
+        }
+
+        user = user.copy(
+            firstName = updateData.firstName,
+            secondName = updateData.secondName,
+            thirdName = updateData.thirdName,
+            lastName = updateData.lastName,
+            displayName = updateData.displayName,
+            nationalId = updateData.nationalId,
+            phone = formattedPhone,
+            homePhone = formatHomePhone(updateData.homePhone),
+            isPhoneVerified = if (user.status == UserStatus.APPROVED) true else if (formattedPhone != user.phone) false else user.isPhoneVerified,
+            isEmailVerified = if (updateData.email != user.email) false else user.isEmailVerified,
+            email = updateData.email,
+            imageUrl = updateData.imageUrl ?: user.imageUrl,
+            job = updateData.job,
+            buildingNo = updateData.buildingNo,
+            street = updateData.street,
+            streetBranch = updateData.streetBranch,
+            area = updateData.area,
+            floor = updateData.floor,
+            apartment = updateData.apartment,
+            specialMark = updateData.specialMark,
+            confessionPriest = confessionPriest,
+            externalConfessionPriestName = updateData.externalConfessionPriestName,
+            externalConfessionChurch = updateData.externalConfessionChurch,
+            externalConfessionPhone = updateData.externalConfessionPhone
+        )
+
+        if (user.role == UserRole.MAKHDOOM && updateData.makhdoomProfile != null) {
+            val educationalStage = educationalStageRepository.findById(updateData.makhdoomProfile.educationalStageId).orElseThrow {
+                IllegalArgumentException("Educational stage not found")
+            }
+            if (educationalStage.isKhademOnly) {
+                throw IllegalArgumentException("Educational stage is reserved for Khadem role")
+            }
+            val educationalYear = updateData.makhdoomProfile.educationalYearId?.let {
+                educationalYearRepository.findById(it).orElseThrow {
+                    IllegalArgumentException("Educational year not found")
+                }
+            }
+            val currentProfile = user.makhdoomProfile
+            val updatedMakhdoomProfile = currentProfile?.copy(
+                shamamsaStudyStatus = updateData.makhdoomProfile.shamamsaStudyStatus,
+                educationalStage = educationalStage,
+                educationalYear = educationalYear,
+                fatherPhone = updateData.makhdoomProfile.fatherPhone,
+                fatherWhatsapp = updateData.makhdoomProfile.fatherWhatsapp,
+                motherPhone = updateData.makhdoomProfile.motherPhone,
+                motherWhatsapp = updateData.makhdoomProfile.motherWhatsapp,
+                isFatherDeceased = updateData.makhdoomProfile.isFatherDeceased ?: false,
+                isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased ?: false,
+                identityDocumentImageUrl = updateData.makhdoomProfile.identityDocumentImageUrl ?: currentProfile.identityDocumentImageUrl
+            ) ?: MakhdoomProfile(
+                user = user,
+                shamamsaStudyStatus = updateData.makhdoomProfile.shamamsaStudyStatus,
+                educationalStage = educationalStage,
+                educationalYear = educationalYear,
+                fatherPhone = updateData.makhdoomProfile.fatherPhone,
+                fatherWhatsapp = updateData.makhdoomProfile.fatherWhatsapp,
+                motherPhone = updateData.makhdoomProfile.motherPhone,
+                motherWhatsapp = updateData.makhdoomProfile.motherWhatsapp,
+                isFatherDeceased = updateData.makhdoomProfile.isFatherDeceased ?: false,
+                isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased ?: false,
+                identityDocumentImageUrl = updateData.makhdoomProfile.identityDocumentImageUrl
+            )
+            user = user.copy(makhdoomProfile = updatedMakhdoomProfile)
+        }
+
+        if (user.role == UserRole.KHADEM) {
+            updateData.khademProfile?.let { khademDto ->
+                val educationalStage = educationalStageRepository.findById(khademDto.educationalStageId).orElseThrow {
+                    IllegalArgumentException("Educational stage not found")
+                }
+                val educationalYear = khademDto.educationalYearId?.let {
+                    educationalYearRepository.findById(it).orElseThrow {
+                        IllegalArgumentException("Educational year not found")
+                    }
+                }
+                val respStages = khademDto.responsibleStageIds?.takeIf { it.isNotEmpty() }?.let {
+                    educationalStageRepository.findAllById(it)
+                } ?: emptyList()
+                val respYears = khademDto.responsibleYearIds?.takeIf { it.isNotEmpty() }?.let {
+                    educationalYearRepository.findAllById(it)
+                } ?: emptyList()
+                val currentKhadem = user.khademProfile
+                val updatedKhadem = currentKhadem?.copy(
+                    educationalStage = educationalStage,
+                    educationalYear = educationalYear,
+                    canApproveRequests = khademDto.canApproveRequests ?: false,
+                    responsibleStages = respStages.toMutableList(),
+                    responsibleYears = respYears.toMutableList()
+                ) ?: KhademProfile(
+                    user = user,
+                    educationalStage = educationalStage,
+                    educationalYear = educationalYear,
+                    canApproveRequests = khademDto.canApproveRequests ?: false,
+                    responsibleStages = respStages.toMutableList(),
+                    responsibleYears = respYears.toMutableList()
+                )
+                user = user.copy(khademProfile = updatedKhadem)
+            }
+            updateData.adminKhademProfile?.let { adminKhademDto ->
+                val responsibleStages = adminKhademDto.responsibleStageIds?.takeIf { it.isNotEmpty() }?.let {
+                    educationalStageRepository.findAllById(it)
+                } ?: emptyList()
+                val responsibleYears = adminKhademDto.responsibleYearIds?.takeIf { it.isNotEmpty() }?.let {
+                    educationalYearRepository.findAllById(it)
+                } ?: emptyList()
+                val currentKhadem = user.khademProfile
+                if (currentKhadem != null) {
+                    val updatedKhadem = currentKhadem.copy(
+                        canApproveRequests = adminKhademDto.canApproveRequests ?: false,
+                        responsibleStages = responsibleStages.toMutableList(),
+                        responsibleYears = responsibleYears.toMutableList()
+                    )
+                    user = user.copy(khademProfile = updatedKhadem)
+                }
+            }
+        }
+        return user
+    }
+
 
     @Transactional
     fun rejectUser(userId: UUID, reason: String) {

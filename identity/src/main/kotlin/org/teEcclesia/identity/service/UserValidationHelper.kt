@@ -25,15 +25,14 @@ class UserValidationHelper(
     }
 
     fun validateNationalId(nationalId: String, currentUserId: UUID? = null, isRegistration: Boolean = false) {
-        val existingByNationalId = userRepository.findByNationalId(nationalId)
-        if (existingByNationalId != null && existingByNationalId.id != currentUserId) {
-            if (isRegistration) {
-                if (existingByNationalId.status == UserStatus.APPROVED) {
-                    throw UserAlreadyExistsException("National ID is already registered.")
-                }
-            } else {
-                throw UserAlreadyExistsException("National ID is already registered.")
-            }
+        val exists = if (currentUserId != null) {
+            userRepository.existsByNationalIdAndIdNotAndStatus(nationalId, currentUserId, UserStatus.APPROVED)
+        } else {
+            userRepository.existsByNationalIdAndStatus(nationalId, UserStatus.APPROVED)
+        }
+        
+        if (exists) {
+            throw UserAlreadyExistsException("National ID is already registered.")
         }
     }
 
