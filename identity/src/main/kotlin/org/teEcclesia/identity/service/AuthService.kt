@@ -333,6 +333,7 @@ class AuthService(
 
     private fun updateVerifiedUser(tokenEntity: AccountVerification): User {
         val user = tokenEntity.user
+        val previousStatus = user.status
         val verifiedUser = when (tokenEntity.purpose) {
             VerificationPurpose.PHONE_CHANGE -> {
                 user.copy(
@@ -352,8 +353,10 @@ class AuthService(
         val savedUser = userRepository.save(verifiedUser)
         teEcclesiaEventPublisher.publish(savedUser.toUserUpdatedEvent())
         
-        if (tokenEntity.purpose != VerificationPurpose.PHONE_CHANGE && user.status == UserStatus.UNVERIFIED) {
-            teEcclesiaEventPublisher.publish(UserPendingApprovalEvent(savedUser.id, savedUser.fullName))
+        if (tokenEntity.purpose != VerificationPurpose.PHONE_CHANGE) {
+            if (previousStatus == UserStatus.UNVERIFIED && savedUser.status == UserStatus.PENDING_APPROVAL) {
+                teEcclesiaEventPublisher.publish(UserPendingApprovalEvent(savedUser.id, savedUser.fullName))
+            }
         }
         return savedUser
     }
