@@ -119,6 +119,7 @@ class IdentityTestApplication {
         passwordEncoder: PasswordEncoder,
         educationalStageRepository: EducationalStageRepository,
         educationalYearRepository: EducationalYearRepository,
+        rankRepository: RankRepository,
         @Value("\${cdn.endpoint:}") cdnEndpoint: String,
         authService: AuthService,
         userValidationHelper: UserValidationHelper
@@ -133,6 +134,7 @@ class IdentityTestApplication {
             educationalStageRepository = educationalStageRepository,
             educationalYearRepository = educationalYearRepository,
             areaRepository = mockk(relaxed = true),
+            rankRepository = rankRepository,
             cdnEndpoint = cdnEndpoint,
             parentProfileService = parentProfileService(),
             documentsDirectory = "test-docs",

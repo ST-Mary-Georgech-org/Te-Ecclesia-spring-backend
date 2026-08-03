@@ -32,9 +32,12 @@ import org.teEcclesia.identity.utils.extractGender
 import org.teEcclesia.identity.api.dto.request.toEntity
 import org.teEcclesia.identity.entity.MakhdoomProfile
 import org.teEcclesia.identity.entity.KhademProfile
+import org.teEcclesia.identity.entity.OrdinationProfile
+import org.teEcclesia.identity.entity.KahenProfile
 import org.teEcclesia.identity.repository.EducationalStageRepository
 import org.teEcclesia.identity.repository.EducationalYearRepository
 import org.teEcclesia.identity.repository.AreaRepository
+import org.teEcclesia.identity.repository.RankRepository
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.teEcclesia.identity.api.dto.request.ParentProfileRequest
 import org.teEcclesia.identity.entity.lookups.Area
@@ -53,6 +56,7 @@ class UserService(
     private val educationalStageRepository: EducationalStageRepository,
     private val educationalYearRepository: EducationalYearRepository,
     private val areaRepository: AreaRepository,
+    private val rankRepository: RankRepository,
     private val authService: AuthService,
     private val userValidationHelper: UserValidationHelper,
     @param:Value("\${storage.teEcclesia.cdn-endpoint}") private val cdnEndpoint: String,
@@ -362,8 +366,12 @@ class UserService(
         val formattedPhone = formatPhone(updateData.phone)
 
         var confessionPriest: User? = user.confessionPriest
-        if (updateData.confessionPriestId != null && updateData.confessionPriestId != user.confessionPriest?.id) {
-            confessionPriest = findById(updateData.confessionPriestId)
+        if (updateData.confessionPriestId != null) {
+            if (updateData.confessionPriestId != user.confessionPriest?.id) {
+                confessionPriest = findById(updateData.confessionPriestId)
+            }
+        } else if (updateData.externalConfessionPriestName != null) {
+            confessionPriest = null
         }
 
         user = user.copy(
@@ -387,11 +395,36 @@ class UserService(
             floor = updateData.floor,
             apartment = updateData.apartment,
             specialMark = updateData.specialMark,
+            role = updateData.role ?: user.role,
             confessionPriest = confessionPriest,
             externalConfessionPriestName = updateData.externalConfessionPriestName,
             externalConfessionChurch = updateData.externalConfessionChurch,
             externalConfessionPhone = updateData.externalConfessionPhone
         )
+
+        if (updateData.ordinationProfile != null) {
+            val rank = rankRepository.findById(updateData.ordinationProfile.rankId).orElseThrow {
+                IllegalArgumentException("Rank not found")
+            }
+            val currentOrdination = user.ordinationProfile
+            val updatedOrdination = currentOrdination?.copy(
+                rank = rank,
+                isOrdinationInAnotherChurch = updateData.ordinationProfile.isOrdinationInAnotherChurch ?: false,
+                ordinationYear = updateData.ordinationProfile.ordinationYear,
+                bishopName = updateData.ordinationProfile.bishopName,
+                ordinationPlace = updateData.ordinationProfile.ordinationPlace,
+                certificateImageUrl = updateData.ordinationProfile.certificateImageUrl ?: currentOrdination.certificateImageUrl
+            ) ?: OrdinationProfile(
+                user = user,
+                rank = rank,
+                isOrdinationInAnotherChurch = updateData.ordinationProfile.isOrdinationInAnotherChurch ?: false,
+                ordinationYear = updateData.ordinationProfile.ordinationYear,
+                bishopName = updateData.ordinationProfile.bishopName,
+                ordinationPlace = updateData.ordinationProfile.ordinationPlace,
+                certificateImageUrl = updateData.ordinationProfile.certificateImageUrl
+            )
+            user = user.copy(ordinationProfile = updatedOrdination)
+        }
 
         if (user.role == UserRole.MAKHDOOM && updateData.makhdoomProfile != null) {
             val educationalStage = educationalStageRepository.findById(updateData.makhdoomProfile.educationalStageId).orElseThrow {
@@ -484,6 +517,28 @@ class UserService(
                 }
             }
         }
+
+        if (user.role == UserRole.PARENT && updateData.parentProfile != null) {
+            val updatedParent = parentProfileService.createOrUpdateProfile(user, updateData.parentProfile)
+            user = user.copy(parentProfile = updatedParent)
+        }
+
+        if (user.role == UserRole.KAHEN && updateData.kahenProfile != null) {
+            val stages = if (updateData.kahenProfile.educationalStageIds.isNotEmpty()) {
+                educationalStageRepository.findAllById(updateData.kahenProfile.educationalStageIds)
+            } else emptyList()
+            val currentKahen = user.kahenProfile
+            val updatedKahen = currentKahen?.copy(
+                educationalStages = stages.toMutableList(),
+                ordinationDate = updateData.kahenProfile.ordinationDate
+            ) ?: KahenProfile(
+                user = user,
+                educationalStages = stages.toMutableList(),
+                ordinationDate = updateData.kahenProfile.ordinationDate
+            )
+            user = user.copy(kahenProfile = updatedKahen)
+        }
+
         return user
     }
 
