@@ -18,6 +18,8 @@ import org.teEcclesia.identity.exception.UnauthorizedException
 import org.springframework.http.MediaType
 import org.springframework.web.multipart.MultipartFile
 import jakarta.validation.Valid
+import org.apache.logging.log4j.LogManager.getLogger
+import org.apache.logging.log4j.Logger
 import java.util.UUID
 
 @RestController
@@ -26,8 +28,11 @@ class UserController(
     private val userService: UserService
 ) {
 
+    val logger: Logger = getLogger(UserController::class.java)
+
     private fun authorizeAdminOrKhadem(callerId: UUID, requireApprovePermission: Boolean = false) {
         val caller = userService.findProfileById(callerId)
+        logger.info("Authorizing user with ID: $callerId, Role: ${caller.role}, Require Approve Permission: $requireApprovePermission")
         if (caller.role == UserRole.ADMIN) return
         
         if (caller.role == UserRole.KHADEM) {
@@ -66,25 +71,30 @@ class UserController(
     }
 
 
-    @PostMapping("/{userId}/approve")
+    @PostMapping("/{userId}/approve", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     fun approveUser(
         @AuthenticationPrincipal callerId: UUID, 
         @PathVariable userId: UUID,
-        @RequestBody(required = false) request: ApproveUserRequest?
+        @RequestPart("request", required = false) request: ApproveUserRequest?,
+        @RequestPart("image", required = false) image: MultipartFile?,
+        @RequestPart("identityDocument", required = false) identityDocument: MultipartFile?,
+        @RequestPart("ordinationCertificate", required = false) ordinationCertificate: MultipartFile?
     ): ResponseEntity<Void> {
         authorizeAdminOrKhadem(callerId, requireApprovePermission = true)
-        userService.approveUser(userId, request)
+        userService.approveUser(userId, request, image, identityDocument, ordinationCertificate)
         return ResponseEntity.ok().build()
     }
 
-    @PatchMapping("/{userId}")
-    fun updateMakhdoomProfile(
+    @PatchMapping("/{userId}", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun updateUser(
         @AuthenticationPrincipal callerId: UUID,
         @PathVariable userId: UUID,
-        @Valid @RequestBody request: RegisterRequest
+        @RequestPart("request") @Valid request: ApproveUserRequest,
+        @RequestPart("image", required = false) image: MultipartFile?,
+        @RequestPart("identityDocument", required = false) identityDocument: MultipartFile?,
+        @RequestPart("ordinationCertificate", required = false) ordinationCertificate: MultipartFile?
     ): ResponseEntity<Void> {
-        authorizeAdminOrKhadem(callerId)
-        userService.updateMakhdoomProfileByKhadem(callerId, userId, request)
+        userService.updateUserByAdminOrKhadem(callerId, userId, request, image, identityDocument, ordinationCertificate)
         return ResponseEntity.ok().build()
     }
 

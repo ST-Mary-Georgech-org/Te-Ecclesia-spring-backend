@@ -87,9 +87,13 @@ class AuthService(
         identityDocument: MultipartFile? = null
     ): TokenResponse {
         val formattedPhone = formatPhone(request.phone)
-        var existingUser: User? = userRepository.findByNationalId(request.nationalId)
+        
+        var existingUser = userRepository.findFirstByNationalIdAndStatusNotIn(
+            request.nationalId,
+            listOf(UserStatus.REJECTED, UserStatus.BANNED)
+        )
 
-        if (existingUser != null && existingUser.status == UserStatus.APPROVED) {
+        if (existingUser?.status == UserStatus.APPROVED) {
             throw UserAlreadyExistsException("National ID is already registered.")
         }
 
@@ -126,8 +130,14 @@ class AuthService(
             request.imageUrl ?: existingUser?.imageUrl
         }
 
+        val passwordToEncode = if (request.password.isNullOrBlank()) {
+            generateRandomPassword()
+        } else {
+            request.password
+        }
+
         val userToSave = request.toEntity(
-            hashedPassword = passwordEncoder.encode(request.password)!!,
+            hashedPassword = passwordEncoder.encode(passwordToEncode)!!,
             confessionPriest = confessionPriest,
             id = userId,
             imageUrl = finalImageUrl
@@ -894,5 +904,26 @@ class AuthService(
             name = user.displayName,
             imageUrl = fullImageUrl
         )
+    }
+
+    private fun generateRandomPassword(): String {
+        val uppercase = ('A'..'Z').toList()
+        val lowercase = ('a'..'z').toList()
+        val digits = ('0'..'9').toList()
+        val specials = listOf('!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '_', '+', '=')
+        val allChars = uppercase + lowercase + digits + specials
+
+        val password = mutableListOf<Char>()
+        password.add(uppercase.random())
+        password.add(lowercase.random())
+        password.add(digits.random())
+        password.add(specials.random())
+
+        repeat(4) {
+            password.add(allChars.random())
+        }
+
+        password.shuffle()
+        return password.joinToString("")
     }
 }
