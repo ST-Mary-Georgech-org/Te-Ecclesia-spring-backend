@@ -2,7 +2,8 @@ package org.teEcclesia.notifications.entity
 
 enum class NotificationType {
     ALERT,
-    SYSTEM;
+    SYSTEM,
+    REVIEW;
 
     companion object {
         fun fromStringOrDefault(type: String): NotificationType {

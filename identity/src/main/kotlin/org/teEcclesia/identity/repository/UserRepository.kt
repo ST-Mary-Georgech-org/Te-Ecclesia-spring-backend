@@ -121,7 +121,7 @@ interface UserRepository : JpaRepository<User, UUID> {
     @Query("""
         SELECT u FROM User u 
         WHERE u.role = :role AND u.status = :status
-        AND (u.email = :query OR u.nationalId = :query OR u.code = :query OR u.phone = :query)
+        AND ((u.email = :query AND u.isEmailVerified = true) OR u.nationalId = :query OR u.code = :query OR u.phone = :query)
     """)
     fun findByRoleAndIdentifier(
         @Param("role") role: UserRole,
