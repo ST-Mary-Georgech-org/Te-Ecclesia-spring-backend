@@ -43,8 +43,9 @@ class UserVerificationListener(
                     userId = approver.id,
                     subject = "New User Verification",
                     message = "User ${event.userName} has verified their phone and is awaiting your review.",
-                    type = NotificationType.SYSTEM,
-                    medium = NotificationMedium.PUSH
+                    type = NotificationType.REVIEW,
+                    medium = NotificationMedium.PUSH,
+                    dataPayload = mapOf("id" to event.userId.toString())
                 )
             }
 
@@ -77,8 +78,9 @@ class UserVerificationListener(
                     userId = approver.id,
                     subject = "Update to User Verification Request",
                     message = "User ${event.userName} has updated their registration request details and is awaiting your review.",
-                    type = NotificationType.SYSTEM,
-                    medium = NotificationMedium.PUSH
+                    type = NotificationType.REVIEW,
+                    medium = NotificationMedium.PUSH,
+                    dataPayload = mapOf("id" to event.userId.toString())
                 )
             }
 
