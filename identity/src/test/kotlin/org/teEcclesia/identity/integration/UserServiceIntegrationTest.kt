@@ -23,6 +23,9 @@ import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.exception.UserNotFoundException
 import org.teEcclesia.identity.repository.*
+import org.teEcclesia.identity.api.dto.request.ApproveUserRequest
+import org.teEcclesia.identity.api.dto.request.OrdinationProfileRequest
+import org.teEcclesia.identity.entity.lookups.Rank
 import org.teEcclesia.identity.service.UserService
 import org.teEcclesia.storage.service.ImageStorageService
 import org.springframework.beans.factory.annotation.Autowired
@@ -57,6 +60,9 @@ class UserServiceIntegrationTest {
 
     @Autowired
     private lateinit var educationalYearRepository: EducationalYearRepository
+
+    @Autowired
+    private lateinit var rankRepository: RankRepository
 
     @Autowired
     private lateinit var imageStorageService: ImageStorageService
@@ -365,6 +371,54 @@ class UserServiceIntegrationTest {
 
         val created = userService.createMakhdoomDirectly(admin.id, request)
         assertThat(created.email).isEqualTo("unverified-shared-email@mail.com")
+    }
+
+    @Test
+    fun `approveUser updates user profile data, role, and ordination profile correctly`() {
+        val user = createUser(email = "unapproved-ordination-test@mail.com")
+        userRepository.save(user.copy(status = UserStatus.PENDING_APPROVAL, role = UserRole.GUEST))
+
+        val rank = rankRepository.save(Rank(nameAr = "Epsaltos", nameEn = "Epsaltos", codeLetter = 'A'))
+
+        val updateRequest = RegisterRequest(
+            firstName = "UpdatedFirst",
+            secondName = user.secondName,
+            thirdName = user.thirdName,
+            lastName = user.lastName,
+            displayName = "Updated Display Name",
+            nationalId = user.nationalId,
+            phone = user.phone,
+            buildingNo = user.buildingNo,
+            street = user.street,
+            area = user.area,
+            floor = user.floor,
+            specialMark = user.specialMark,
+            role = UserRole.MAKHDOOM,
+            ordinationProfile = OrdinationProfileRequest(
+                rankId = rank.id,
+                isOrdinationInAnotherChurch = true,
+                ordinationYear = 2022,
+                bishopName = "Anba Thomas",
+                ordinationPlace = "St. Mark Cathedral"
+            )
+        )
+
+        val approveRequest = ApproveUserRequest(
+            customCode = "A24991234",
+            updateProfileData = updateRequest
+        )
+
+        userService.approveUser(user.id, approveRequest)
+
+        val approvedUser = userRepository.findById(user.id).get()
+        assertThat(approvedUser.status).isEqualTo(UserStatus.APPROVED)
+        assertThat(approvedUser.firstName).isEqualTo("UpdatedFirst")
+        assertThat(approvedUser.role).isEqualTo(UserRole.MAKHDOOM)
+        assertThat(approvedUser.code).isEqualTo("A24991234")
+        assertThat(approvedUser.ordinationProfile).isNotNull()
+        assertThat(approvedUser.ordinationProfile?.ordinationPlace).isEqualTo("St. Mark Cathedral")
+        assertThat(approvedUser.ordinationProfile?.bishopName).isEqualTo("Anba Thomas")
+        assertThat(approvedUser.ordinationProfile?.ordinationYear).isEqualTo(2022)
     }
 }
 
