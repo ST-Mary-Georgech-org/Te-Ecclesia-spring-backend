@@ -160,8 +160,8 @@ class UserService(
     @Transactional(readOnly = true)
     fun getUsersByStatus(callerId: UUID, status: UserStatus, stageId: Long?, yearId: Long?, role: UserRole?, search: String?, pageable: Pageable): Page<ProfileResponse> {
         val caller = findById(callerId)
-        var finalStageId = stageId
-        var finalYearId = yearId
+        var stageIdsToQuery: Collection<Long>? = if (stageId != null) listOf(stageId) else null
+        var yearIdsToQuery: Collection<Long>? = if (yearId != null) listOf(yearId) else null
 
         if (caller.role == UserRole.KHADEM) {
             val khademProfile = caller.khademProfile
@@ -182,16 +182,18 @@ class UserService(
                 allowedStageIds.addAll(khademProfile.responsibleStages.map { it.id })
                 allowedYearIds.addAll(khademProfile.responsibleYears.map { it.id })
 
-                if (finalStageId != null && !allowedStageIds.contains(finalStageId)) {
+                if (stageId != null && !allowedStageIds.contains(stageId)) {
                     throw UnauthorizedException("Khadem does not have permission to view this stage")
                 }
-                if (finalYearId != null && !allowedYearIds.contains(finalYearId)) {
+                if (yearId != null && !allowedYearIds.contains(yearId)) {
                     throw UnauthorizedException("Khadem does not have permission to view this year")
                 }
 
-                if (finalStageId == null && finalYearId == null) {
-                    finalYearId = khademProfile.educationalYear?.id
-                    finalStageId = khademProfile.educationalStage.id
+                if (stageId == null) {
+                    stageIdsToQuery = allowedStageIds
+                }
+                if (yearId == null && allowedYearIds.isNotEmpty()) {
+                    yearIdsToQuery = allowedYearIds
                 }
             }
         } else if (caller.role != UserRole.ADMIN) {
@@ -200,8 +202,8 @@ class UserService(
 
         return userRepository.findByStatusAndFilters(
             status = status,
-            stageId = finalStageId,
-            yearId = finalYearId,
+            stageIds = stageIdsToQuery,
+            yearIds = yearIdsToQuery,
             role = role,
             search = search,
             pageable = pageable

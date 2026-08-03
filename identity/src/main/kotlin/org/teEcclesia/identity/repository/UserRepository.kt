@@ -93,8 +93,8 @@ interface UserRepository : JpaRepository<User, UUID> {
         LEFT JOIN u.makhdoomProfile mp 
         LEFT JOIN u.khademProfile kp 
         WHERE u.status = :status 
-        AND (:stageId IS NULL OR mp.educationalStage.id = :stageId OR kp.educationalStage.id = :stageId) 
-        AND (:yearId IS NULL OR mp.educationalYear.id = :yearId OR kp.educationalYear.id = :yearId)
+        AND (cast(:stageIds as string) IS NULL OR mp.educationalStage.id IN :stageIds OR kp.educationalStage.id IN :stageIds) 
+        AND (cast(:yearIds as string) IS NULL OR mp.educationalYear.id IN :yearIds OR kp.educationalYear.id IN :yearIds)
         AND (cast(:role as string) IS NULL OR u.role = :role)
         AND (cast(:search as string) IS NULL OR 
              LOWER(CONCAT(u.firstName, ' ', u.secondName, ' ', u.thirdName, ' ', u.lastName)) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR 
@@ -105,8 +105,8 @@ interface UserRepository : JpaRepository<User, UUID> {
     """)
     fun findByStatusAndFilters(
         @Param("status") status: UserStatus,
-        @Param("stageId") stageId: Long?,
-        @Param("yearId") yearId: Long?,
+        @Param("stageIds") stageIds: Collection<Long>?,
+        @Param("yearIds") yearIds: Collection<Long>?,
         @Param("role") role: UserRole?,
         @Param("search") search: String?,
         pageable: Pageable
