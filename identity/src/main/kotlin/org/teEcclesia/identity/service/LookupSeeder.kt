@@ -2,6 +2,8 @@ package org.teEcclesia.identity.service
 
 import org.springframework.boot.CommandLineRunner
 import org.springframework.stereotype.Component
+import org.teEcclesia.identity.entity.SystemSetting
+import org.teEcclesia.identity.entity.enums.SettingKey
 import org.teEcclesia.identity.entity.lookups.*
 import org.teEcclesia.identity.repository.*
 
@@ -9,11 +11,25 @@ import org.teEcclesia.identity.repository.*
 class LookupSeeder(
     private val rankRepository: RankRepository,
     private val educationalStageRepository: EducationalStageRepository,
+    private val systemSettingRepository: SystemSettingRepository
 ) : CommandLineRunner {
 
     override fun run(vararg args: String) {
         seedRanks()
         seedEducationalData()
+        seedSystemSettings()
+    }
+
+    private fun seedSystemSettings() {
+        if (!systemSettingRepository.existsById(SettingKey.PARENTS_WHATSAPP_LINK)) {
+            systemSettingRepository.save(
+                SystemSetting(
+                    key = SettingKey.PARENTS_WHATSAPP_LINK,
+                    value = null,
+                    description = "رابط مجموعة واتساب العامة لأولياء الأمور"
+                )
+            )
+        }
     }
 
     private fun seedRanks() {
@@ -62,7 +78,8 @@ class LookupSeeder(
             EducationalYear(
                 nameAr = "السنة ${ranksAr[index]}",
                 nameEn = "${ranksEn[index]} Grade",
-                stage = stage
+                stage = stage,
+                whatsAppLink = null
             )
         }
     }

@@ -69,7 +69,7 @@ fun User.toUserSummaryResponse(imageBaseUrl: String): UserSummaryResponse {
     )
 }
 
-fun User.toProfileResponse(imageBaseUrl: String): ProfileResponse {
+fun User.toProfileResponse(imageBaseUrl: String, parentsWhatsAppLink: String? = null): ProfileResponse {
     val lang = LocaleContextHolder.getLocale().language
     val cdnBaseUrl = imageBaseUrl.substringBeforeLast('/')
     val resolvedImageUrl = resolveUrl(cdnBaseUrl, imageBaseUrl, imageUrl, "profile")
@@ -108,19 +108,19 @@ fun User.toProfileResponse(imageBaseUrl: String): ProfileResponse {
         khademProfile = this.khademProfile?.let {
             val stageName = if (lang.startsWith("en", ignoreCase = true)) it.educationalStage.nameEn else it.educationalStage.nameAr
             KhademProfileResponse(
-                educationalStage = LookupResponse(it.educationalStage.id, stageName),
+                educationalStage = LookupResponse(it.educationalStage.id, stageName, whatsAppLink = null),
                 educationalYear = it.educationalYear?.let { year -> 
                     val yearName = if (lang.startsWith("en", ignoreCase = true)) year.nameEn else year.nameAr
-                    LookupResponse(year.id, yearName)
+                    LookupResponse(year.id, yearName, whatsAppLink = year.whatsAppLink)
                 },
                 canApproveRequests = it.canApproveRequests,
                 responsibleStages = it.responsibleStages.map { stage ->
                     val sName = if (lang.startsWith("en", ignoreCase = true)) stage.nameEn else stage.nameAr
-                    LookupResponse(stage.id, sName)
+                    LookupResponse(stage.id, sName, whatsAppLink = null)
                 },
                 responsibleYears = it.responsibleYears.map { year ->
                     val yName = if (lang.startsWith("en", ignoreCase = true)) year.nameEn else year.nameAr
-                    LookupResponse(year.id, yName)
+                    LookupResponse(year.id, yName, whatsAppLink = year.whatsAppLink)
                 }
             )
         },
@@ -128,7 +128,7 @@ fun User.toProfileResponse(imageBaseUrl: String): ProfileResponse {
             KahenProfileResponse(
                 educationalStages = it.educationalStages.map { stage ->
                     val stageName = if (lang.startsWith("en", ignoreCase = true)) stage.nameEn else stage.nameAr
-                    LookupResponse(stage.id, stageName)
+                    LookupResponse(stage.id, stageName, whatsAppLink = null)
                 },
                 ordinationDate = it.ordinationDate
             )
@@ -137,13 +137,14 @@ fun User.toProfileResponse(imageBaseUrl: String): ProfileResponse {
             ParentProfileResponse(
                 partner = it.partner?.toUserSummaryResponse(imageBaseUrl),
                 children = it.children.map { child -> child.toUserSummaryResponse(imageBaseUrl) },
-                nationalIdImageUrl = resolveUrl(cdnBaseUrl, imageBaseUrl, it.nationalIdImageUrl, "identity-documents")
+                nationalIdImageUrl = resolveUrl(cdnBaseUrl, imageBaseUrl, it.nationalIdImageUrl, "identity-documents"),
+                whatsAppLink = parentsWhatsAppLink
             )
         },
         ordinationProfile = this.ordinationProfile?.let {
             val rankName = if (lang.startsWith("en", ignoreCase = true)) it.rank.nameEn else it.rank.nameAr
             OrdinationProfileResponse(
-                rank = LookupResponse(it.rank.id, rankName),
+                rank = LookupResponse(it.rank.id, rankName, whatsAppLink = null),
                 isOrdinationInAnotherChurch = it.isOrdinationInAnotherChurch,
                 ordinationYear = it.ordinationYear,
                 bishopName = it.bishopName,
@@ -155,10 +156,10 @@ fun User.toProfileResponse(imageBaseUrl: String): ProfileResponse {
             val stageName = if (lang.startsWith("en", ignoreCase = true)) it.educationalStage.nameEn else it.educationalStage.nameAr
             MakhdoomProfileResponse(
                 shamamsaStudyStatus = it.shamamsaStudyStatus,
-                educationalStage = LookupResponse(it.educationalStage.id, stageName),
+                educationalStage = LookupResponse(it.educationalStage.id, stageName, whatsAppLink = null),
                 educationalYear = it.educationalYear?.let { year ->
                     val yearName = if (lang.startsWith("en", ignoreCase = true)) year.nameEn else year.nameAr
-                    LookupResponse(year.id, yearName)
+                    LookupResponse(year.id, yearName, whatsAppLink = year.whatsAppLink)
                 },
                 fatherPhone = it.fatherPhone,
                 fatherWhatsapp = it.fatherWhatsapp,

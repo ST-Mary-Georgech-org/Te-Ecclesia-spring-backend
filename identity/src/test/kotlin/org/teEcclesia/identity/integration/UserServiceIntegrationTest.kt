@@ -256,7 +256,7 @@ class UserServiceIntegrationTest {
         userRepository.save(makhdoom.copy(role = UserRole.MAKHDOOM))
 
         val stage = educationalStageRepository.save(EducationalStage(nameAr = "Stage", nameEn = "Stage"))
-        val year = educationalYearRepository.save(EducationalYear(nameAr = "Year", nameEn = "Year", stage = stage))
+        val year = educationalYearRepository.save(EducationalYear(nameAr = "Year", nameEn = "Year", stage = stage, whatsAppLink = null))
 
         val request = RegisterRequest(
             firstName = "Makhdoom", secondName = "Updated", thirdName = "By", lastName = "Admin",
@@ -369,8 +369,9 @@ class UserServiceIntegrationTest {
             )
         )
 
-        val created = userService.createMakhdoomDirectly(admin.id, request)
-        assertThat(created.email).isEqualTo("unverified-shared-email@mail.com")
+        userService.createMakhdoomDirectly(admin.id, request)
+        val created = userRepository.findUsersByEmail("unverified-shared-email@mail.com").lastOrNull()
+        assertThat(created?.email).isEqualTo("unverified-shared-email@mail.com")
     }
 
     @Test

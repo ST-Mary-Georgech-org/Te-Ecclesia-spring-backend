@@ -1,9 +1,7 @@
 package org.teEcclesia.identity.service
 
 import jakarta.persistence.EntityNotFoundException
-import jakarta.transaction.Transactional
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
+import org.springframework.transaction.annotation.Transactional
 import org.teEcclesia.events.identity.UserLoggedInEvent
 import org.teEcclesia.events.identity.UserPendingApprovalEvent
 import org.teEcclesia.events.publisher.TeEcclesiaEventPublisher
@@ -49,7 +47,11 @@ import org.teEcclesia.storage.service.ImageStorageService
 import java.util.*
 
 @Service
-@Transactional
+@Transactional(noRollbackFor = [
+    AccountPendingApprovalException::class,
+    IncompleteProfileException::class,
+    PhoneNotVerifiedException::class
+])
 class AuthService(
     private val userRepository: UserRepository,
     private val refreshTokenRepository: RefreshTokenRepository,
@@ -404,7 +406,7 @@ class AuthService(
             EntityNotFoundException("User not found with id: $userId")
         }
 
-        val targetEmail = (if (!request.email.isNullOrBlank()) request.email else user.email)
+        val targetEmail = (request.email.ifBlank { user.email })
             ?.lowercase()?.trim()
             ?: throw IllegalArgumentException("Email is required for verification")
 
@@ -693,7 +695,7 @@ class AuthService(
         }
     }
 
-    fun forgotPassword(request: ForgotPasswordRequest): ForgotPasswordResponse? {
+    fun forgotPassword(request: ForgotPasswordRequest): ForgotPasswordResponse {
         val user = findUserForPasswordReset(request.key, request.method) ?: throw EntityNotFoundException("User not found or account is not approved yet")
 
         return if (request.method == VerificationMethod.PHONE) {
@@ -720,7 +722,7 @@ class AuthService(
             if (user.email != null) {
                 emailService.sendOtp(user.email, verification.otp)
             }
-            null
+            ForgotPasswordResponse(link = null, token = null)
         }
     }
 
@@ -782,7 +784,7 @@ class AuthService(
         return "Password reset successfully. You can now login."
     }
 
-    fun resendOtp(request: ForgotPasswordRequest): ForgotPasswordResponse? {
+    fun resendOtp(request: ForgotPasswordRequest): ForgotPasswordResponse {
         val user = findUserForPasswordReset(request.key, request.method)
             ?: throw EntityNotFoundException("User not found")
 
@@ -814,13 +816,13 @@ class AuthService(
                     emailService.sendOtp(user.email, verificationToken.otp)
                 }
             }
-            null
+            ForgotPasswordResponse(link = null, token = null)
         }
     }
 
     private fun findUserForPasswordReset(key: String, method: VerificationMethod): User? {
         if (method == VerificationMethod.EMAIL) {
-            return userRepository.findByEmailAndStatus(key.lowercase(), UserStatus.APPROVED)
+            return userRepository.findByEmailAndStatusAndIsEmailVerifiedIsTrue(key.lowercase(), UserStatus.APPROVED)
         }
 
         val isNationalId = key.matches(Regex("""\d{14}"""))

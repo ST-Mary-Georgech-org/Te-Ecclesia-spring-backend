@@ -24,7 +24,7 @@ class LookupService(
     private val userRepository: UserRepository
 ) {
     fun getRanks(lang: String, pageable: Pageable): Page<LookupResponse> = rankRepository.findAll(pageable).map {
-        LookupResponse(it.id, if (lang.startsWith("en", ignoreCase = true)) it.nameEn else it.nameAr)
+        LookupResponse(it.id, if (lang.startsWith("en", ignoreCase = true)) it.nameEn else it.nameAr, whatsAppLink = null)
     }
 
     fun getEducationalStages(
@@ -67,10 +67,12 @@ class LookupService(
                 subItems = stage.years.map { year ->
                     LookupResponse(
                         id = year.id,
-                        name = if (lang.startsWith("en", ignoreCase = true)) year.nameEn else year.nameAr
+                        name = if (lang.startsWith("en", ignoreCase = true)) year.nameEn else year.nameAr,
+                        whatsAppLink = year.whatsAppLink
                     )
                 },
-                isKhademOnly = stage.isKhademOnly
+                isKhademOnly = stage.isKhademOnly,
+                whatsAppLink = null
             )
         }
     }
@@ -101,10 +103,12 @@ class LookupService(
                     .map { year ->
                         LookupResponse(
                             id = year.id,
-                            name = if (lang.startsWith("en", ignoreCase = true)) year.nameEn else year.nameAr
+                            name = if (lang.startsWith("en", ignoreCase = true)) year.nameEn else year.nameAr,
+                            whatsAppLink = year.whatsAppLink
                         )
                     },
-                isKhademOnly = stage.isKhademOnly
+                isKhademOnly = stage.isKhademOnly,
+                whatsAppLink = null
             )
         }
         return PageImpl(result, pageable, result.size.toLong())
@@ -117,7 +121,7 @@ class LookupService(
         } else {
             areaRepository.searchAreas(cleanQuery, pageable)
         }
-        return areasPage.map { LookupResponse(it.id, it.name) }
+        return areasPage.map { LookupResponse(it.id, it.name, whatsAppLink = null) }
     }
 
     @Transactional
@@ -128,7 +132,7 @@ class LookupService(
             codeLetter = request.codeLetter,
         )
         val saved = rankRepository.save(rank)
-        return LookupResponse(saved.id, saved.nameAr)
+        return LookupResponse(saved.id, saved.nameAr, whatsAppLink = null)
     }
 
     @Transactional
@@ -141,7 +145,7 @@ class LookupService(
                 codeLetter = request.codeLetter,
             )
         )
-        return LookupResponse(updated.id, updated.nameAr)
+        return LookupResponse(updated.id, updated.nameAr, whatsAppLink = null)
     }
 
     @Transactional
@@ -157,7 +161,7 @@ class LookupService(
             isKhademOnly = request.isKhademOnly ?: false
         )
         val saved = educationalStageRepository.save(stage)
-        return LookupResponse(saved.id, saved.nameAr, isKhademOnly = saved.isKhademOnly)
+        return LookupResponse(saved.id, saved.nameAr, isKhademOnly = saved.isKhademOnly, whatsAppLink = null)
     }
 
     @Transactional
@@ -170,7 +174,7 @@ class LookupService(
                 isKhademOnly = request.isKhademOnly ?: false
             )
         )
-        return LookupResponse(updated.id, updated.nameAr, isKhademOnly = updated.isKhademOnly)
+        return LookupResponse(updated.id, updated.nameAr, isKhademOnly = updated.isKhademOnly, whatsAppLink = null)
     }
 
     @Transactional
@@ -185,10 +189,11 @@ class LookupService(
         val year = EducationalYear(
             nameAr = request.nameAr,
             nameEn = request.nameEn,
-            stage = stage
+            stage = stage,
+            whatsAppLink = request.whatsAppLink
         )
         val saved = educationalYearRepository.save(year)
-        return LookupResponse(saved.id, saved.nameAr)
+        return LookupResponse(saved.id, saved.nameAr, whatsAppLink = saved.whatsAppLink)
     }
 
     @Transactional
@@ -200,10 +205,11 @@ class LookupService(
             year.copy(
                 nameAr = request.nameAr,
                 nameEn = request.nameEn,
-                stage = stage
+                stage = stage,
+                whatsAppLink = request.whatsAppLink
             )
         )
-        return LookupResponse(updated.id, updated.nameAr)
+        return LookupResponse(updated.id, updated.nameAr, whatsAppLink = updated.whatsAppLink)
     }
 
     @Transactional
@@ -215,14 +221,14 @@ class LookupService(
     fun createArea(request: AreaRequest): LookupResponse {
         val area = Area(name = request.name)
         val saved = areaRepository.save(area)
-        return LookupResponse(saved.id, saved.name)
+        return LookupResponse(saved.id, saved.name, whatsAppLink = null)
     }
 
     @Transactional
     fun updateArea(id: Long, request: AreaRequest): LookupResponse {
         val area = areaRepository.findById(id).orElseThrow { ResourceNotFoundException("Area not found") }
         val updated = areaRepository.save(area.copy(name = request.name))
-        return LookupResponse(updated.id, updated.name)
+        return LookupResponse(updated.id, updated.name, whatsAppLink = null)
     }
 
     @Transactional

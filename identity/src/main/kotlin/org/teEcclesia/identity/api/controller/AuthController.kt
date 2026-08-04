@@ -65,7 +65,7 @@ class AuthController (
     fun getRegistrationProfile(
         @AuthenticationPrincipal userId: UUID
     ): ResponseEntity<ProfileResponse> {
-        val response = userService.getUserProfile(userId, imagesBaseUrl)
+        val response = userService.getUserProfile(userId)
         return ResponseEntity.ok(response)
     }
 
