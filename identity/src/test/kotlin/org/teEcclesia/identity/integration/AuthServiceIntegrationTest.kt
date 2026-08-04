@@ -366,7 +366,7 @@ class AuthServiceIntegrationTest {
         var user = createUser(email = "makhdoom-complete@mail.com", isVerified = false)
         user = userRepository.save(user.copy(status = UserStatus.PROFILE_INCOMPLETE))
         val stage = educationalStageRepository.save(EducationalStage(nameAr = "Stage", nameEn = "Stage"))
-        val year = educationalYearRepository.save(EducationalYear(nameAr = "Year", nameEn = "Year", stage = stage))
+        val year = educationalYearRepository.save(EducationalYear(nameAr = "Year", nameEn = "Year", stage = stage, whatsAppLink = null))
         val request = CompleteProfileRequest(
             role = UserRole.MAKHDOOM,
             makhdoomProfile = MakhdoomProfileRequest(
@@ -545,7 +545,7 @@ class AuthServiceIntegrationTest {
         user = userRepository.save(user.copy(status = UserStatus.PROFILE_INCOMPLETE))
         
         val stage1 = educationalStageRepository.save(EducationalStage(nameAr = "Stage 1", nameEn = "Stage 1"))
-        val year1 = educationalYearRepository.save(EducationalYear(nameAr = "Year 1", nameEn = "Year 1", stage = stage1))
+        val year1 = educationalYearRepository.save(EducationalYear(nameAr = "Year 1", nameEn = "Year 1", stage = stage1, whatsAppLink = null))
         val rank1 = rankRepository.save(Rank(nameAr = "Rank 1", nameEn = "Rank 1", codeLetter = 'A'))
         
         val request1 = CompleteProfileRequest(
@@ -579,7 +579,7 @@ class AuthServiceIntegrationTest {
 
         // Second completion with updated details
         val stage2 = educationalStageRepository.save(EducationalStage(nameAr = "Stage 2", nameEn = "Stage 2"))
-        val year2 = educationalYearRepository.save(EducationalYear(nameAr = "Year 2", nameEn = "Year 2", stage = stage2))
+        val year2 = educationalYearRepository.save(EducationalYear(nameAr = "Year 2", nameEn = "Year 2", stage = stage2, whatsAppLink = null))
         val rank2 = rankRepository.save(Rank(nameAr = "Rank 2", nameEn = "Rank 2", codeLetter = 'B'))
 
         val request2 = CompleteProfileRequest(
@@ -609,15 +609,15 @@ class AuthServiceIntegrationTest {
         assertThat(userAfterSecond.khademProfile!!.id).isEqualTo(firstKhademId)
 
         // Assert values were updated correctly
-        assertThat(userAfterSecond.ordinationProfile!!.rank.id).isEqualTo(rank2.id)
-        assertThat(userAfterSecond.ordinationProfile!!.isOrdinationInAnotherChurch).isTrue()
-        assertThat(userAfterSecond.ordinationProfile!!.ordinationYear).isEqualTo(2021)
-        assertThat(userAfterSecond.ordinationProfile!!.bishopName).isEqualTo("Bishop 2")
-        assertThat(userAfterSecond.ordinationProfile!!.ordinationPlace).isEqualTo("Church 2")
-        assertThat(userAfterSecond.ordinationProfile!!.certificateImageUrl).isEqualTo("img2.png")
+        assertThat(userAfterSecond.ordinationProfile.rank.id).isEqualTo(rank2.id)
+        assertThat(userAfterSecond.ordinationProfile.isOrdinationInAnotherChurch).isTrue()
+        assertThat(userAfterSecond.ordinationProfile.ordinationYear).isEqualTo(2021)
+        assertThat(userAfterSecond.ordinationProfile.bishopName).isEqualTo("Bishop 2")
+        assertThat(userAfterSecond.ordinationProfile.ordinationPlace).isEqualTo("Church 2")
+        assertThat(userAfterSecond.ordinationProfile.certificateImageUrl).isEqualTo("img2.png")
 
-        assertThat(userAfterSecond.khademProfile!!.educationalStage.id).isEqualTo(stage2.id)
-        assertThat(userAfterSecond.khademProfile!!.educationalYear?.id).isEqualTo(year2.id)
+        assertThat(userAfterSecond.khademProfile.educationalStage.id).isEqualTo(stage2.id)
+        assertThat(userAfterSecond.khademProfile.educationalYear?.id).isEqualTo(year2.id)
     }
 
     @Test

@@ -41,6 +41,7 @@ import org.teEcclesia.identity.repository.RankRepository
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.teEcclesia.identity.api.dto.request.ParentProfileRequest
 import org.teEcclesia.identity.entity.lookups.Area
+import org.teEcclesia.identity.entity.enums.SettingKey
 import org.teEcclesia.identity.utils.formatHomePhone
 import org.teEcclesia.identity.utils.formatPhone
 import java.util.*
@@ -59,6 +60,7 @@ class UserService(
     private val rankRepository: RankRepository,
     private val authService: AuthService,
     private val userValidationHelper: UserValidationHelper,
+    private val systemSettingService: SystemSettingService,
     @param:Value("\${storage.teEcclesia.cdn-endpoint}") private val cdnEndpoint: String,
     @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String,
     @param:Value("\${identity.resources.documents-directory}") private val documentsDirectory: String
@@ -76,16 +78,20 @@ class UserService(
             ?: throw UserNotFoundException("User with id: $userId not found")
     }
 
+    private fun getParentsWhatsAppLink(): String? {
+        return systemSettingService.getSettingValue(SettingKey.PARENTS_WHATSAPP_LINK)
+    }
+
     @Transactional(readOnly = true)
     fun getUserProfile(userId: UUID, imageBaseUrl: String): ProfileResponse {
         val user = findProfileById(userId)
-        return user.toProfileResponse(imageBaseUrl)
+        return user.toProfileResponse(imageBaseUrl, getParentsWhatsAppLink())
     }
 
     @Transactional(readOnly = true)
     fun getUserProfile(userId: UUID): ProfileResponse {
         val user = findProfileById(userId)
-        return user.toProfileResponse(imagesBaseUrl)
+        return user.toProfileResponse(imagesBaseUrl, getParentsWhatsAppLink())
     }
 
 
@@ -199,6 +205,7 @@ class UserService(
         } else if (caller.role != UserRole.ADMIN) {
             throw UnauthorizedException("Only Admin or Khadem can view users")
         }
+        val whatsappLink = getParentsWhatsAppLink()
 
         return userRepository.findByStatusAndFilters(
             status = status,
@@ -207,7 +214,7 @@ class UserService(
             role = role,
             search = search,
             pageable = pageable
-        ).map { it.toProfileResponse(imagesBaseUrl) }
+        ).map { it.toProfileResponse(imagesBaseUrl, whatsappLink) }
     }
 
     @Transactional
@@ -607,7 +614,7 @@ class UserService(
     }
 
     @Transactional
-    fun createMakhdoomDirectly(callerId: UUID, request: RegisterRequest, image: MultipartFile? = null, identityDocument: MultipartFile? = null): ProfileResponse {
+    fun createMakhdoomDirectly(callerId: UUID, request: RegisterRequest, image: MultipartFile? = null, identityDocument: MultipartFile? = null) {
         val caller = findById(callerId)
         if (caller.role == UserRole.KHADEM) {
             val khademProfile = caller.khademProfile
@@ -701,12 +708,10 @@ class UserService(
         val savedUser = userRepository.save(approvedUser)
         addAreaIfNotExists(savedUser.area)
         eventPublisher.publish(savedUser.toUserUpdatedEvent())
-        
-        return savedUser.toProfileResponse(imagesBaseUrl)
     }
 
     @Transactional
-    fun createParentDirectly(request: RegisterRequest, image: MultipartFile? = null, nationalIdImage: MultipartFile? = null): ProfileResponse {
+    fun createParentDirectly(request: RegisterRequest, image: MultipartFile? = null, nationalIdImage: MultipartFile? = null) {
         var confessionPriest: User? = null
         if (request.confessionPriestId != null) {
             confessionPriest = findById(request.confessionPriestId)
@@ -760,11 +765,10 @@ class UserService(
 
         addAreaIfNotExists(savedUser.area)
         eventPublisher.publish(savedUser.toUserUpdatedEvent())
-        return savedUser.toProfileResponse(imagesBaseUrl)
     }
 
     @Transactional
-    fun updateParentProfile(parentId: UUID, request: ParentProfileRequest): ProfileResponse {
+    fun updateParentProfile(parentId: UUID, request: ParentProfileRequest) {
         val user = findById(parentId)
         if (user.role != UserRole.PARENT) {
             throw IllegalArgumentException("User is not a PARENT")
@@ -779,7 +783,6 @@ class UserService(
         }
 
         eventPublisher.publish(savedUser.toUserUpdatedEvent())
-        return savedUser.toProfileResponse(imagesBaseUrl)
     }
 
     @Transactional

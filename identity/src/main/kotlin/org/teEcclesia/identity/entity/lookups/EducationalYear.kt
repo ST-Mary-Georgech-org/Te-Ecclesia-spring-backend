@@ -18,6 +18,9 @@ data class EducationalYear(
     @Column(nullable = false)
     val nameEn: String,
 
+    @Column(nullable = true)
+    val whatsAppLink: String?,
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "stage_id", nullable = false)
     val stage: EducationalStage

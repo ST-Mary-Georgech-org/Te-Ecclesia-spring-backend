@@ -136,7 +136,7 @@ class UserController(
         @RequestPart("request") @Valid request: RegisterRequest,
         @RequestPart("image", required = false) image: MultipartFile?,
         @RequestPart("identityDocument", required = false) identityDocument: MultipartFile?
-    ): ResponseEntity<ProfileResponse> {
+    ): ResponseEntity<Unit> {
         authorizeAdminOrKhadem(callerId)
         return ResponseEntity.ok(userService.createMakhdoomDirectly(callerId, request, image, identityDocument))
     }
@@ -147,7 +147,7 @@ class UserController(
         @RequestPart("request") @Valid request: RegisterRequest,
         @RequestPart("image", required = false) image: MultipartFile?,
         @RequestPart("nationalIdImage", required = false) nationalIdImage: MultipartFile?
-    ): ResponseEntity<ProfileResponse> {
+    ): ResponseEntity<Unit> {
         authorizeAdminOrKhadem(callerId)
         return ResponseEntity.ok(userService.createParentDirectly(request, image, nationalIdImage))
     }
@@ -157,7 +157,7 @@ class UserController(
         @AuthenticationPrincipal callerId: UUID,
         @PathVariable id: UUID,
         @RequestBody request: ParentProfileRequest
-    ): ResponseEntity<ProfileResponse> {
+    ): ResponseEntity<Unit> {
         authorizeAdminOrKhadem(callerId)
         return ResponseEntity.ok(userService.updateParentProfile(id, request))
     }

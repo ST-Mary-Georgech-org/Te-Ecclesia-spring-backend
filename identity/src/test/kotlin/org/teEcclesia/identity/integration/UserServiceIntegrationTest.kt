@@ -256,7 +256,7 @@ class UserServiceIntegrationTest {
         userRepository.save(makhdoom.copy(role = UserRole.MAKHDOOM))
 
         val stage = educationalStageRepository.save(EducationalStage(nameAr = "Stage", nameEn = "Stage"))
-        val year = educationalYearRepository.save(EducationalYear(nameAr = "Year", nameEn = "Year", stage = stage))
+        val year = educationalYearRepository.save(EducationalYear(nameAr = "Year", nameEn = "Year", stage = stage, whatsAppLink = null))
 
         val request = RegisterRequest(
             firstName = "Makhdoom", secondName = "Updated", thirdName = "By", lastName = "Admin",

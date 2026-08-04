@@ -1,7 +1,7 @@
 package org.teEcclesia.identity.service
 
 import jakarta.persistence.EntityNotFoundException
-import jakarta.transaction.Transactional
+import org.springframework.transaction.annotation.Transactional
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.teEcclesia.events.identity.UserLoggedInEvent
@@ -49,7 +49,11 @@ import org.teEcclesia.storage.service.ImageStorageService
 import java.util.*
 
 @Service
-@Transactional
+@Transactional(noRollbackFor = [
+    AccountPendingApprovalException::class,
+    IncompleteProfileException::class,
+    PhoneNotVerifiedException::class
+])
 class AuthService(
     private val userRepository: UserRepository,
     private val refreshTokenRepository: RefreshTokenRepository,
@@ -404,7 +408,7 @@ class AuthService(
             EntityNotFoundException("User not found with id: $userId")
         }
 
-        val targetEmail = (if (!request.email.isNullOrBlank()) request.email else user.email)
+        val targetEmail = (request.email.ifBlank { user.email })
             ?.lowercase()?.trim()
             ?: throw IllegalArgumentException("Email is required for verification")
 

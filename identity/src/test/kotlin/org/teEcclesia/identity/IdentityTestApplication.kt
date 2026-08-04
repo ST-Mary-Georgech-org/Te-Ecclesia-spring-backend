@@ -25,7 +25,9 @@ import org.teEcclesia.identity.repository.AreaRepository
 import org.teEcclesia.identity.repository.EducationalStageRepository
 import org.teEcclesia.identity.repository.EducationalYearRepository
 import org.teEcclesia.identity.repository.RankRepository
+import org.teEcclesia.identity.repository.SystemSettingRepository
 import org.teEcclesia.identity.service.ParentProfileService
+import org.teEcclesia.identity.service.SystemSettingService
 import org.teEcclesia.identity.service.UserCodeGenerator
 import org.teEcclesia.identity.service.UserValidationHelper
 
@@ -35,6 +37,11 @@ import org.teEcclesia.identity.service.UserValidationHelper
 @EntityScan(basePackages = ["org.teEcclesia.identity.entity"])
 @EnableJpaRepositories(basePackages = ["org.teEcclesia.identity.repository"])
 class IdentityTestApplication {
+
+    @Bean
+    fun systemSettingService(systemSettingRepository: SystemSettingRepository): SystemSettingService {
+        return SystemSettingService(systemSettingRepository)
+    }
 
     @Bean
     fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
@@ -122,7 +129,8 @@ class IdentityTestApplication {
         rankRepository: RankRepository,
         @Value("\${cdn.endpoint:}") cdnEndpoint: String,
         authService: AuthService,
-        userValidationHelper: UserValidationHelper
+        userValidationHelper: UserValidationHelper,
+        systemSettingService: SystemSettingService
     ): UserService {
         return UserService(
             userRepository = userRepository,
@@ -139,7 +147,8 @@ class IdentityTestApplication {
             parentProfileService = parentProfileService(),
             documentsDirectory = "test-docs",
             authService = authService,
-            userValidationHelper = userValidationHelper
+            userValidationHelper = userValidationHelper,
+            systemSettingService = systemSettingService
         )
     }
 
