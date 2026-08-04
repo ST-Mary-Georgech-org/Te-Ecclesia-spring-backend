@@ -26,7 +26,7 @@ interface UserRepository : JpaRepository<User, UUID> {
     fun findUsersByPhone(phone: String): List<User>
     fun findUsersByPhoneAndStatus(phone: String, status: UserStatus): List<User>
     fun findByEmail(email: String): User?
-    fun findByEmailAndStatus(email: String, status: UserStatus): User?
+    fun findByEmailAndStatusAndIsEmailVerifiedIsTrue(email: String, status: UserStatus): User?
     fun findUsersByEmail(email: String): List<User>
     fun findByEmailIgnoreCase(email: String): List<User>
 

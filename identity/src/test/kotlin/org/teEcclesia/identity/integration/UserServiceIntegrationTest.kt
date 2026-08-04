@@ -369,8 +369,9 @@ class UserServiceIntegrationTest {
             )
         )
 
-        val created = userService.createMakhdoomDirectly(admin.id, request)
-        assertThat(created.email).isEqualTo("unverified-shared-email@mail.com")
+        userService.createMakhdoomDirectly(admin.id, request)
+        val created = userRepository.findUsersByEmail("unverified-shared-email@mail.com").lastOrNull()
+        assertThat(created?.email).isEqualTo("unverified-shared-email@mail.com")
     }
 
     @Test

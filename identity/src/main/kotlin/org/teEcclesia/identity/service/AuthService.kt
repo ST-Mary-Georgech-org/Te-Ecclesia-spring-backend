@@ -2,8 +2,6 @@ package org.teEcclesia.identity.service
 
 import jakarta.persistence.EntityNotFoundException
 import org.springframework.transaction.annotation.Transactional
-import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 import org.teEcclesia.events.identity.UserLoggedInEvent
 import org.teEcclesia.events.identity.UserPendingApprovalEvent
 import org.teEcclesia.events.publisher.TeEcclesiaEventPublisher
@@ -697,7 +695,7 @@ class AuthService(
         }
     }
 
-    fun forgotPassword(request: ForgotPasswordRequest): ForgotPasswordResponse? {
+    fun forgotPassword(request: ForgotPasswordRequest): ForgotPasswordResponse {
         val user = findUserForPasswordReset(request.key, request.method) ?: throw EntityNotFoundException("User not found or account is not approved yet")
 
         return if (request.method == VerificationMethod.PHONE) {
@@ -724,7 +722,7 @@ class AuthService(
             if (user.email != null) {
                 emailService.sendOtp(user.email, verification.otp)
             }
-            null
+            ForgotPasswordResponse(link = null, token = null)
         }
     }
 
@@ -786,7 +784,7 @@ class AuthService(
         return "Password reset successfully. You can now login."
     }
 
-    fun resendOtp(request: ForgotPasswordRequest): ForgotPasswordResponse? {
+    fun resendOtp(request: ForgotPasswordRequest): ForgotPasswordResponse {
         val user = findUserForPasswordReset(request.key, request.method)
             ?: throw EntityNotFoundException("User not found")
 
@@ -818,13 +816,13 @@ class AuthService(
                     emailService.sendOtp(user.email, verificationToken.otp)
                 }
             }
-            null
+            ForgotPasswordResponse(link = null, token = null)
         }
     }
 
     private fun findUserForPasswordReset(key: String, method: VerificationMethod): User? {
         if (method == VerificationMethod.EMAIL) {
-            return userRepository.findByEmailAndStatus(key.lowercase(), UserStatus.APPROVED)
+            return userRepository.findByEmailAndStatusAndIsEmailVerifiedIsTrue(key.lowercase(), UserStatus.APPROVED)
         }
 
         val isNationalId = key.matches(Regex("""\d{14}"""))
