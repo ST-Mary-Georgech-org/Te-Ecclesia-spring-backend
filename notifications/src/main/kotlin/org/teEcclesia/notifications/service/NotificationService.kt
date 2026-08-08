@@ -24,7 +24,7 @@ class NotificationService(
     @Transactional
     fun saveNotifications(notifications: List<NotificationDetails>) {
         val notifications = notifications.map(NotificationDetails::toNotification)
-        notificationRepository.saveAll(notifications)
+        notificationRepository.saveAllAndFlush(notifications)
     }
 
     @Transactional(readOnly = true)
