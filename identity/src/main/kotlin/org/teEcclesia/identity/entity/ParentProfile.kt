@@ -4,9 +4,11 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
 
 import org.hibernate.envers.Audited
+import org.hibernate.annotations.BatchSize
 
 @Audited
 @Entity
+@BatchSize(size = 25)
 @Table(name = "parent_profiles", schema = "identity")
 data class ParentProfile(
     @Id
@@ -23,6 +25,7 @@ data class ParentProfile(
     @JoinColumn(name = "partner_id")
     val partner: User? = null,
 
+    @BatchSize(size = 25)
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "parent_children",

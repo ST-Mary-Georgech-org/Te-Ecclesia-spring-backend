@@ -15,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile
 import org.teEcclesia.identity.api.dto.request.ApproveUserRequest
 import org.teEcclesia.identity.api.dto.response.InitiateWhatsAppVerificationResponse
 import org.teEcclesia.identity.api.dto.response.toProfileResponse
+import org.teEcclesia.identity.api.dto.response.toUserSummaryResponse
 import org.teEcclesia.identity.exception.UnauthorizedException
 import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.events.notifications.UserNotificationsEvent
@@ -24,6 +25,7 @@ import org.teEcclesia.events.notifications.utils.NotificationType
 import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.entity.toUserUpdatedEvent
 import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import org.teEcclesia.identity.api.dto.request.RegisterRequest
 import java.time.Instant
@@ -165,7 +167,7 @@ class UserService(
 
     @Transactional(readOnly = true)
     fun getUsersByStatus(callerId: UUID, status: UserStatus, stageId: Long?, yearId: Long?, role: UserRole?, search: String?, pageable: Pageable): Page<ProfileResponse> {
-        val caller = findById(callerId)
+        val caller = findProfileById(callerId)
         var stageIdsToQuery: Collection<Long>? = if (stageId != null) listOf(stageId) else null
         var yearIdsToQuery: Collection<Long>? = if (yearId != null) listOf(yearId) else null
 
@@ -205,16 +207,29 @@ class UserService(
         } else if (caller.role != UserRole.ADMIN) {
             throw UnauthorizedException("Only Admin or Khadem can view users")
         }
+
         val whatsappLink = getParentsWhatsAppLink()
 
-        return userRepository.findByStatusAndFilters(
+        val profiles = userRepository.findProfilesByStatusAndFiltersProjection(
             status = status,
             stageIds = stageIdsToQuery,
             yearIds = yearIdsToQuery,
             role = role,
             search = search,
             pageable = pageable
-        ).map { it.toProfileResponse(imagesBaseUrl, whatsappLink) }
+        )
+        
+        val parentIds = profiles.mapNotNull { it.getParentProfile()?.getId() }
+        val childrenByParentId = if (parentIds.isNotEmpty()) {
+            userRepository.findChildrenByParentIds(parentIds).groupBy(
+                { it.getParentId() },
+                { it.toUserSummaryResponse(imagesBaseUrl) }
+            )
+        } else {
+            emptyMap()
+        }
+
+        return profiles.map { it.toProfileResponse(imagesBaseUrl, whatsappLink, childrenByParentId) }
     }
 
     @Transactional

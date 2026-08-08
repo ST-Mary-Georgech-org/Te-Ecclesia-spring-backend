@@ -5,9 +5,11 @@ import jakarta.persistence.*
 import org.teEcclesia.identity.entity.lookups.Rank
 
 import org.hibernate.envers.Audited
+import org.hibernate.annotations.BatchSize
 
 @Audited
 @Entity
+@BatchSize(size = 25)
 @Table(name = "ordination_profiles", schema = "identity")
 data class OrdinationProfile(
     @Id

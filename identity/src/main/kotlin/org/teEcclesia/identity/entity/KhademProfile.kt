@@ -7,9 +7,11 @@ import org.teEcclesia.identity.entity.lookups.EducationalYear
 
 
 import org.hibernate.envers.Audited
+import org.hibernate.annotations.BatchSize
 
 @Audited
 @Entity
+@BatchSize(size = 25)
 @Table(name = "khadem_profiles", schema = "identity")
 data class KhademProfile(
     @Id
@@ -32,6 +34,7 @@ data class KhademProfile(
     @Column(nullable = false)
     val canApproveRequests: Boolean = false,
 
+    @BatchSize(size = 25)
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "khadem_responsible_stages",
@@ -41,6 +44,7 @@ data class KhademProfile(
     )
     val responsibleStages: List<EducationalStage> = emptyList(),
 
+    @BatchSize(size = 25)
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "khadem_responsible_years",
