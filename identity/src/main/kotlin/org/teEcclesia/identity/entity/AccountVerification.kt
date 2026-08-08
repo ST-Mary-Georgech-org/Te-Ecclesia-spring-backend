@@ -1,5 +1,6 @@
 package org.teEcclesia.identity.entity
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -35,6 +36,7 @@ data class AccountVerification(
     @Column(nullable = false)
     val purpose: VerificationPurpose = VerificationPurpose.REGISTER,
 
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     val user: User

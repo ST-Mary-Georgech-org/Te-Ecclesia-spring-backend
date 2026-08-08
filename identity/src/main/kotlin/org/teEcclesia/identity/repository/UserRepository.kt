@@ -12,6 +12,7 @@ import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.entity.enums.UserRole
 
 import org.springframework.data.jpa.repository.EntityGraph
+import org.teEcclesia.identity.repository.projection.UserProfileProjection
 
 interface UserRepository : JpaRepository<User, UUID> {
     fun findByCode(code: String): User?
@@ -22,7 +23,6 @@ interface UserRepository : JpaRepository<User, UUID> {
     fun existsByNationalIdAndStatus(nationalId: String, status: UserStatus): Boolean
     fun findByNationalIdAndStatus(nationalId: String, status: UserStatus): User?
     fun findFirstByNationalIdAndStatusNotIn(nationalId: String, statuses: Collection<UserStatus>): User?
-    fun findByPhone(phone: String): User?
     fun findUsersByPhone(phone: String): List<User>
     fun findUsersByPhoneAndStatus(phone: String, status: UserStatus): List<User>
     fun findByEmail(email: String): User?
@@ -44,10 +44,6 @@ interface UserRepository : JpaRepository<User, UUID> {
         @Param("status") status: UserStatus = UserStatus.APPROVED,
         @Param("excludeUserId") excludeUserId: UUID? = null
     ): Boolean
-    
-    @Query("SELECT MAX(u.code) FROM User u WHERE u.code LIKE concat(:prefix, '%')")
-    fun findMaxCodeByPrefix(prefix: String): String?
-    fun findByStatus(status: UserStatus, pageable: Pageable): Page<User>
 
     @EntityGraph(
         attributePaths = [
@@ -61,14 +57,6 @@ interface UserRepository : JpaRepository<User, UUID> {
     )
     @Query("SELECT u FROM User u WHERE u.id = :id")
     fun findProfileById(@Param("id") id: UUID): User?
-    
-    @Query("""
-        SELECT u FROM User u 
-        WHERE (u.email = :id OR u.nationalId = :id OR u.code = :id OR u.phone = :id)
-        ORDER BY u.isPhoneVerified DESC, u.createdAt DESC 
-        LIMIT 1
-    """)
-    fun findTopByIdentifierOrderByVerification(@Param("id") id: String): User?
 
     @Query("""
         SELECT u FROM User u 
@@ -80,9 +68,22 @@ interface UserRepository : JpaRepository<User, UUID> {
     @EntityGraph(
         attributePaths = [
             "confessionPriest",
+            "confessionPriest.khademProfile",
+            "confessionPriest.kahenProfile",
+            "confessionPriest.parentProfile",
+            "confessionPriest.ordinationProfile",
+            "confessionPriest.makhdoomProfile",
+
+            "parentProfile", 
+            "parentProfile.partner",
+            "parentProfile.partner.khademProfile",
+            "parentProfile.partner.kahenProfile",
+            "parentProfile.partner.parentProfile",
+            "parentProfile.partner.ordinationProfile",
+            "parentProfile.partner.makhdoomProfile",
+
             "khademProfile", "khademProfile.educationalStage", "khademProfile.educationalYear",
             "kahenProfile",
-            "parentProfile", "parentProfile.partner",
             "ordinationProfile", "ordinationProfile.rank",
             "makhdoomProfile", "makhdoomProfile.educationalStage", "makhdoomProfile.educationalYear"
         ]
@@ -102,21 +103,32 @@ interface UserRepository : JpaRepository<User, UUID> {
              LOWER(u.email) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR 
              LOWER(u.code) LIKE LOWER(CONCAT('%', cast(:search as string), '%')))
     """)
-    fun findByStatusAndFilters(
+    fun findProfilesByStatusAndFiltersProjection(
         @Param("status") status: UserStatus,
         @Param("stageIds") stageIds: Collection<Long>?,
         @Param("yearIds") yearIds: Collection<Long>?,
         @Param("role") role: UserRole?,
         @Param("search") search: String?,
         pageable: Pageable
-    ): Page<User>
+    ): Page<UserProfileProjection>
     
-    fun findByRole(role: UserRole, pageable: Pageable): Page<User>
+    @Query("SELECT p.id as parentId, c.id as childId, c.displayName as displayName, c.code as code, c.imageUrl as imageUrl FROM ParentProfile p JOIN p.children c WHERE p.id IN :parentIds")
+    fun findChildrenByParentIds(@Param("parentIds") parentIds: Collection<Long>): List<org.teEcclesia.identity.repository.projection.ParentChildProjection>
 
+    @EntityGraph(
+        attributePaths = [
+            "khademProfile", "kahenProfile", "parentProfile", "ordinationProfile", "makhdoomProfile"
+        ]
+    )
     fun findByRoleAndStatusIs(role: UserRole, status: UserStatus, pageable: Pageable): Page<User>
 
     fun countByRole(role: UserRole): Long
 
+    @EntityGraph(
+        attributePaths = [
+            "khademProfile", "kahenProfile", "parentProfile", "ordinationProfile", "makhdoomProfile"
+        ]
+    )
     @Query("""
         SELECT u FROM User u 
         WHERE u.role = :role AND u.status = :status
@@ -127,10 +139,12 @@ interface UserRepository : JpaRepository<User, UUID> {
         @Param("status") status: UserStatus,
         @Param("query") query: String
     ): List<User>
-    
-    @Query("SELECT u FROM User u JOIN u.khademProfile kp WHERE u.role = :role AND kp.canApproveRequests = true")
-    fun findByRoleAndCanApproveRequestsTrue(@Param("role") role: UserRole, pageable: Pageable): Page<User>
 
+    @EntityGraph(
+        attributePaths = [
+            "khademProfile", "kahenProfile", "parentProfile", "ordinationProfile", "makhdoomProfile"
+        ]
+    )
     @Query("""
         SELECT u FROM User u 
         LEFT JOIN u.khademProfile kp 

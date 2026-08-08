@@ -1,5 +1,6 @@
 package org.teEcclesia.identity.entity
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
 import java.time.Instant
 
@@ -22,6 +23,7 @@ data class RefreshToken(
     @Column(nullable = true)
     val deviceToken: String? = null,
 
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     val user: User

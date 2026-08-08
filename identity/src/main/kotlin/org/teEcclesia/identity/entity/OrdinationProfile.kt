@@ -1,18 +1,22 @@
 package org.teEcclesia.identity.entity
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
 import org.teEcclesia.identity.entity.lookups.Rank
 
 import org.hibernate.envers.Audited
+import org.hibernate.annotations.BatchSize
 
 @Audited
 @Entity
+@BatchSize(size = 25)
 @Table(name = "ordination_profiles", schema = "identity")
 data class OrdinationProfile(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0,
 
+    @JsonIgnore
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     val user: User,
