@@ -81,11 +81,9 @@ class UserNotificationListener(
     @Transactional
     fun handleDeviceTokenUnregistered(event: DeviceTokenUnregisteredEvent) {
         try {
-            val tokens = refreshTokenRepository.findAllByDeviceToken(event.token)
-            if (tokens.isNotEmpty()) {
-                val updatedTokens = tokens.map { it.copy(deviceToken = null) }
-                refreshTokenRepository.saveAll(updatedTokens)
-                log.info("Successfully cleared unregistered device token: ${event.token} from ${updatedTokens.size} sessions")
+            val updatedCount = refreshTokenRepository.clearDeviceToken(event.token)
+            if (updatedCount > 0) {
+                log.info("Successfully cleared unregistered device token: ${event.token} from $updatedCount sessions")
             }
         } catch (e: Exception) {
             log.error("Error clearing unregistered device token: ${event.token}", e)

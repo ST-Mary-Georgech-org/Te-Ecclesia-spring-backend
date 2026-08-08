@@ -148,11 +148,14 @@ interface UserRepository : JpaRepository<User, UUID> {
     @Query("""
         SELECT u FROM User u 
         LEFT JOIN u.khademProfile kp 
-        WHERE u.role = :adminRole OR (u.role = :khademRole AND kp.canApproveRequests = true)
+        WHERE u.status = :approvedStatus 
+        AND u.deleted = false
+        AND (u.role = :adminRole OR (u.role = :khademRole AND kp.canApproveRequests = true))
     """)
     fun findApprovers(
         @Param("adminRole") adminRole: UserRole = UserRole.ADMIN,
         @Param("khademRole") khademRole: UserRole = UserRole.KHADEM,
+        @Param("approvedStatus") approvedStatus: UserStatus = UserStatus.APPROVED,
         pageable: Pageable
     ): Page<User>
     
