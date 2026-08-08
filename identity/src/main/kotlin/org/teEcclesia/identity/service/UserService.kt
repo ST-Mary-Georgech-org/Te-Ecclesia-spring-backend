@@ -268,7 +268,7 @@ class UserService(
         val savedUser = userRepository.save(updatedUser)
         
         savedUser.parentProfile?.let {
-            parentProfileService.syncPartner(it)
+            parentProfileService.syncPartner(savedUser)
         }
         
         addAreaIfNotExists(savedUser.area)
@@ -356,7 +356,7 @@ class UserService(
         val savedUser = userRepository.save(updatedUser)
         
         savedUser.parentProfile?.let {
-            parentProfileService.syncPartner(it)
+            parentProfileService.syncPartner(savedUser)
         }
         
         addAreaIfNotExists(savedUser.area)
@@ -760,7 +760,7 @@ class UserService(
             val updatedParentProfile = parentProfile.copy(nationalIdImageUrl = finalDocumentUrl)
             val userWithParent = savedUser.copy(parentProfile = updatedParentProfile)
             userRepository.save(userWithParent)
-            parentProfileService.syncPartner(updatedParentProfile)
+            parentProfileService.syncPartner(userWithParent)
         }
 
         addAreaIfNotExists(savedUser.area)
@@ -779,7 +779,7 @@ class UserService(
         val savedUser = userRepository.save(updatedUser)
         
         if (savedUser.status == UserStatus.APPROVED) {
-            parentProfileService.syncPartner(parentProfile)
+            parentProfileService.syncPartner(savedUser)
         }
 
         eventPublisher.publish(savedUser.toUserUpdatedEvent())

@@ -1,5 +1,6 @@
 package org.teEcclesia.identity.entity
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
 import org.teEcclesia.events.identity.UserCreatedEvent
 import org.teEcclesia.events.identity.UserUpdatedEvent
@@ -108,6 +109,7 @@ data class User(
     @Column(nullable = true, length = 9)
     val code: String? = null,
 
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "confession_priest_id")
     val confessionPriest: User? = null,
@@ -127,9 +129,11 @@ data class User(
     @Column(nullable = false)
     val isPhoneVerified: Boolean = false,
 
+    @JsonIgnore
     @OneToMany(mappedBy = "user", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
     val accountVerifications: MutableList<AccountVerification> = mutableListOf(),
 
+    @JsonIgnore
     @OneToMany(mappedBy = "user", cascade = [CascadeType.ALL], orphanRemoval = true)
     val refreshTokens: MutableList<RefreshToken> = mutableListOf(),
 

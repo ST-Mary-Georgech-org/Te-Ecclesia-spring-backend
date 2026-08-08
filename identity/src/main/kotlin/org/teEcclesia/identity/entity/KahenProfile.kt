@@ -1,5 +1,6 @@
 package org.teEcclesia.identity.entity
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
 import org.teEcclesia.identity.entity.lookups.EducationalStage
 import org.hibernate.envers.Audited
@@ -13,6 +14,7 @@ data class KahenProfile(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0,
 
+    @JsonIgnore
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false, unique = true)
     val user: User,

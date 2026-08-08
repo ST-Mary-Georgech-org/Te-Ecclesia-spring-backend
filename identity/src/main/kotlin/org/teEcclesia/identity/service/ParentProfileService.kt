@@ -45,7 +45,8 @@ class ParentProfileService(
     }
 
     @Transactional
-    fun syncPartner(parentProfile: ParentProfile) {
+    fun syncPartner(user: User) {
+        val parentProfile = user.parentProfile ?: return
         val partner = parentProfile.partner ?: return
         val partnerProfile = partner.parentProfile ?: ParentProfile(user = partner)
         
@@ -54,7 +55,7 @@ class ParentProfileService(
         
         val updatedParentProfile = parentProfile.copy(children = allChildren)
         val updatedPartnerProfile = partnerProfile.copy(
-            partner = parentProfile.user,
+            partner = user,
             children = allChildren
         )
 
