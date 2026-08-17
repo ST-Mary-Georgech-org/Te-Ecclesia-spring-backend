@@ -895,6 +895,7 @@ class AuthService(
             id = user.id,
             code = user.code,
             name = user.displayName,
+            fullName = user.fullName,
             imageUrl = fullImageUrl
         )
     }
@@ -907,6 +908,7 @@ class AuthService(
             id = user.id,
             code = user.code,
             name = user.displayName,
+            fullName = user.fullName,
             imageUrl = fullImageUrl
         )
     }

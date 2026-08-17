@@ -6,6 +6,7 @@ data class UserSummaryResponse(
     val id: UUID,
     val code: String?,
     val name: String,
+    val fullName: String,
     val imageUrl: String?
 )
 

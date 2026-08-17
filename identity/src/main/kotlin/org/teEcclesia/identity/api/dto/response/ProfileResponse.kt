@@ -65,6 +65,7 @@ fun User.toUserSummaryResponse(imageBaseUrl: String): UserSummaryResponse {
         id = id,
         name = displayName,
         code = code,
+        fullName = displayName,
         imageUrl = resolveUrl(imageBaseUrl, imageUrl)
     )
 }
@@ -239,6 +240,7 @@ private fun UserSummaryProjection.toUserSummaryResponse(imageBaseUrl: String): U
     return UserSummaryResponse(
         id = getId(),
         name = getDisplayName(),
+        fullName = getDisplayName(),
         code = getCode(),
         imageUrl = resolveUrl(imageBaseUrl, getImageUrl())
     )
@@ -257,6 +259,7 @@ fun ParentChildProjection.toUserSummaryResponse(imageBaseUrl: String): UserSumma
     return UserSummaryResponse(
         id = getChildId(),
         name = getDisplayName(),
+        fullName = getDisplayName(),
         code = getCode(),
         imageUrl = resolveUrl(imageBaseUrl, getImageUrl())
     )
