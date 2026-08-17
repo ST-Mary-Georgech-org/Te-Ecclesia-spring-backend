@@ -8,3 +8,10 @@ data class UserSummaryResponse(
     val name: String,
     val imageUrl: String?
 )
+
+data class UserSummaryResponseWithFullName(
+    val id: UUID,
+    val code: String?,
+    val fullName: String,
+    val imageUrl: String?
+)

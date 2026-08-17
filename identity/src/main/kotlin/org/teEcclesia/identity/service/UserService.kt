@@ -42,6 +42,7 @@ import org.teEcclesia.identity.repository.AreaRepository
 import org.teEcclesia.identity.repository.RankRepository
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.teEcclesia.identity.api.dto.request.ParentProfileRequest
+import org.teEcclesia.identity.api.dto.response.toUserSummaryResponseWithFullName
 import org.teEcclesia.identity.entity.lookups.Area
 import org.teEcclesia.identity.entity.enums.SettingKey
 import org.teEcclesia.identity.utils.formatHomePhone
@@ -223,7 +224,7 @@ class UserService(
         val childrenByParentId = if (parentIds.isNotEmpty()) {
             userRepository.findChildrenByParentIds(parentIds).groupBy(
                 { it.getParentId() },
-                { it.toUserSummaryResponse(imagesBaseUrl) }
+                { it.toUserSummaryResponseWithFullName(imagesBaseUrl) }
             )
         } else {
             emptyMap()

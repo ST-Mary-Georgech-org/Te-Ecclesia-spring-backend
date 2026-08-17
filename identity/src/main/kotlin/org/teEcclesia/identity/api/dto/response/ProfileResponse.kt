@@ -69,6 +69,15 @@ fun User.toUserSummaryResponse(imageBaseUrl: String): UserSummaryResponse {
     )
 }
 
+fun User.toUserSummaryResponseWithFullName(imageBaseUrl: String): UserSummaryResponseWithFullName {
+    return UserSummaryResponseWithFullName(
+        id = id,
+        fullName = displayName,
+        code = code,
+        imageUrl = resolveUrl(imageBaseUrl, imageUrl)
+    )
+}
+
 fun User.toProfileResponse(imageBaseUrl: String, parentsWhatsAppLink: String? = null): ProfileResponse {
     val lang = LocaleContextHolder.getLocale().language
     return ProfileResponse(
@@ -133,8 +142,8 @@ fun User.toProfileResponse(imageBaseUrl: String, parentsWhatsAppLink: String? = 
         },
         parentProfile = this.parentProfile?.let {
             ParentProfileResponse(
-                partner = it.partner?.toUserSummaryResponse(imageBaseUrl),
-                children = it.children.map { child -> child.toUserSummaryResponse(imageBaseUrl) },
+                partner = it.partner?.toUserSummaryResponseWithFullName(imageBaseUrl),
+                children = it.children.map { child -> child.toUserSummaryResponseWithFullName(imageBaseUrl) },
                 nationalIdImageUrl = resolveUrl(imageBaseUrl, it.nationalIdImageUrl),
                 whatsAppLink = parentsWhatsAppLink
             )
@@ -176,7 +185,7 @@ fun User.toProfileResponse(imageBaseUrl: String, parentsWhatsAppLink: String? = 
 fun UserProfileProjection.toProfileResponse(
     imageBaseUrl: String, 
     parentsWhatsAppLink: String?,
-    childrenByParentId: Map<Long, List<UserSummaryResponse>> = emptyMap()
+    childrenByParentId: Map<Long, List<UserSummaryResponseWithFullName>> = emptyMap()
 ): ProfileResponse {
     val lang = LocaleContextHolder.getLocale().language
 
@@ -235,10 +244,28 @@ private fun UserSummaryProjection.toUserSummaryResponse(imageBaseUrl: String): U
     )
 }
 
+private fun UserSummaryProjection.toUserSummaryResponseWithFullName(imageBaseUrl: String): UserSummaryResponseWithFullName {
+    return UserSummaryResponseWithFullName(
+        id = getId(),
+        fullName = getDisplayName(),
+        code = getCode(),
+        imageUrl = resolveUrl(imageBaseUrl, getImageUrl())
+    )
+}
+
 fun ParentChildProjection.toUserSummaryResponse(imageBaseUrl: String): UserSummaryResponse {
     return UserSummaryResponse(
         id = getChildId(),
         name = getDisplayName(),
+        code = getCode(),
+        imageUrl = resolveUrl(imageBaseUrl, getImageUrl())
+    )
+}
+
+fun ParentChildProjection.toUserSummaryResponseWithFullName(imageBaseUrl: String): UserSummaryResponseWithFullName {
+    return UserSummaryResponseWithFullName(
+        id = getChildId(),
+        fullName = getDisplayName(),
         code = getCode(),
         imageUrl = resolveUrl(imageBaseUrl, getImageUrl())
     )
@@ -274,10 +301,10 @@ private fun KahenProfileProjection.toKahenProfileResponse(lang: String): KahenPr
 private fun ParentProfileProjection.toParentProfileResponse(
     imageBaseUrl: String, 
     parentsWhatsAppLink: String?,
-    children: List<UserSummaryResponse>
+    children: List<UserSummaryResponseWithFullName>
 ): ParentProfileResponse {
     return ParentProfileResponse(
-        partner = getPartner()?.toUserSummaryResponse(imageBaseUrl),
+        partner = getPartner()?.toUserSummaryResponseWithFullName(imageBaseUrl),
         children = children,
         nationalIdImageUrl = resolveUrl(imageBaseUrl, getNationalIdImageUrl()),
         whatsAppLink = parentsWhatsAppLink
