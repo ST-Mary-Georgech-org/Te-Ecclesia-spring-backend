@@ -30,7 +30,8 @@ import org.teEcclesia.identity.service.ParentProfileService
 import org.teEcclesia.identity.service.SystemSettingService
 import org.teEcclesia.identity.service.UserCodeGenerator
 import org.teEcclesia.identity.service.UserValidationHelper
-
+import org.teEcclesia.identity.api.controller.InternalAuthController
+import org.teEcclesia.identity.repository.WhatsAppPendingTokenRepository
 
 @SpringBootConfiguration
 @EnableAutoConfiguration
@@ -79,6 +80,7 @@ class IdentityTestApplication {
         userRepository: UserRepository,
         refreshTokenRepository: RefreshTokenRepository,
         emailVerificationRepository: EmailVerificationRepository,
+        whatsAppPendingTokenRepository: WhatsAppPendingTokenRepository,
         emailService: EmailService,
         passwordEncoder: PasswordEncoder,
         jwtUtil: JwtUtil,
@@ -94,6 +96,7 @@ class IdentityTestApplication {
             userRepository = userRepository,
             refreshTokenRepository = refreshTokenRepository,
             otpRepository = emailVerificationRepository,
+            whatsAppPendingTokenRepository = whatsAppPendingTokenRepository,
             emailService = emailService,
             passwordEncoder = passwordEncoder,
             jwtUtil = jwtUtil,
@@ -109,6 +112,11 @@ class IdentityTestApplication {
             profileImageDirectory = "test-profiles",
             documentsDirectory = "test-docs"
         )
+    }
+
+    @Bean
+    fun internalAuthController(authService: AuthService): InternalAuthController {
+        return InternalAuthController(authService)
     }
 
     @Bean
