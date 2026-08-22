@@ -45,6 +45,7 @@ import org.teEcclesia.identity.repository.EducationalYearRepository
 import org.teEcclesia.identity.repository.EmailVerificationRepository
 import org.teEcclesia.identity.repository.RefreshTokenRepository
 import org.teEcclesia.identity.repository.UserRepository
+import org.teEcclesia.identity.repository.WhatsAppPendingTokenRepository
 import org.teEcclesia.identity.service.AuthService
 import org.teEcclesia.identity.service.EmailService
 import org.teEcclesia.identity.service.ParentProfileService
@@ -84,11 +85,15 @@ class AuthServiceIntegrationTest {
     @Autowired
     private lateinit var areaRepository: AreaRepository
 
+    @Autowired
+    private lateinit var whatsAppPendingTokenRepository: WhatsAppPendingTokenRepository
+
     @BeforeEach
     fun setUp() {
         areaRepository.deleteAll()
         refreshTokenRepository.deleteAll()
         otpRepository.deleteAll()
+        whatsAppPendingTokenRepository.deleteAll()
         userRepository.deleteAll()
         educationalYearRepository.deleteAll()
         educationalStageRepository.deleteAll()
@@ -293,8 +298,9 @@ class AuthServiceIntegrationTest {
         val updatedUser = userRepository.findById(user.id).get()
         val updatedToken = otpRepository.findByOtpAndMethod("APPROVED_$token", VerificationMethod.PHONE)
         
-        assertThat(result.success).isTrue()
+        assertThat(result.verified).isTrue()
         assertThat(result.message).contains("Your phone number has been successfully verified!")
+        assertThat(result.message).contains("تم التحقق من رقم هاتفك بنجاح!")
         assertThat(updatedUser.status).isEqualTo(UserStatus.PENDING_APPROVAL)
         assertThat(updatedToken?.otp).isEqualTo("APPROVED_$token")
     }
@@ -318,10 +324,101 @@ class AuthServiceIntegrationTest {
         val updatedUser = userRepository.findById(user.id).get()
         val updatedToken = otpRepository.findByOtpAndMethod("APPROVED_$token", VerificationMethod.PHONE)
         
-        assertThat(result.success).isTrue()
+        assertThat(result.verified).isTrue()
         assertThat(result.message).contains("Your password reset request has been verified.")
+        assertThat(result.message).contains("تم التحقق من طلب إعادة تعيين كلمة المرور.")
         assertThat(updatedUser.status).isEqualTo(UserStatus.APPROVED)
         assertThat(updatedToken?.otp).isEqualTo("APPROVED_$token")
+    }
+
+    @Test
+    fun `processWhatsAppVerification returns error message on mismatch or invalid token`() {
+        val user = createUser(email = "webhook-invalid@mail.com", isVerified = false)
+        val token = "AUTH_INVALID"
+        otpRepository.save(
+            AccountVerification(
+                otp = token,
+                user = user,
+                phone = user.phone,
+                method = VerificationMethod.PHONE
+            )
+        )
+
+        val resultMismatch = authService.processWhatsAppVerification(token, "+201999999999")
+        assertThat(resultMismatch.verified).isFalse()
+        assertThat(resultMismatch.message).contains("Please send the verification message from your registered phone number.")
+        assertThat(resultMismatch.message).contains("يرجى إرسال رسالة التحقق من رقم هاتفك المسجل.")
+
+        val resultNotFound = authService.processWhatsAppVerification("NON_EXISTENT", user.phone)
+        assertThat(resultNotFound.verified).isFalse()
+        assertThat(resultNotFound.message).contains("This verification code is invalid, expired, or has already been used.")
+        assertThat(resultNotFound.message).contains("رمز التحقق هذا غير صالح أو منتهي الصلاحية أو تم استخدامه بالفعل.")
+    }
+
+    @Test
+    fun `savePendingToken stores token and getPendingToken retrieves it`() {
+        val userId = "bsuid_user_123"
+        val token = "AUTH_PENDING_1"
+
+        authService.savePendingToken(userId, token)
+
+        val retrieved = authService.getPendingToken(userId)
+        assertThat(retrieved).isEqualTo(token)
+    }
+
+    @Test
+    fun `getPendingToken returns null and cleans up expired token`() {
+        val userId = "bsuid_user_expired"
+        val token = "AUTH_EXPIRED"
+
+        val expiredPendingToken = WhatsAppPendingToken(
+            userId = userId,
+            token = token,
+            createdAt = Instant.now().minus(35, ChronoUnit.MINUTES),
+            expiresAt = Instant.now().minus(5, ChronoUnit.MINUTES)
+        )
+        whatsAppPendingTokenRepository.save(expiredPendingToken)
+
+        val retrieved = authService.getPendingToken(userId)
+        assertThat(retrieved).isNull()
+        assertThat(whatsAppPendingTokenRepository.findById(userId).isPresent).isFalse()
+    }
+
+    @Test
+    fun `clearPendingToken removes pending token`() {
+        val userId = "bsuid_user_clear"
+        val token = "AUTH_CLEAR"
+
+        authService.savePendingToken(userId, token)
+        assertThat(authService.getPendingToken(userId)).isEqualTo(token)
+
+        authService.clearPendingToken(userId)
+        assertThat(authService.getPendingToken(userId)).isNull()
+    }
+
+    @Test
+    fun `processWhatsAppVerification with userId clears pending token on success`() {
+        val user = createUser(email = "webhook-bsuid@mail.com", isVerified = false)
+        val token = "AUTH_BSUID_TOKEN"
+        val userId = "bsuid_456"
+
+        otpRepository.save(
+            AccountVerification(
+                otp = token,
+                user = user,
+                phone = user.phone,
+                method = VerificationMethod.PHONE
+            )
+        )
+        authService.savePendingToken(userId, token)
+        assertThat(authService.getPendingToken(userId)).isEqualTo(token)
+
+        val result = authService.processWhatsAppVerification(token, user.phone, userId)
+
+        assertThat(result.verified).isTrue()
+        assertThat(result.message).contains("Your phone number has been successfully verified!")
+        assertThat(result.message).contains("تم التحقق من رقم هاتفك بنجاح!")
+        assertThat(authService.getPendingToken(userId)).isNull()
     }
 
 
@@ -333,8 +430,8 @@ class AuthServiceIntegrationTest {
         val response = authService.forgotPassword(request)
 
         assertThat(response).isNotNull()
-        assertThat(response?.link).startsWith("https://wa.me/")
-        assertThat(response?.token).startsWith("AUTH_")
+        assertThat(response.link).startsWith("https://wa.me/")
+        assertThat(response.token).startsWith("AUTH_")
     }
 
 

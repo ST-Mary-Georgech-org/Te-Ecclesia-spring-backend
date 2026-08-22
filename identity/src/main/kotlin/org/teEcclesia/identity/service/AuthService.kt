@@ -44,6 +44,8 @@ import org.teEcclesia.identity.api.dto.response.VerifyTokenResponse
 import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.utils.formatPhone
 import org.teEcclesia.storage.service.ImageStorageService
+import org.teEcclesia.identity.entity.WhatsAppPendingToken
+import org.teEcclesia.identity.repository.WhatsAppPendingTokenRepository
 import java.util.*
 
 @Service
@@ -56,6 +58,7 @@ class AuthService(
     private val userRepository: UserRepository,
     private val refreshTokenRepository: RefreshTokenRepository,
     private val otpRepository: EmailVerificationRepository,
+    private val whatsAppPendingTokenRepository: WhatsAppPendingTokenRepository,
     private val emailService: EmailService,
     private val passwordEncoder: PasswordEncoder,
     private val jwtUtil: JwtUtil,
@@ -304,17 +307,43 @@ class AuthService(
         return Pair(buildWhatsAppLink(token), token)
     }
 
-    fun processWhatsAppVerification(tokenStr: String, fromNumber: String): VerifyTokenResponse {
+    fun savePendingToken(userId: String, token: String) {
+        val pendingToken = WhatsAppPendingToken(
+            userId = userId,
+            token = token,
+            createdAt = Instant.now(),
+            expiresAt = Instant.now().plus(30, ChronoUnit.MINUTES)
+        )
+        whatsAppPendingTokenRepository.save(pendingToken)
+    }
+
+    fun getPendingToken(userId: String): String? {
+        val pendingToken = whatsAppPendingTokenRepository.findById(userId).orElse(null) ?: return null
+        if (pendingToken.isExpired()) {
+            whatsAppPendingTokenRepository.delete(pendingToken)
+            return null
+        }
+        return pendingToken.token
+    }
+
+    fun clearPendingToken(userId: String) {
+        whatsAppPendingTokenRepository.deleteById(userId)
+    }
+
+    fun processWhatsAppVerification(tokenStr: String, fromNumber: String, userId: String? = null): VerifyTokenResponse {
         val tokenEntity = otpRepository.findByOtpAndMethod(tokenStr, VerificationMethod.PHONE)
-            ?: return VerifyTokenResponse(false, "This verification code is invalid, expired, or has already been used.\nرمز التحقق هذا غير صالح أو منتهي الصلاحية أو تم استخدامه بالفعل.")
+            ?: return VerifyTokenResponse(verified = false, message = "This verification code is invalid, expired, or has already been used.\nرمز التحقق هذا غير صالح أو منتهي الصلاحية أو تم استخدامه بالفعل.")
 
         if (tokenEntity.isExpired()) {
             otpRepository.delete(tokenEntity)
-            return VerifyTokenResponse(false, "This verification code has expired. Please request a new one.\nانتهت صلاحية رمز التحقق هذا. يرجى طلب رمز جديد.")
+            if (!userId.isNullOrBlank()) {
+                clearPendingToken(userId)
+            }
+            return VerifyTokenResponse(verified = false, message = "This verification code has expired. Please request a new one.\nانتهت صلاحية رمز التحقق هذا. يرجى طلب رمز جديد.")
         }
 
         if (!validateFromNumber(tokenEntity, fromNumber)) {
-            return VerifyTokenResponse(false, "Please send the verification message from your registered phone number.\nيرجى إرسال رسالة التحقق من رقم هاتفك المسجل.")
+            return VerifyTokenResponse(verified = false, message = "Please send the verification message from your registered phone number.\nيرجى إرسال رسالة التحقق من رقم هاتفك المسجل.")
         }
 
         updateVerifiedUser(tokenEntity)
@@ -323,7 +352,11 @@ class AuthService(
         val approvedToken = tokenEntity.copy(otp = "APPROVED_$tokenStr")
         otpRepository.save(approvedToken)
 
-        return VerifyTokenResponse(true, responseMessage)
+        if (!userId.isNullOrBlank()) {
+            clearPendingToken(userId)
+        }
+
+        return VerifyTokenResponse(verified = true, message = responseMessage)
     }
 
     private fun validateFromNumber(tokenEntity: AccountVerification, fromNumber: String): Boolean {
