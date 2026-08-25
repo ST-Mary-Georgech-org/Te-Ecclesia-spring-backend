@@ -157,6 +157,18 @@ data class User(
 ) {
     val fullName: String
         get() = "$firstName $secondName $thirdName $lastName"
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is User) return false
+        return id == other.id
+    }
+
+    override fun hashCode(): Int = id.hashCode()
+
+    override fun toString(): String {
+        return "User(id=$id, nationalId='$nationalId', phone='$phone', role=$role, status=$status)"
+    }
 }
 
 fun User.toUserCreatedEvent(): UserCreatedEvent {
