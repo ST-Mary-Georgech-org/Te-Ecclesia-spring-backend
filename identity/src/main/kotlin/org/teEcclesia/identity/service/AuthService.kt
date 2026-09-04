@@ -105,7 +105,7 @@ class AuthService(
         val existingUsersByPhone = userRepository.findUsersByPhone(formattedPhone)
         val verifiedPhoneUsers = existingUsersByPhone.filter { it.isPhoneVerified && it.id != existingUser?.id }
 
-        if (verifiedPhoneUsers.size >= 2) {
+        if (verifiedPhoneUsers.size >= 3) {
             throw UserAlreadyExistsException("Phone number is already registered and verified twice.")
         }
 

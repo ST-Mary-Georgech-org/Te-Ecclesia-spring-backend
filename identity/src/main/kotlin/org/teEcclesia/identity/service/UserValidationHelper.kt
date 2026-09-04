@@ -41,7 +41,7 @@ class UserValidationHelper(
         val existingUsersByPhone = userRepository.findUsersByPhone(formattedPhone)
         val otherVerifiedPhoneUsers = existingUsersByPhone.filter { it.isPhoneVerified && it.id != currentUserId }
 
-        if (otherVerifiedPhoneUsers.size >= 2) {
+        if (otherVerifiedPhoneUsers.size >= 3) {
             throw UserAlreadyExistsException("Phone number is already registered and verified twice.")
         }
 
