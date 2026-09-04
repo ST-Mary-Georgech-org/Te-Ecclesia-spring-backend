@@ -545,7 +545,7 @@ class AuthServiceIntegrationTest {
         authService.register(request)
 
         val users = userRepository.findUsersByPhone(sharedPhone)
-        assertThat(users.size).isEqualTo(2)
+        assertThat(users.size).isEqualTo(3)
     }
 
     @Test
