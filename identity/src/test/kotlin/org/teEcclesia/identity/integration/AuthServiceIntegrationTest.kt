@@ -528,16 +528,23 @@ class AuthServiceIntegrationTest {
     }
 
     @Test
-    fun `register allows same phone number twice for different national IDs`() {
+    fun `register allows same phone number up to three times for different national IDs`() {
         val user1 = createUser(email = "phone-shared-1@mail.com", isVerified = true)
         userRepository.save(user1.copy(nationalId = "29001010101091"))
         val sharedPhone = user1.phone
-        
+
+        val user2 = user1.copy(
+            id = UUID.randomUUID(),
+            nationalId = "29001010101017",
+            email = "phone-shared-2@mail.com"
+        )
+        userRepository.save(user2)
+
         val request = RegisterRequest(
-            firstName = "Second", secondName = "User", thirdName = "Test", lastName = "Case",
-            displayName = "Second User", nationalId = "29001010101018",
+            firstName = "Third", secondName = "User", thirdName = "Test", lastName = "Case",
+            displayName = "Third User", nationalId = "29001010101018",
             phone = sharedPhone, homePhone = "0223456789",
-            email = "phone-shared-2@mail.com", password = "Password@1",
+            email = "phone-shared-3@mail.com", password = "Password@1",
             job = "Engineer", buildingNo = "2", street = "Street", area = "Area",
             floor = "1", apartment = "1", specialMark = "Mark"
         )
@@ -549,22 +556,27 @@ class AuthServiceIntegrationTest {
     }
 
     @Test
-    fun `register throws UserAlreadyExistsException if phone registered twice`() {
-        val user1 = createUser(email = "phone-shared-3@mail.com", isVerified = true)
+    fun `register throws UserAlreadyExistsException if phone registered more than three times`() {
+        val user1 = createUser(email = "phone-shared-4@mail.com", isVerified = true)
         val sharedPhone = user1.phone
-        
+
         val user2 = user1.copy(
             id = UUID.randomUUID(),
             nationalId = "29001010101017",
-            email = "phone-shared-4@mail.com"
+            email = "phone-shared-5@mail.com"
         )
-        userRepository.save(user2)
-        
+        val user3 = user1.copy(
+            id = UUID.randomUUID(),
+            nationalId = "29001010101016",
+            email = "phone-shared-6@mail.com"
+        )
+        userRepository.saveAll(listOf(user1, user2, user3))
+
         val request = RegisterRequest(
-            firstName = "Third", secondName = "User", thirdName = "Test", lastName = "Case",
-            displayName = "Third User", nationalId = "29001010101016",
+            firstName = "Fourth", secondName = "User", thirdName = "Test", lastName = "Case",
+            displayName = "Fourth User", nationalId = "29001010101015",
             phone = sharedPhone, homePhone = "0223456789",
-            email = "phone-shared-5@mail.com", password = "Password@1",
+            email = "phone-shared-7@mail.com", password = "Password@1",
             job = "Engineer", buildingNo = "2", street = "Street", area = "Area",
             floor = "1", apartment = "1", specialMark = "Mark"
         )
