@@ -20,6 +20,57 @@ import org.hibernate.annotations.SQLRestriction
 @Table(name = "users", schema = "identity")
 @SQLDelete(sql = "UPDATE identity.users SET deleted = true WHERE id=?")
 @SQLRestriction("deleted = false")
+@NamedEntityGraphs(
+    NamedEntityGraph(
+        name = User.GRAPH_WITH_PROFILES,
+        attributeNodes = [
+            NamedAttributeNode("khademProfile"),
+            NamedAttributeNode("kahenProfile"),
+            NamedAttributeNode("parentProfile"),
+            NamedAttributeNode("ordinationProfile"),
+            NamedAttributeNode("makhdoomProfile")
+        ]
+    ),
+    NamedEntityGraph(
+        name = User.GRAPH_FULL_PROFILE,
+        attributeNodes = [
+            NamedAttributeNode("confessionPriest"),
+            NamedAttributeNode("kahenProfile"),
+            NamedAttributeNode(value = "khademProfile", subgraph = "khadem-subgraph"),
+            NamedAttributeNode(value = "parentProfile", subgraph = "parent-subgraph"),
+            NamedAttributeNode(value = "ordinationProfile", subgraph = "ordination-subgraph"),
+            NamedAttributeNode(value = "makhdoomProfile", subgraph = "makhdoom-subgraph")
+        ],
+        subgraphs = [
+            NamedSubgraph(
+                name = "khadem-subgraph",
+                attributeNodes = [
+                    NamedAttributeNode("educationalStage"),
+                    NamedAttributeNode("educationalYear")
+                ]
+            ),
+            NamedSubgraph(
+                name = "parent-subgraph",
+                attributeNodes = [
+                    NamedAttributeNode("partner")
+                ]
+            ),
+            NamedSubgraph(
+                name = "ordination-subgraph",
+                attributeNodes = [
+                    NamedAttributeNode("rank")
+                ]
+            ),
+            NamedSubgraph(
+                name = "makhdoom-subgraph",
+                attributeNodes = [
+                    NamedAttributeNode("educationalStage"),
+                    NamedAttributeNode("educationalYear")
+                ]
+            )
+        ]
+    )
+)
 data class User(
     @Id
     @Column(columnDefinition = "uuid", updatable = false, nullable = false)
@@ -168,6 +219,11 @@ data class User(
 
     override fun toString(): String {
         return "User(id=$id, nationalId='$nationalId', phone='$phone', role=$role, status=$status)"
+    }
+
+    companion object {
+        const val GRAPH_WITH_PROFILES = "User.withProfiles"
+        const val GRAPH_FULL_PROFILE = "User.fullProfile"
     }
 }
 
