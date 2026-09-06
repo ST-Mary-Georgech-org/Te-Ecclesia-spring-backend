@@ -137,12 +137,11 @@ interface UserRepository : JpaRepository<User, UUID> {
     @Query("SELECT p.id as parentId, c.id as childId, c.displayName as displayName, c.code as code, c.imageUrl as imageUrl FROM ParentProfile p JOIN p.children c WHERE p.id IN :parentIds")
     fun findChildrenByParentIds(@Param("parentIds") parentIds: Collection<Long>): List<org.teEcclesia.identity.repository.projection.ParentChildProjection>
 
-    @EntityGraph(value = User.GRAPH_WITH_PROFILES)
+    @EntityGraph(attributePaths = ["kahenProfile"])
     fun findByRoleAndStatusIs(role: UserRole, status: UserStatus, pageable: Pageable): Page<User>
 
     fun countByRole(role: UserRole): Long
 
-    @EntityGraph(value = User.GRAPH_WITH_PROFILES)
     @Query("""
         SELECT u FROM User u 
         WHERE u.role = :role AND u.status = :status
@@ -154,7 +153,6 @@ interface UserRepository : JpaRepository<User, UUID> {
         @Param("query") query: String
     ): List<User>
 
-    @EntityGraph(value = User.GRAPH_WITH_PROFILES)
     @Query("""
         SELECT u FROM User u 
         LEFT JOIN u.khademProfile kp 
