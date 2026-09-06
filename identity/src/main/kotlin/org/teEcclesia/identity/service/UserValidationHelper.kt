@@ -25,28 +25,25 @@ class UserValidationHelper(
     }
 
     fun validateNationalId(nationalId: String, currentUserId: UUID? = null, isRegistration: Boolean = false) {
-        val exists = if (currentUserId != null) {
-            userRepository.existsByNationalIdAndIdNotAndStatus(nationalId, currentUserId, UserStatus.APPROVED)
-        } else {
-            userRepository.existsByNationalIdAndStatus(nationalId, UserStatus.APPROVED)
-        }
+        val exists = userRepository.existsByNationalIdExcludingStatuses(
+            nationalId = nationalId,
+            excludeUserId = currentUserId
+        )
         
         if (exists) {
             throw UserAlreadyExistsException("National ID is already registered.")
         }
     }
 
-    fun validatePhone(phone: String, nationalId: String, currentUserId: UUID? = null) {
+    fun validatePhone(phone: String, currentUserId: UUID? = null) {
         val formattedPhone = formatPhone(phone)
-        val existingUsersByPhone = userRepository.findUsersByPhone(formattedPhone)
-        val otherVerifiedPhoneUsers = existingUsersByPhone.filter { it.isPhoneVerified && it.id != currentUserId }
 
-        if (otherVerifiedPhoneUsers.size >= 3) {
-            throw UserAlreadyExistsException("Phone number is already registered and verified twice.")
-        }
-
-        if (otherVerifiedPhoneUsers.any { it.nationalId == nationalId }) {
-            throw UserAlreadyExistsException("National ID is already registered.")
+        val verifiedCount = userRepository.countVerifiedUsersByPhone(
+            phone = formattedPhone,
+            excludeUserId = currentUserId
+        )
+        if (verifiedCount >= 3) {
+            throw UserAlreadyExistsException("Phone number is already registered and verified 3 times.")
         }
     }
 
@@ -58,7 +55,7 @@ class UserValidationHelper(
         isRegistration: Boolean = false
     ) {
         validateNationalId(nationalId = nationalId, currentUserId = currentUserId, isRegistration = isRegistration)
-        validatePhone(phone = phone, nationalId = nationalId, currentUserId = currentUserId)
+        validatePhone(phone = phone, currentUserId = currentUserId)
         validateEmail(email = email, currentUserId = currentUserId)
     }
 }

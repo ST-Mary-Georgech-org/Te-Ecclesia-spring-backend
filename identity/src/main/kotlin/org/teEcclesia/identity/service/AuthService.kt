@@ -102,14 +102,19 @@ class AuthService(
             throw UserAlreadyExistsException("National ID is already registered.")
         }
 
-        val existingUsersByPhone = userRepository.findUsersByPhone(formattedPhone)
-        val verifiedPhoneUsers = existingUsersByPhone.filter { it.isPhoneVerified && it.id != existingUser?.id }
+        val verifiedPhoneCount = userRepository.countVerifiedUsersByPhone(
+            phone = formattedPhone,
+            excludeUserId = existingUser?.id
+        )
 
-        if (verifiedPhoneUsers.size >= 3) {
-            throw UserAlreadyExistsException("Phone number is already registered and verified twice.")
+        if (verifiedPhoneCount >= 3) {
+            throw UserAlreadyExistsException("Phone number is already registered and verified 3 times.")
         }
 
-        val matchingUnverifiedPhone = existingUsersByPhone.find { !it.isPhoneVerified && it.nationalId == request.nationalId }
+        val matchingUnverifiedPhone = userRepository.findFirstByPhoneAndNationalIdAndIsPhoneVerifiedFalse(
+            phone = formattedPhone,
+            nationalId = request.nationalId
+        )
 
         if (existingUser == null) {
             existingUser = matchingUnverifiedPhone

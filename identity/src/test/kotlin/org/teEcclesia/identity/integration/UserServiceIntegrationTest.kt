@@ -22,6 +22,7 @@ import org.teEcclesia.identity.entity.enums.Gender
 import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.exception.UserNotFoundException
+import org.teEcclesia.identity.exception.UserAlreadyExistsException
 import org.teEcclesia.identity.repository.*
 import org.teEcclesia.identity.api.dto.request.ApproveUserRequest
 import org.teEcclesia.identity.api.dto.request.OrdinationProfileRequest
@@ -420,6 +421,112 @@ class UserServiceIntegrationTest {
         assertThat(approvedUser.ordinationProfile?.ordinationPlace).isEqualTo("St. Mark Cathedral")
         assertThat(approvedUser.ordinationProfile?.bishopName).isEqualTo("Anba Thomas")
         assertThat(approvedUser.ordinationProfile?.ordinationYear).isEqualTo(2022)
+    }
+
+    @Test
+    fun testApproveUser_WithExistingRejectedUserWithSameNationalIdAndPhone() {
+        val nationalId = "29901011234567"
+        val phone = "01012345678"
+
+        // Create an existing REJECTED user with phone verified
+        val baseRejected = createUser(email = "rejected@test.com")
+        userRepository.save(
+            baseRejected.copy(
+                phone = phone,
+                nationalId = nationalId,
+                status = UserStatus.REJECTED,
+                isPhoneVerified = true
+            )
+        )
+
+        // Create a PENDING_APPROVAL user with same phone and nationalId
+        val basePending = createUser(email = "pending@test.com")
+        val pendingUser = userRepository.save(
+            basePending.copy(
+                phone = phone,
+                nationalId = nationalId,
+                status = UserStatus.PENDING_APPROVAL,
+                isPhoneVerified = true
+            )
+        )
+
+        val updateRequest = RegisterRequest(
+            firstName = pendingUser.firstName,
+            secondName = pendingUser.secondName,
+            thirdName = pendingUser.thirdName,
+            lastName = pendingUser.lastName,
+            displayName = pendingUser.displayName,
+            nationalId = nationalId,
+            phone = phone,
+            buildingNo = pendingUser.buildingNo,
+            street = pendingUser.street,
+            area = pendingUser.area,
+            floor = pendingUser.floor,
+            specialMark = pendingUser.specialMark,
+            role = UserRole.MAKHDOOM
+        )
+
+        val approveRequest = ApproveUserRequest(
+            updateProfileData = updateRequest
+        )
+
+        userService.approveUser(pendingUser.id, approveRequest)
+
+        val approvedUser = userRepository.findById(pendingUser.id).get()
+        assertThat(approvedUser.status).isEqualTo(UserStatus.APPROVED)
+    }
+
+    @Test
+    fun testApproveUser_FailsWhenAnotherActiveUserHasSameNationalIdEvenWithDifferentPhone() {
+        val nationalId = "29901019999999"
+        val phone1 = "01011112222"
+        val phone2 = "01033334444"
+
+        // Create an existing APPROVED user with phone1
+        val baseApproved = createUser(email = "approved-other-phone@test.com")
+        userRepository.save(
+            baseApproved.copy(
+                phone = phone1,
+                nationalId = nationalId,
+                status = UserStatus.APPROVED,
+                isPhoneVerified = true
+            )
+        )
+
+        // Create a PENDING_APPROVAL user with phone2 and same nationalId
+        val basePending = createUser(email = "pending-other-phone@test.com")
+        val pendingUser = userRepository.save(
+            basePending.copy(
+                phone = phone2,
+                nationalId = nationalId,
+                status = UserStatus.PENDING_APPROVAL,
+                isPhoneVerified = true
+            )
+        )
+
+        val updateRequest = RegisterRequest(
+            firstName = pendingUser.firstName,
+            secondName = pendingUser.secondName,
+            thirdName = pendingUser.thirdName,
+            lastName = pendingUser.lastName,
+            displayName = pendingUser.displayName,
+            nationalId = nationalId,
+            phone = phone2,
+            buildingNo = pendingUser.buildingNo,
+            street = pendingUser.street,
+            area = pendingUser.area,
+            floor = pendingUser.floor,
+            specialMark = pendingUser.specialMark,
+            role = UserRole.MAKHDOOM
+        )
+
+        val approveRequest = ApproveUserRequest(
+            updateProfileData = updateRequest
+        )
+
+        assertThrows<UserAlreadyExistsException> {
+            userService.approveUser(pendingUser.id, approveRequest)
+        }
     }
 }
 

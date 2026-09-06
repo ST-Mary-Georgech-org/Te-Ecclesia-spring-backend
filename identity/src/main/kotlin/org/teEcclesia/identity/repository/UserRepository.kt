@@ -19,8 +19,6 @@ interface UserRepository : JpaRepository<User, UUID> {
     fun existsByCodeLike(codePattern: String): Boolean
     fun findAllByCodeIn(codes: List<String>): List<User>
     fun findByNationalId(nationalId: String): User?
-    fun existsByNationalIdAndIdNotAndStatus(nationalId: String, id: UUID, status: UserStatus): Boolean
-    fun existsByNationalIdAndStatus(nationalId: String, status: UserStatus): Boolean
     fun findByNationalIdAndStatus(nationalId: String, status: UserStatus): User?
     fun findFirstByNationalIdAndStatusNotIn(nationalId: String, statuses: Collection<UserStatus>): User?
     fun findUsersByPhone(phone: String): List<User>
@@ -45,16 +43,40 @@ interface UserRepository : JpaRepository<User, UUID> {
         @Param("excludeUserId") excludeUserId: UUID? = null
     ): Boolean
 
-    @EntityGraph(
-        attributePaths = [
-            "confessionPriest",
-            "khademProfile", "khademProfile.educationalStage", "khademProfile.educationalYear",
-            "kahenProfile",
-            "parentProfile", "parentProfile.partner",
-            "ordinationProfile", "ordinationProfile.rank",
-            "makhdoomProfile", "makhdoomProfile.educationalStage", "makhdoomProfile.educationalYear"
-        ]
+    @Query(
+        """
+            SELECT COUNT(u)
+            FROM User u
+            WHERE u.phone = :phone
+                AND u.isPhoneVerified = true
+                AND u.status NOT IN (:excludedStatuses)
+                AND (:excludeUserId IS NULL OR u.id != :excludeUserId)
+        """
     )
+    fun countVerifiedUsersByPhone(
+        @Param("phone") phone: String,
+        @Param("excludedStatuses") excludedStatuses: Collection<UserStatus> = listOf(UserStatus.REJECTED, UserStatus.BANNED),
+        @Param("excludeUserId") excludeUserId: UUID? = null
+    ): Long
+
+    @Query(
+        """
+            SELECT CASE WHEN COUNT(u) > 0 THEN true ELSE false END
+            FROM User u
+            WHERE u.nationalId = :nationalId
+                AND u.status NOT IN (:excludedStatuses)
+                AND (:excludeUserId IS NULL OR u.id != :excludeUserId)
+        """
+    )
+    fun existsByNationalIdExcludingStatuses(
+        @Param("nationalId") nationalId: String,
+        @Param("excludedStatuses") excludedStatuses: Collection<UserStatus> = listOf(UserStatus.REJECTED, UserStatus.BANNED),
+        @Param("excludeUserId") excludeUserId: UUID? = null
+    ): Boolean
+
+    fun findFirstByPhoneAndNationalIdAndIsPhoneVerifiedFalse(phone: String, nationalId: String): User?
+
+    @EntityGraph(value = User.GRAPH_FULL_PROFILE)
     @Query("SELECT u FROM User u WHERE u.id = :id")
     fun findProfileById(@Param("id") id: UUID): User?
 
@@ -115,20 +137,12 @@ interface UserRepository : JpaRepository<User, UUID> {
     @Query("SELECT p.id as parentId, c.id as childId, c.displayName as displayName, c.code as code, c.imageUrl as imageUrl FROM ParentProfile p JOIN p.children c WHERE p.id IN :parentIds")
     fun findChildrenByParentIds(@Param("parentIds") parentIds: Collection<Long>): List<org.teEcclesia.identity.repository.projection.ParentChildProjection>
 
-    @EntityGraph(
-        attributePaths = [
-            "khademProfile", "kahenProfile", "parentProfile", "ordinationProfile", "makhdoomProfile"
-        ]
-    )
+    @EntityGraph(value = User.GRAPH_WITH_PROFILES)
     fun findByRoleAndStatusIs(role: UserRole, status: UserStatus, pageable: Pageable): Page<User>
 
     fun countByRole(role: UserRole): Long
 
-    @EntityGraph(
-        attributePaths = [
-            "khademProfile", "kahenProfile", "parentProfile", "ordinationProfile", "makhdoomProfile"
-        ]
-    )
+    @EntityGraph(value = User.GRAPH_WITH_PROFILES)
     @Query("""
         SELECT u FROM User u 
         WHERE u.role = :role AND u.status = :status
@@ -140,11 +154,7 @@ interface UserRepository : JpaRepository<User, UUID> {
         @Param("query") query: String
     ): List<User>
 
-    @EntityGraph(
-        attributePaths = [
-            "khademProfile", "kahenProfile", "parentProfile", "ordinationProfile", "makhdoomProfile"
-        ]
-    )
+    @EntityGraph(value = User.GRAPH_WITH_PROFILES)
     @Query("""
         SELECT u FROM User u 
         LEFT JOIN u.khademProfile kp 

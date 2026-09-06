@@ -142,7 +142,7 @@ class UserService(
             throw IllegalArgumentException("New phone number must be different from current phone number.")
         }
 
-        userValidationHelper.validatePhone(phone = phone, nationalId = user.nationalId, currentUserId = userId)
+        userValidationHelper.validatePhone(phone = phone, currentUserId = userId)
 
 
         val (deepLink, token) = authService.initiateWhatsAppPhoneChangeVerification(user, formattedPhone)
