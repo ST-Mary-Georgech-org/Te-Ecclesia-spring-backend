@@ -1,11 +1,12 @@
-.gradle
-**/build/
-build/
 .gradle/
-.gradle
 target/
 **/out/
 out/
+
+# Build artifacts: ignore all build directories except the built JAR in app module
+**/build/**
+!app/build/libs/
+!app/build/libs/*.jar
 
 # IDE and editor files
 .idea/
@@ -30,11 +31,5 @@ Thumbs.db
 
 local.properties
 
-# Keep gradlew and the gradle wrapper
-!gradlew
-!gradlew.bat
-!gradle/wrapper/
-
-
-# Maven local repository (if inside project)
+# Maven local repository
 .mvn/wrapper/dists/

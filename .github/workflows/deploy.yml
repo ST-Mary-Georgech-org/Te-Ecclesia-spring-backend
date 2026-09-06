@@ -10,12 +10,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Firebase Credentials
         run: |
           mkdir -p app/src/main/resources
           echo "${{ secrets.FIREBASE_CREDENTIALS_BASE64 }}" | base64 -d > app/src/main/resources/teEcclesia-firebase-adminsdk.json
+
+      - name: Setup Java with Gradle Cache
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 21
+          cache: gradle
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build JAR with Gradle
+        run: ./gradlew :app:bootJar -x test --build-cache
 
       - name: Build Docker image
         run: docker build -t josephsameh/teecclesia-backend:latest .
