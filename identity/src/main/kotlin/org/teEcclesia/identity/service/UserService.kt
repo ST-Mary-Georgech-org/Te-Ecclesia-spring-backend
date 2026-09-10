@@ -25,7 +25,6 @@ import org.teEcclesia.events.notifications.utils.NotificationType
 import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.entity.toUserUpdatedEvent
 import org.springframework.data.domain.Page
-import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.Pageable
 import org.teEcclesia.identity.api.dto.request.RegisterRequest
 import java.time.Instant
@@ -42,7 +41,6 @@ import org.teEcclesia.identity.repository.AreaRepository
 import org.teEcclesia.identity.repository.RankRepository
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.teEcclesia.identity.api.dto.request.ParentProfileRequest
-import org.teEcclesia.identity.api.dto.response.toUserSummaryResponseWithFullName
 import org.teEcclesia.identity.entity.lookups.Area
 import org.teEcclesia.identity.entity.enums.SettingKey
 import org.teEcclesia.identity.utils.formatHomePhone
@@ -224,7 +222,7 @@ class UserService(
         val childrenByParentId = if (parentIds.isNotEmpty()) {
             userRepository.findChildrenByParentIds(parentIds).groupBy(
                 { it.getParentId() },
-                { it.toUserSummaryResponseWithFullName(imagesBaseUrl) }
+                { it.toUserSummaryResponse(imagesBaseUrl) }
             )
         } else {
             emptyMap()

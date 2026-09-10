@@ -14,6 +14,7 @@ import org.teEcclesia.identity.api.dto.request.UpdateProfileRequest
 import org.teEcclesia.identity.api.dto.request.RegisterRequest
 import org.teEcclesia.identity.api.dto.request.MakhdoomProfileRequest
 import org.teEcclesia.identity.entity.User
+import org.teEcclesia.identity.entity.ParentProfile
 import org.teEcclesia.identity.entity.VerificationPurpose
 import org.teEcclesia.identity.entity.VerificationMethod
 import org.teEcclesia.identity.entity.lookups.EducationalStage
@@ -66,6 +67,9 @@ class UserServiceIntegrationTest {
     private lateinit var rankRepository: RankRepository
 
     @Autowired
+    private lateinit var parentProfileRepository: ParentProfileRepository
+
+    @Autowired
     private lateinit var imageStorageService: ImageStorageService
 
     @Autowired
@@ -75,6 +79,7 @@ class UserServiceIntegrationTest {
     fun setUp() {
         refreshTokenRepository.deleteAll()
         emailVerificationRepository.deleteAll()
+        parentProfileRepository.deleteAll()
         userRepository.deleteAll()
         educationalYearRepository.deleteAll()
         educationalStageRepository.deleteAll()
@@ -527,6 +532,67 @@ class UserServiceIntegrationTest {
         assertThrows<UserAlreadyExistsException> {
             userService.approveUser(pendingUser.id, approveRequest)
         }
+    }
+
+    @Test
+    fun `toUserSummaryResponse correctly populates real fullName instead of displayName`() {
+        val admin = userRepository.save(
+            createUser(email = "admin@test.com", role = UserRole.ADMIN)
+        )
+        val priest = userRepository.save(
+            createUser(email = "priest@test.com", role = UserRole.KAHEN).copy(
+                displayName = "Abouna Mina",
+                firstName = "Mina",
+                secondName = "Adly",
+                thirdName = "Naguib",
+                lastName = "Bishoy"
+            )
+        )
+        val child = userRepository.save(
+            createUser(email = "child@test.com").copy(
+                displayName = "Fady",
+                firstName = "Fady",
+                secondName = "Naguib",
+                thirdName = "Kamel",
+                lastName = "Boulos",
+                confessionPriest = priest
+            )
+        )
+        val parentUser = userRepository.save(
+            createUser(email = "parent@test.com", role = UserRole.PARENT).copy(
+                displayName = "Parent Nabil",
+                firstName = "Nabil",
+                secondName = "Kamel",
+                thirdName = "Boulos",
+                lastName = "Girgis"
+            )
+        )
+        parentProfileRepository.save(
+            ParentProfile(
+                user = parentUser,
+                children = listOf(child)
+            )
+        )
+        val profiles = userService.getUsersByStatus(
+            callerId = admin.id,
+            status = UserStatus.APPROVED,
+            stageId = null,
+            yearId = null,
+            role = null,
+            search = null,
+            pageable = PageRequest.of(0, 10)
+        )
+        val childProfile = profiles.content.find { it.id == child.id.toString() }
+        assertThat(childProfile).isNotNull()
+        assertThat(childProfile?.confessionPriest?.name).isEqualTo("Abouna Mina")
+        assertThat(childProfile?.confessionPriest?.fullName).isEqualTo("Mina Adly Naguib Bishoy")
+
+        val parentResponse = profiles.content.find { it.id == parentUser.id.toString() }
+        assertThat(parentResponse).isNotNull()
+        assertThat(parentResponse?.parentProfile?.children).hasSize(1)
+        val childSummary = parentResponse?.parentProfile?.children?.first()
+        assertThat(childSummary?.name).isEqualTo("Fady")
+        assertThat(childSummary?.fullName).isEqualTo("Fady Naguib Kamel Boulos")
     }
 }
 

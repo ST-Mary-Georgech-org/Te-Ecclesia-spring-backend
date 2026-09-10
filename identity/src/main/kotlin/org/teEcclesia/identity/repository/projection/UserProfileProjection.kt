@@ -53,6 +53,7 @@ interface UserProfileProjection {
 interface UserSummaryProjection {
     fun getId(): UUID
     fun getDisplayName(): String
+    fun getFullName(): String
     fun getCode(): String?
     fun getImageUrl(): String?
 }
@@ -119,6 +120,7 @@ interface ParentChildProjection {
     fun getParentId(): Long
     fun getChildId(): UUID
     fun getDisplayName(): String
+    fun getFullName(): String
     fun getCode(): String?
     fun getImageUrl(): String?
 }

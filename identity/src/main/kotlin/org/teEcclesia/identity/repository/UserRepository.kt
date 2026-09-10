@@ -134,7 +134,7 @@ interface UserRepository : JpaRepository<User, UUID> {
         pageable: Pageable
     ): Page<UserProfileProjection>
     
-    @Query("SELECT p.id as parentId, c.id as childId, c.displayName as displayName, c.code as code, c.imageUrl as imageUrl FROM ParentProfile p JOIN p.children c WHERE p.id IN :parentIds")
+    @Query("SELECT p.id as parentId, c.id as childId, c.displayName as displayName, CONCAT(c.firstName, ' ', c.secondName, ' ', c.thirdName, ' ', c.lastName) as fullName, c.code as code, c.imageUrl as imageUrl FROM ParentProfile p JOIN p.children c WHERE p.id IN :parentIds")
     fun findChildrenByParentIds(@Param("parentIds") parentIds: Collection<Long>): List<org.teEcclesia.identity.repository.projection.ParentChildProjection>
 
     @EntityGraph(attributePaths = ["kahenProfile"])
