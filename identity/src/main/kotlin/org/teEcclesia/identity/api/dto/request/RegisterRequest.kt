@@ -83,7 +83,8 @@ data class RegisterRequest(
     val kahenProfile: KahenProfileRequest? = null,
     val parentProfile: ParentProfileRequest? = null,
     val khademProfile: KhademProfileRequest? = null,
-    val adminKhademProfile: AdminKhademProfileRequest? = null
+    val adminKhademProfile: AdminKhademProfileRequest? = null,
+    val deaconsSchoolRecord: DeaconsSchoolRecordRequest? = null
 )
 
 

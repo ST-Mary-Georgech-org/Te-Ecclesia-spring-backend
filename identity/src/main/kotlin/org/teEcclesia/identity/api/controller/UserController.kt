@@ -81,7 +81,7 @@ class UserController(
         @RequestPart("ordinationCertificate", required = false) ordinationCertificate: MultipartFile?
     ): ResponseEntity<Void> {
         authorizeAdminOrKhadem(callerId, requireApprovePermission = true)
-        userService.approveUser(userId, request, image, identityDocument, ordinationCertificate)
+        userService.approveUser(userId, request, image, identityDocument, ordinationCertificate, callerId = callerId)
         return ResponseEntity.ok().build()
     }
 
@@ -115,7 +115,7 @@ class UserController(
         @RequestBody request: ActionReasonRequest
     ): ResponseEntity<Void> {
         authorizeAdminOrKhadem(callerId)
-        userService.rejectUser(userId, request.reason)
+        userService.rejectUser(userId, request.reason, callerId = callerId)
         return ResponseEntity.ok().build()
     }
 
@@ -126,7 +126,7 @@ class UserController(
         @RequestBody request: ActionReasonRequest
     ): ResponseEntity<Void> {
         authorizeAdminOrKhadem(callerId)
-        userService.banUser(userId, request.reason)
+        userService.banUser(userId, request.reason, callerId = callerId)
         return ResponseEntity.ok().build()
     }
 

@@ -10,6 +10,7 @@ import org.teEcclesia.identity.service.AuthService
 import org.teEcclesia.identity.service.EmailService
 import org.teEcclesia.identity.service.UserService
 import org.teEcclesia.identity.service.LookupService
+import org.teEcclesia.identity.api.controller.SystemSettingController
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.teEcclesia.storage.service.ImageStorageService
 import org.teEcclesia.client.ApiClient
@@ -26,6 +27,7 @@ import org.teEcclesia.identity.repository.EducationalStageRepository
 import org.teEcclesia.identity.repository.EducationalYearRepository
 import org.teEcclesia.identity.repository.RankRepository
 import org.teEcclesia.identity.repository.SystemSettingRepository
+import org.teEcclesia.identity.repository.DeaconsSchoolRecordRepository
 import org.teEcclesia.identity.service.ParentProfileService
 import org.teEcclesia.identity.service.SystemSettingService
 import org.teEcclesia.identity.service.UserCodeGenerator
@@ -120,6 +122,14 @@ class IdentityTestApplication {
     }
 
     @Bean
+    fun systemSettingController(
+        systemSettingService: SystemSettingService,
+        userService: UserService
+    ): SystemSettingController {
+        return SystemSettingController(systemSettingService, userService)
+    }
+
+    @Bean
     fun parentProfileService(): ParentProfileService {
         return mockk<ParentProfileService>(relaxed = true)
     }
@@ -138,7 +148,8 @@ class IdentityTestApplication {
         @Value("\${cdn.endpoint:}") cdnEndpoint: String,
         authService: AuthService,
         userValidationHelper: UserValidationHelper,
-        systemSettingService: SystemSettingService
+        systemSettingService: SystemSettingService,
+        deaconsSchoolRecordRepository: DeaconsSchoolRecordRepository
     ): UserService {
         return UserService(
             userRepository = userRepository,
@@ -156,7 +167,8 @@ class IdentityTestApplication {
             documentsDirectory = "test-docs",
             authService = authService,
             userValidationHelper = userValidationHelper,
-            systemSettingService = systemSettingService
+            systemSettingService = systemSettingService,
+            deaconsSchoolRecordRepository = deaconsSchoolRecordRepository
         )
     }
 

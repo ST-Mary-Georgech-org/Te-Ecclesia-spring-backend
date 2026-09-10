@@ -1,6 +1,7 @@
 package org.teEcclesia.identity.service
 
 import org.springframework.boot.CommandLineRunner
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Component
 import org.teEcclesia.identity.entity.SystemSetting
 import org.teEcclesia.identity.entity.enums.SettingKey
@@ -11,13 +12,23 @@ import org.teEcclesia.identity.repository.*
 class LookupSeeder(
     private val rankRepository: RankRepository,
     private val educationalStageRepository: EducationalStageRepository,
-    private val systemSettingRepository: SystemSettingRepository
+    private val systemSettingRepository: SystemSettingRepository,
+    private val jdbcTemplate: JdbcTemplate
 ) : CommandLineRunner {
 
     override fun run(vararg args: String) {
+        dropObsoleteCheckConstraints()
         seedRanks()
         seedEducationalData()
         seedSystemSettings()
+    }
+
+    private fun dropObsoleteCheckConstraints() {
+        try {
+            jdbcTemplate.execute("ALTER TABLE identity.system_settings DROP CONSTRAINT IF EXISTS system_settings_setting_key_check")
+            jdbcTemplate.execute("ALTER TABLE identity.system_settings_aud DROP CONSTRAINT IF EXISTS system_settings_aud_setting_key_check")
+        } catch (_: Exception) {
+        }
     }
 
     private fun seedSystemSettings() {
@@ -27,6 +38,15 @@ class LookupSeeder(
                     key = SettingKey.PARENTS_WHATSAPP_LINK,
                     value = null,
                     description = "رابط مجموعة واتساب العامة لأولياء الأمور"
+                )
+            )
+        }
+        if (!systemSettingRepository.existsById(SettingKey.CURRENT_ACADEMIC_YEAR)) {
+            systemSettingRepository.save(
+                SystemSetting(
+                    key = SettingKey.CURRENT_ACADEMIC_YEAR,
+                    value = "2026",
+                    description = "السنة الدراسية الحالية لمدرسة الشمامسة"
                 )
             )
         }

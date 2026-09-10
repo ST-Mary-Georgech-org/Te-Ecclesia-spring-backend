@@ -24,6 +24,7 @@ import org.hibernate.annotations.SQLRestriction
     name = User.GRAPH_FULL_PROFILE,
     attributeNodes = [
         NamedAttributeNode("confessionPriest"),
+        NamedAttributeNode("actionTakenBy"),
         NamedAttributeNode("kahenProfile"),
         NamedAttributeNode(value = "khademProfile", subgraph = "khadem-subgraph"),
         NamedAttributeNode(value = "parentProfile", subgraph = "parent-subgraph"),
@@ -141,6 +142,11 @@ data class User(
     @Column(nullable = true)
     val actionTakenAt: Instant? = null,
 
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "action_taken_by_id")
+    val actionTakenBy: User? = null,
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     val role: UserRole,
@@ -190,6 +196,10 @@ data class User(
 
     @OneToOne(mappedBy = "user", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
     val parentProfile: ParentProfile? = null,
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "user", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
+    val deaconsSchoolRecords: MutableList<DeaconsSchoolRecord> = mutableListOf(),
 
     @Column(nullable = false)
     val deleted: Boolean = false

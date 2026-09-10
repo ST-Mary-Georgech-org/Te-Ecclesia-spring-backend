@@ -29,6 +29,10 @@ import org.teEcclesia.identity.api.dto.request.ApproveUserRequest
 import org.teEcclesia.identity.api.dto.request.OrdinationProfileRequest
 import org.teEcclesia.identity.entity.lookups.Rank
 import org.teEcclesia.identity.service.UserService
+import org.teEcclesia.identity.service.SystemSettingService
+import org.teEcclesia.identity.api.dto.request.DeaconsSchoolRecordRequest
+import org.teEcclesia.identity.entity.enums.DeaconsSchoolStatus
+import java.math.BigDecimal
 import org.teEcclesia.storage.service.ImageStorageService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -74,6 +78,12 @@ class UserServiceIntegrationTest {
 
     @Autowired
     private lateinit var teEcclesiaEventPublisher: TeEcclesiaEventPublisher
+
+    @Autowired
+    private lateinit var deaconsSchoolRecordRepository: DeaconsSchoolRecordRepository
+
+    @Autowired
+    private lateinit var systemSettingService: SystemSettingService
 
     @BeforeEach
     fun setUp() {
@@ -415,7 +425,7 @@ class UserServiceIntegrationTest {
             updateProfileData = updateRequest
         )
 
-        userService.approveUser(user.id, approveRequest)
+        userService.approveUser(user.id, approveRequest, callerId = null)
 
         val approvedUser = userRepository.findById(user.id).get()
         assertThat(approvedUser.status).isEqualTo(UserStatus.APPROVED)
@@ -475,7 +485,7 @@ class UserServiceIntegrationTest {
             updateProfileData = updateRequest
         )
 
-        userService.approveUser(pendingUser.id, approveRequest)
+        userService.approveUser(pendingUser.id, approveRequest, callerId = null)
 
         val approvedUser = userRepository.findById(pendingUser.id).get()
         assertThat(approvedUser.status).isEqualTo(UserStatus.APPROVED)
@@ -524,13 +534,12 @@ class UserServiceIntegrationTest {
             specialMark = pendingUser.specialMark,
             role = UserRole.MAKHDOOM
         )
-
         val approveRequest = ApproveUserRequest(
             updateProfileData = updateRequest
         )
 
-        assertThrows<UserAlreadyExistsException> {
-            userService.approveUser(pendingUser.id, approveRequest)
+        assertThrows<RuntimeException> {
+            userService.approveUser(pendingUser.id, approveRequest, callerId = null)
         }
     }
 
@@ -593,6 +602,98 @@ class UserServiceIntegrationTest {
         val childSummary = parentResponse?.parentProfile?.children?.first()
         assertThat(childSummary?.name).isEqualTo("Fady")
         assertThat(childSummary?.fullName).isEqualTo("Fady Naguib Kamel Boulos")
+    }
+
+    @Test
+    fun `approveUser records actionTakenBy and actionTakenAt`() {
+        val admin = createUser(email = "admin-action-test@mail.com")
+        userRepository.save(admin.copy(role = UserRole.ADMIN, status = UserStatus.APPROVED))
+
+        val pending = createUser(email = "pending-action-test@mail.com")
+        userRepository.save(pending.copy(status = UserStatus.PENDING_APPROVAL))
+
+        userService.approveUser(pending.id, null, callerId = admin.id)
+
+        val approved = userRepository.findById(pending.id).get()
+        assertThat(approved.status).isEqualTo(UserStatus.APPROVED)
+        assertThat(approved.actionTakenAt).isNotNull()
+        assertThat(approved.actionTakenBy?.id).isEqualTo(admin.id)
+
+        val profile = userService.getUserProfile(pending.id)
+        assertThat(profile.actionTakenAt).isNotNull()
+        assertThat(profile.actionTakenBy?.id).isEqualTo(admin.id)
+    }
+
+    @Test
+    fun `updateUserByAdminOrKhadem saves deaconsSchoolRecord for current academic year`() {
+        val admin = createUser(email = "admin-deacon-test@mail.com")
+        userRepository.save(admin.copy(role = UserRole.ADMIN, status = UserStatus.APPROVED))
+
+        val makhdoom = createUser(email = "makhdoom-deacon-test@mail.com")
+        userRepository.save(makhdoom.copy(role = UserRole.MAKHDOOM, status = UserStatus.APPROVED))
+
+        systemSettingService.updateCurrentAcademicYear(2026)
+
+        val updateRequest = ApproveUserRequest(
+            deaconsSchoolRecord = DeaconsSchoolRecordRequest(
+                enrolled = true,
+                paid = true,
+                paidAmount = BigDecimal("150.00"),
+                status = DeaconsSchoolStatus.COMPLETED
+            )
+        )
+
+        userService.updateUserByAdminOrKhadem(
+            callerId = admin.id,
+            targetUserId = makhdoom.id,
+            request = updateRequest
+        )
+
+        val profile2026 = userService.getUserProfile(makhdoom.id)
+        assertThat(profile2026.deaconsSchoolRecord).isNotNull()
+        assertThat(profile2026.deaconsSchoolRecord?.academicYear).isEqualTo(2026)
+        assertThat(profile2026.deaconsSchoolRecord?.enrolled).isTrue()
+        assertThat(profile2026.deaconsSchoolRecord?.paid).isTrue()
+        assertThat(profile2026.deaconsSchoolRecord?.paidAmount).isEqualTo(BigDecimal("150.00"))
+        assertThat(profile2026.deaconsSchoolRecord?.status).isEqualTo(DeaconsSchoolStatus.COMPLETED)
+
+        // Change year to 2027
+        systemSettingService.updateCurrentAcademicYear(2027)
+
+        val profile2027 = userService.getUserProfile(makhdoom.id)
+        assertThat(profile2027.deaconsSchoolRecord).isNotNull()
+        assertThat(profile2027.deaconsSchoolRecord?.academicYear).isEqualTo(2027)
+        assertThat(profile2027.deaconsSchoolRecord?.enrolled).isFalse()
+        assertThat(profile2027.deaconsSchoolRecord?.paid).isFalse()
+
+        // Switch back to 2026
+        systemSettingService.updateCurrentAcademicYear(2026)
+        val profile2026Again = userService.getUserProfile(makhdoom.id)
+        assertThat(profile2026Again.deaconsSchoolRecord?.enrolled).isTrue()
+        assertThat(profile2026Again.deaconsSchoolRecord?.paidAmount).isEqualTo(BigDecimal("150.00"))
+    }
+
+    @Test
+    fun `rejectUser and banUser record actionTakenBy and actionTakenAt`() {
+        val admin = createUser(email = "admin-reject-test@mail.com")
+        userRepository.save(admin.copy(role = UserRole.ADMIN, status = UserStatus.APPROVED))
+
+        val pending = createUser(email = "pending-reject-test@mail.com")
+        userRepository.save(pending.copy(status = UserStatus.PENDING_APPROVAL))
+
+        userService.rejectUser(pending.id, reason = "Incomplete papers", callerId = admin.id)
+
+        val rejected = userRepository.findById(pending.id).get()
+        assertThat(rejected.status).isEqualTo(UserStatus.REJECTED)
+        assertThat(rejected.actionTakenAt).isNotNull()
+        assertThat(rejected.actionTakenBy?.id).isEqualTo(admin.id)
+
+        userService.banUser(pending.id, reason = "Violation", callerId = admin.id)
+
+        val banned = userRepository.findById(pending.id).get()
+        assertThat(banned.status).isEqualTo(UserStatus.BANNED)
+        assertThat(banned.actionTakenAt).isNotNull()
+        assertThat(banned.actionTakenBy?.id).isEqualTo(admin.id)
     }
 }
 

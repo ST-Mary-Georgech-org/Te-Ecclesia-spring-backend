@@ -13,6 +13,7 @@ import org.teEcclesia.identity.entity.enums.UserRole
 
 import org.springframework.data.jpa.repository.EntityGraph
 import org.teEcclesia.identity.repository.projection.UserProfileProjection
+import org.teEcclesia.identity.repository.projection.UserProfileWithDeaconsRecordProjection
 
 interface UserRepository : JpaRepository<User, UUID> {
     fun findByCode(code: String): User?
@@ -79,6 +80,18 @@ interface UserRepository : JpaRepository<User, UUID> {
     @EntityGraph(value = User.GRAPH_FULL_PROFILE)
     @Query("SELECT u FROM User u WHERE u.id = :id")
     fun findProfileById(@Param("id") id: UUID): User?
+
+    @EntityGraph(value = User.GRAPH_FULL_PROFILE)
+    @Query("""
+        SELECT u as user, d as deaconsSchoolRecord 
+        FROM User u 
+        LEFT JOIN DeaconsSchoolRecord d ON d.user = u AND d.academicYear = :academicYear 
+        WHERE u.id = :id
+    """)
+    fun findProfileWithDeaconsRecord(
+        @Param("id") id: UUID,
+        @Param("academicYear") academicYear: Int
+    ): UserProfileWithDeaconsRecordProjection?
 
     @Query("""
         SELECT u FROM User u 
