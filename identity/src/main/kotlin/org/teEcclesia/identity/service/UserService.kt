@@ -45,6 +45,13 @@ import org.teEcclesia.identity.entity.lookups.Area
 import org.teEcclesia.identity.entity.enums.SettingKey
 import org.teEcclesia.identity.utils.formatHomePhone
 import org.teEcclesia.identity.utils.formatPhone
+import org.teEcclesia.identity.entity.DeaconsSchoolRecord
+import org.teEcclesia.identity.entity.enums.DeaconsSchoolStatus
+import org.teEcclesia.identity.repository.DeaconsSchoolRecordRepository
+import org.teEcclesia.identity.api.dto.response.DeaconsSchoolRecordResponse
+import org.teEcclesia.identity.api.dto.response.orEmpty
+import org.teEcclesia.identity.api.dto.response.toResponse
+import java.math.BigDecimal
 import java.util.*
 
 @Service
@@ -62,6 +69,7 @@ class UserService(
     private val authService: AuthService,
     private val userValidationHelper: UserValidationHelper,
     private val systemSettingService: SystemSettingService,
+    private val deaconsSchoolRecordRepository: DeaconsSchoolRecordRepository,
     @param:Value("\${storage.teEcclesia.cdn-endpoint}") private val cdnEndpoint: String,
     @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String,
     @param:Value("\${identity.resources.documents-directory}") private val documentsDirectory: String
@@ -85,14 +93,20 @@ class UserService(
 
     @Transactional(readOnly = true)
     fun getUserProfile(userId: UUID, imageBaseUrl: String): ProfileResponse {
-        val user = findProfileById(userId)
-        return user.toProfileResponse(imageBaseUrl, getParentsWhatsAppLink())
+        val currentYear = systemSettingService.getCurrentAcademicYear()
+        val projection = userRepository.findProfileWithDeaconsRecord(userId, currentYear)
+            ?: throw UserNotFoundException("User with id: $userId not found")
+        val user = projection.getUser()
+        val deaconsRecord = if (user.role == UserRole.MAKHDOOM) {
+            projection.getDeaconsSchoolRecord()?.toResponse().orEmpty(currentYear)
+        } else null
+
+        return user.toProfileResponse(imageBaseUrl, getParentsWhatsAppLink(), deaconsRecord)
     }
 
     @Transactional(readOnly = true)
     fun getUserProfile(userId: UUID): ProfileResponse {
-        val user = findProfileById(userId)
-        return user.toProfileResponse(imagesBaseUrl, getParentsWhatsAppLink())
+        return getUserProfile(userId, imagesBaseUrl)
     }
 
 
@@ -237,7 +251,8 @@ class UserService(
         request: ApproveUserRequest?,
         image: MultipartFile? = null,
         identityDocument: MultipartFile? = null,
-        ordinationCertificate: MultipartFile? = null
+        ordinationCertificate: MultipartFile? = null,
+        callerId: UUID?
     ) {
         var user = findById(userId)
         
@@ -272,12 +287,14 @@ class UserService(
         )
 
         val code = request?.customCode ?: user.code ?: userCodeGenerator.generateCode(user)
+        val caller = callerId?.let { userRepository.getReferenceById(it) }
         
         val updatedUser = user.copy(
             status = UserStatus.APPROVED,
             code = code,
             isPhoneVerified = true,
-            actionTakenAt = Instant.now()
+            actionTakenAt = Instant.now(),
+            actionTakenBy = caller
         )
         val savedUser = userRepository.save(updatedUser)
         
@@ -364,10 +381,38 @@ class UserService(
         
         val updatedUser = user.copy(
             code = code,
-            actionTakenAt = Instant.now()
+            actionTakenAt = Instant.now(),
+            actionTakenBy = caller
         )
         
         val savedUser = userRepository.save(updatedUser)
+        
+        val deaconsRecordReq = request.deaconsSchoolRecord ?: request.updateProfileData?.deaconsSchoolRecord
+        if (caller.role == UserRole.ADMIN && user.role == UserRole.MAKHDOOM && deaconsRecordReq != null) {
+            val currentYear = systemSettingService.getCurrentAcademicYear()
+            val existing = deaconsSchoolRecordRepository.findByUserIdAndAcademicYear(user.id, currentYear)
+            if (existing != null) {
+                deaconsSchoolRecordRepository.save(
+                    existing.copy(
+                        enrolled = deaconsRecordReq.enrolled,
+                        paid = deaconsRecordReq.paid,
+                        paidAmount = deaconsRecordReq.paidAmount,
+                        status = deaconsRecordReq.status
+                    )
+                )
+            } else {
+                deaconsSchoolRecordRepository.save(
+                    DeaconsSchoolRecord(
+                        user = savedUser,
+                        academicYear = currentYear,
+                        enrolled = deaconsRecordReq.enrolled,
+                        paid = deaconsRecordReq.paid,
+                        paidAmount = deaconsRecordReq.paidAmount,
+                        status = deaconsRecordReq.status
+                    )
+                )
+            }
+        }
         
         savedUser.parentProfile?.let {
             parentProfileService.syncPartner(savedUser)
@@ -567,12 +612,20 @@ class UserService(
 
 
     @Transactional
-    fun rejectUser(userId: UUID, reason: String) {
+    fun rejectUser(userId: UUID, reason: String, callerId: UUID?) {
         val user = findById(userId)
         if (user.status != UserStatus.PENDING_APPROVAL) {
             throw RuntimeException("Only users pending approval can be rejected")
         }
-        val updatedUser = userRepository.save(user.copy(status = UserStatus.REJECTED, statusReason = reason, actionTakenAt = Instant.now()))
+        val caller = callerId?.let { userRepository.getReferenceById(it) }
+        val updatedUser = userRepository.save(
+            user.copy(
+                status = UserStatus.REJECTED,
+                statusReason = reason,
+                actionTakenAt = Instant.now(),
+                actionTakenBy = caller
+            )
+        )
         eventPublisher.publish(updatedUser.toUserUpdatedEvent())
 
         eventPublisher.publish(
@@ -591,9 +644,17 @@ class UserService(
     }
 
     @Transactional
-    fun banUser(userId: UUID, reason: String) {
+    fun banUser(userId: UUID, reason: String, callerId: UUID?) {
         val user = findById(userId)
-        val updatedUser = userRepository.save(user.copy(status = UserStatus.BANNED, statusReason = reason, actionTakenAt = Instant.now()))
+        val caller = callerId?.let { userRepository.getReferenceById(it) }
+        val updatedUser = userRepository.save(
+            user.copy(
+                status = UserStatus.BANNED,
+                statusReason = reason,
+                actionTakenAt = Instant.now(),
+                actionTakenBy = caller
+            )
+        )
         eventPublisher.publish(updatedUser.toUserUpdatedEvent())
     }
 

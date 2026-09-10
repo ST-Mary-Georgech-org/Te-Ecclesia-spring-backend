@@ -46,7 +46,9 @@ data class ProfileResponse(
     val ordinationProfile: OrdinationProfileResponse? = null,
     val makhdoomProfile: MakhdoomProfileResponse? = null,
     val createdAt: Instant? = null,
-    val actionTakenAt: Instant? = null
+    val actionTakenAt: Instant? = null,
+    val actionTakenBy: UserSummaryResponse? = null,
+    val deaconsSchoolRecord: DeaconsSchoolRecordResponse? = null
 )
 
 private fun resolveUrl(imageBaseUrl: String, relativePath: String?): String? {
@@ -71,7 +73,11 @@ fun User.toUserSummaryResponse(imageBaseUrl: String): UserSummaryResponse {
 }
 
 
-fun User.toProfileResponse(imageBaseUrl: String, parentsWhatsAppLink: String? = null): ProfileResponse {
+fun User.toProfileResponse(
+    imageBaseUrl: String, 
+    parentsWhatsAppLink: String? = null,
+    deaconsSchoolRecord: DeaconsSchoolRecordResponse? = null
+): ProfileResponse {
     val lang = LocaleContextHolder.getLocale().language
     return ProfileResponse(
         id = id.toString(),
@@ -171,14 +177,17 @@ fun User.toProfileResponse(imageBaseUrl: String, parentsWhatsAppLink: String? = 
             )
         },
         createdAt = this.createdAt,
-        actionTakenAt = this.actionTakenAt
+        actionTakenAt = this.actionTakenAt,
+        actionTakenBy = this.actionTakenBy?.toUserSummaryResponse(imageBaseUrl),
+        deaconsSchoolRecord = deaconsSchoolRecord
     )
 }
 
 fun UserProfileProjection.toProfileResponse(
     imageBaseUrl: String, 
     parentsWhatsAppLink: String?,
-    childrenByParentId: Map<Long, List<UserSummaryResponse>> = emptyMap()
+    childrenByParentId: Map<Long, List<UserSummaryResponse>> = emptyMap(),
+    deaconsSchoolRecord: DeaconsSchoolRecordResponse? = null
 ): ProfileResponse {
     val lang = LocaleContextHolder.getLocale().language
 
@@ -224,7 +233,9 @@ fun UserProfileProjection.toProfileResponse(
         ordinationProfile = getOrdinationProfile()?.toOrdinationProfileResponse(lang, imageBaseUrl),
         makhdoomProfile = getMakhdoomProfile()?.toMakhdoomProfileResponse(lang, imageBaseUrl),
         createdAt = getCreatedAt(),
-        actionTakenAt = getActionTakenAt()
+        actionTakenAt = getActionTakenAt(),
+        actionTakenBy = getActionTakenBy()?.toUserSummaryResponse(imageBaseUrl),
+        deaconsSchoolRecord = deaconsSchoolRecord
     )
 }
 

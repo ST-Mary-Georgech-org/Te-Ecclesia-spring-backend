@@ -37,6 +37,7 @@ interface UserProfileProjection {
     fun getRole(): UserRole
     fun getCreatedAt(): Instant?
     fun getActionTakenAt(): Instant?
+    fun getActionTakenBy(): UserSummaryProjection?
 
     fun getConfessionPriest(): UserSummaryProjection?
     fun getExternalConfessionPriestName(): String?
