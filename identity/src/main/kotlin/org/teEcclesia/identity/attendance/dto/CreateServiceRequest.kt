@@ -6,6 +6,6 @@ import java.util.UUID
 data class CreateServiceRequest(
     @field:NotBlank
     val name: String,
-    val educationalStageId: Long?,
-    val responsibleServantIds: List<UUID>
+    val educationalStageIds: List<Long>? = emptyList(),
+    val responsibleServantIds: List<UUID>? = emptyList()
 )

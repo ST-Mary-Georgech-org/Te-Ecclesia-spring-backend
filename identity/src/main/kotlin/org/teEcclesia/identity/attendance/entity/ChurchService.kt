@@ -9,14 +9,16 @@ import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
-import jakarta.persistence.ManyToOne
+import jakarta.persistence.JoinTable
+import jakarta.persistence.ManyToMany
 import jakarta.persistence.Table
+import org.hibernate.annotations.BatchSize
 import org.teEcclesia.identity.entity.lookups.EducationalStage
 import java.time.Instant
 import java.util.UUID
 
 @Entity
-@Table(name = "church_services")
+@Table(name = "church_services", schema = "identity")
 data class ChurchService(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -25,13 +27,20 @@ data class ChurchService(
     @Column(nullable = false)
     val name: String,
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "educational_stage_id", nullable = true)
-    val educationalStage: EducationalStage? = null,
+    @BatchSize(size = 25)
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "church_service_educational_stages",
+        schema = "identity",
+        joinColumns = [JoinColumn(name = "service_id")],
+        inverseJoinColumns = [JoinColumn(name = "educational_stage_id")]
+    )
+    val educationalStages: MutableSet<EducationalStage> = mutableSetOf(),
 
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(
         name = "church_service_responsible_servants",
+        schema = "identity",
         joinColumns = [JoinColumn(name = "service_id")]
     )
     @Column(name = "servant_id")

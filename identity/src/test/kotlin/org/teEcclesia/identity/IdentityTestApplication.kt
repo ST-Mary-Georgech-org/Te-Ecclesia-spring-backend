@@ -37,8 +37,8 @@ import org.teEcclesia.identity.repository.WhatsAppPendingTokenRepository
 
 @SpringBootConfiguration
 @EnableAutoConfiguration
-@EntityScan(basePackages = ["org.teEcclesia.identity.entity"])
-@EnableJpaRepositories(basePackages = ["org.teEcclesia.identity.repository"])
+@EntityScan(basePackages = ["org.teEcclesia.identity.entity", "org.teEcclesia.identity.attendance.entity"])
+@EnableJpaRepositories(basePackages = ["org.teEcclesia.identity.repository", "org.teEcclesia.identity.attendance.repository"])
 class IdentityTestApplication {
 
     @Bean

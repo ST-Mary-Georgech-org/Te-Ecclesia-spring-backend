@@ -11,13 +11,13 @@ import java.util.UUID
 
 interface ChurchServiceRepository : JpaRepository<ChurchService, Long> {
     @Query(
-        value = "SELECT cs FROM ChurchService cs LEFT JOIN FETCH cs.educationalStage ORDER BY cs.createdAt DESC",
+        value = "SELECT cs FROM ChurchService cs ORDER BY cs.createdAt DESC",
         countQuery = "SELECT count(cs) FROM ChurchService cs"
     )
-    fun findAllWithEducationalStage(pageable: Pageable): Page<ChurchService>
+    fun findAllWithEducationalStages(pageable: Pageable): Page<ChurchService>
 
-    @Query("SELECT cs FROM ChurchService cs LEFT JOIN FETCH cs.educationalStage WHERE cs.id = :id")
-    fun findByIdWithEducationalStage(@Param("id") id: Long): ChurchService?
+    @Query("SELECT cs FROM ChurchService cs LEFT JOIN FETCH cs.educationalStages WHERE cs.id = :id")
+    fun findByIdWithEducationalStages(@Param("id") id: Long): ChurchService?
 
     @Query(
         value = """
@@ -30,7 +30,7 @@ interface ChurchServiceRepository : JpaRepository<ChurchService, Long> {
                 u.last_name AS "lastName",
                 u.code AS "code",
                 u.image_url AS "imageUrl"
-            FROM church_service_responsible_servants rs
+            FROM identity.church_service_responsible_servants rs
             JOIN identity.users u ON u.id = rs.servant_id AND u.deleted = false
             WHERE rs.service_id IN :serviceIds
         """,
@@ -41,7 +41,7 @@ interface ChurchServiceRepository : JpaRepository<ChurchService, Long> {
     @Query(
         value = """
             SELECT CASE WHEN COUNT(*) > 0 THEN true ELSE false END
-            FROM church_service_responsible_servants rs
+            FROM identity.church_service_responsible_servants rs
             JOIN identity.users u ON u.id = rs.servant_id AND u.deleted = false
             WHERE rs.service_id = :serviceId AND rs.servant_id = :servantId
         """,

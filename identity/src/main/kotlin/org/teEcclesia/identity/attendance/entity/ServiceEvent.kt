@@ -12,7 +12,7 @@ import java.time.LocalTime
 import java.util.UUID
 
 @Entity
-@Table(name = "service_events")
+@Table(name = "service_events", schema = "identity")
 data class ServiceEvent(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
