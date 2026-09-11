@@ -12,10 +12,12 @@ interface AttendeeCandidateProjection {
     fun getRole(): UserRole
     fun getCode(): String?
     fun getImageUrl(): String?
+    fun getMakhdoomStageId(): Long?
     fun getMakhdoomStageAr(): String?
     fun getMakhdoomStageEn(): String?
     fun getMakhdoomYearAr(): String?
     fun getMakhdoomYearEn(): String?
+    fun getKhademStageId(): Long?
     fun getKhademStageAr(): String?
     fun getKhademStageEn(): String?
     fun getKhademYearAr(): String?

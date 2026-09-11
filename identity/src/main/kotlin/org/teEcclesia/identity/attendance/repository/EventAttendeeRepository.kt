@@ -2,12 +2,13 @@ package org.teEcclesia.identity.attendance.repository
 
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
-import org.springframework.data.jpa.repository.EntityGraph
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.teEcclesia.identity.attendance.entity.EventAttendee
 import org.teEcclesia.identity.attendance.repository.projection.EventAttendeeProjection
+import org.teEcclesia.identity.entity.User
 import java.util.UUID
 
 interface EventAttendeeRepository : JpaRepository<EventAttendee, Long> {
@@ -31,7 +32,7 @@ interface EventAttendeeRepository : JpaRepository<EventAttendee, Long> {
             ky.nameAr as khademYearAr,
             ky.nameEn as khademYearEn
         FROM EventAttendee ea
-        JOIN ea.user u
+        JOIN User u ON u.id = ea.userId
         LEFT JOIN u.makhdoomProfile mp
         LEFT JOIN mp.educationalStage ms
         LEFT JOIN mp.educationalYear my
@@ -46,20 +47,10 @@ interface EventAttendeeRepository : JpaRepository<EventAttendee, Long> {
         pageable: Pageable
     ): Page<EventAttendeeProjection>
 
-    fun findAllByEventIdOrderByRegisteredAtDesc(eventId: Long, pageable: Pageable): Page<EventAttendee>
-
-    @EntityGraph(
-        attributePaths = [
-            "user",
-            "user.makhdoomProfile",
-            "user.makhdoomProfile.educationalStage",
-            "user.makhdoomProfile.educationalYear",
-            "user.khademProfile",
-            "user.khademProfile.educationalStage",
-            "user.khademProfile.educationalYear"
-        ]
-    )
     fun findByEventIdAndUserId(eventId: Long, userId: UUID): EventAttendee?
 
-    fun deleteByEventIdAndUserId(eventId: Long, userId: UUID)
+    @Modifying
+    @Query("DELETE FROM EventAttendee ea WHERE ea.eventId = :eventId AND ea.userId = :userId")
+    fun deleteByEventIdAndUserId(@Param("eventId") eventId: Long, @Param("userId") userId: UUID)
 }
+
