@@ -13,6 +13,7 @@ import org.teEcclesia.identity.entity.enums.UserRole
 
 import org.springframework.data.jpa.repository.EntityGraph
 import org.teEcclesia.identity.attendance.repository.projection.AttendeeCandidateProjection
+import org.teEcclesia.identity.repository.projection.ParentChildProjection
 import org.teEcclesia.identity.repository.projection.UserProfileProjection
 import org.teEcclesia.identity.repository.projection.UserProfileWithDeaconsRecordProjection
 
@@ -149,7 +150,7 @@ interface UserRepository : JpaRepository<User, UUID> {
     ): Page<UserProfileProjection>
     
     @Query("SELECT p.id as parentId, c.id as childId, c.displayName as displayName, CONCAT(c.firstName, ' ', c.secondName, ' ', c.thirdName, ' ', c.lastName) as fullName, c.code as code, c.imageUrl as imageUrl FROM ParentProfile p JOIN p.children c WHERE p.id IN :parentIds")
-    fun findChildrenByParentIds(@Param("parentIds") parentIds: Collection<Long>): List<org.teEcclesia.identity.repository.projection.ParentChildProjection>
+    fun findChildrenByParentIds(@Param("parentIds") parentIds: Collection<Long>): List<ParentChildProjection>
 
     @EntityGraph(attributePaths = ["kahenProfile"])
     fun findByRoleAndStatusIs(role: UserRole, status: UserStatus, pageable: Pageable): Page<User>
@@ -193,10 +194,12 @@ interface UserRepository : JpaRepository<User, UUID> {
             u.role as role,
             u.code as code,
             u.imageUrl as imageUrl,
+            ms.id as makhdoomStageId,
             ms.nameAr as makhdoomStageAr,
             ms.nameEn as makhdoomStageEn,
             my.nameAr as makhdoomYearAr,
             my.nameEn as makhdoomYearEn,
+            ks.id as khademStageId,
             ks.nameAr as khademStageAr,
             ks.nameEn as khademStageEn,
             ky.nameAr as khademYearAr,
@@ -208,7 +211,7 @@ interface UserRepository : JpaRepository<User, UUID> {
         LEFT JOIN u.khademProfile kp
         LEFT JOIN kp.educationalStage ks
         LEFT JOIN kp.educationalYear ky
-        WHERE u.status = org.teEcclesia.identity.entity.enums.UserStatus.APPROVED
+        WHERE u.status = UserStatus.APPROVED
         AND (
             REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(CONCAT(u.firstName, ' ', u.secondName, ' ', u.thirdName, ' ', u.lastName)), 'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ة', 'ه'), 'ى', 'ي'), 'ؤ', 'و'), 'ئ', 'ء') LIKE CONCAT('%', :normalizedQuery, '%')
             OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(u.displayName), 'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ة', 'ه'), 'ى', 'ي'), 'ؤ', 'و'), 'ئ', 'ء') LIKE CONCAT('%', :normalizedQuery, '%')
@@ -223,6 +226,92 @@ interface UserRepository : JpaRepository<User, UUID> {
         @Param("rawQuery") rawQuery: String,
         @Param("numericQuery") numericQuery: String,
         pageable: Pageable
+    ): List<AttendeeCandidateProjection>
+
+    @Query("""
+        SELECT 
+            u.id as id,
+            u.firstName as firstName,
+            u.secondName as secondName,
+            u.thirdName as thirdName,
+            u.lastName as lastName,
+            u.role as role,
+            u.code as code,
+            u.imageUrl as imageUrl,
+            ms.id as makhdoomStageId,
+            ms.nameAr as makhdoomStageAr,
+            ms.nameEn as makhdoomStageEn,
+            my.nameAr as makhdoomYearAr,
+            my.nameEn as makhdoomYearEn,
+            ks.id as khademStageId,
+            ks.nameAr as khademStageAr,
+            ks.nameEn as khademStageEn,
+            ky.nameAr as khademYearAr,
+            ky.nameEn as khademYearEn
+        FROM User u 
+        LEFT JOIN u.makhdoomProfile mp
+        LEFT JOIN mp.educationalStage ms
+        LEFT JOIN mp.educationalYear my
+        LEFT JOIN u.khademProfile kp
+        LEFT JOIN kp.educationalStage ks
+        LEFT JOIN kp.educationalYear ky
+        WHERE u.status = UserStatus.APPROVED
+        AND u.role = UserRole.KHADEM
+        AND (
+            REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(CONCAT(u.firstName, ' ', u.secondName, ' ', u.thirdName, ' ', u.lastName)), 'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ة', 'ه'), 'ى', 'ي'), 'ؤ', 'و'), 'ئ', 'ء') LIKE CONCAT('%', :normalizedQuery, '%')
+            OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(u.displayName), 'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ة', 'ه'), 'ى', 'ي'), 'ؤ', 'و'), 'ئ', 'ء') LIKE CONCAT('%', :normalizedQuery, '%')
+            OR u.phone LIKE CONCAT('%', :rawQuery, '%')
+            OR u.nationalId LIKE CONCAT('%', :rawQuery, '%')
+            OR LOWER(u.code) LIKE LOWER(CONCAT('%', :rawQuery, '%'))
+            OR (:numericQuery != '' AND u.code LIKE CONCAT('%', :numericQuery, '%'))
+        )
+    """)
+    fun searchServantCandidates(
+        @Param("normalizedQuery") normalizedQuery: String,
+        @Param("rawQuery") rawQuery: String,
+        @Param("numericQuery") numericQuery: String,
+        pageable: Pageable
+    ): List<AttendeeCandidateProjection>
+
+    @Query("SELECT u.role FROM User u WHERE u.id = :id AND u.deleted = false")
+    fun findRoleById(@Param("id") id: UUID): UserRole?
+
+    @Query("SELECT u.id FROM User u WHERE u.id IN :ids AND u.role = 'KHADEM' AND u.status = 'APPROVED' AND u.deleted = false")
+    fun findApprovedKhademIdsByIds(@Param("ids") ids: Collection<UUID>): List<UUID>
+
+    @Query("""
+        SELECT 
+            u.id as id,
+            u.firstName as firstName,
+            u.secondName as secondName,
+            u.thirdName as thirdName,
+            u.lastName as lastName,
+            u.role as role,
+            u.code as code,
+            u.imageUrl as imageUrl,
+            ms.id as makhdoomStageId,
+            ms.nameAr as makhdoomStageAr,
+            ms.nameEn as makhdoomStageEn,
+            my.nameAr as makhdoomYearAr,
+            my.nameEn as makhdoomYearEn,
+            ks.id as khademStageId,
+            ks.nameAr as khademStageAr,
+            ks.nameEn as khademStageEn,
+            ky.nameAr as khademYearAr,
+            ky.nameEn as khademYearEn
+        FROM User u 
+        LEFT JOIN u.makhdoomProfile mp
+        LEFT JOIN mp.educationalStage ms
+        LEFT JOIN mp.educationalYear my
+        LEFT JOIN u.khademProfile kp
+        LEFT JOIN kp.educationalStage ks
+        LEFT JOIN kp.educationalYear ky
+        WHERE u.deleted = false
+        AND (LOWER(u.code) = LOWER(:code) OR (:digits != '' AND u.code LIKE CONCAT('%', :digits)))
+    """)
+    fun findCandidateByCode(
+        @Param("code") code: String,
+        @Param("digits") digits: String
     ): List<AttendeeCandidateProjection>
 
     @EntityGraph(value = User.GRAPH_FULL_PROFILE)
