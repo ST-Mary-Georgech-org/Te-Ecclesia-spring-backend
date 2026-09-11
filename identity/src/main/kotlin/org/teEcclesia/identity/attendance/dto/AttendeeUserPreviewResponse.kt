@@ -8,5 +8,6 @@ data class AttendeeUserPreviewResponse(
     val role: UserRole,
     val stageName: String?,
     val yearName: String?,
-    val code: String?
+    val code: String?,
+    val imageUrl: String? = null
 )

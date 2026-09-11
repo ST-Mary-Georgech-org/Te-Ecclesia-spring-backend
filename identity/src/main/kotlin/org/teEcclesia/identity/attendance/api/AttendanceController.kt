@@ -1,6 +1,8 @@
 package org.teEcclesia.identity.attendance.api
 
 import jakarta.validation.Valid
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.DeleteMapping
@@ -10,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import org.teEcclesia.identity.attendance.dto.AddAttendeeRequest
 import org.teEcclesia.identity.attendance.dto.AttendeeUserPreviewResponse
@@ -83,8 +86,18 @@ class AttendanceController(
     }
 
     @GetMapping("/events/{eventId}/attendees")
-    fun getAttendeesByEventId(@PathVariable eventId: Long): ResponseEntity<List<EventAttendeeResponse>> {
-        return ResponseEntity.ok(attendanceService.getAttendeesByEventId(eventId))
+    fun getAttendeesByEventId(
+        @PathVariable eventId: Long,
+        pageable: Pageable
+    ): ResponseEntity<Page<EventAttendeeResponse>> {
+        return ResponseEntity.ok(attendanceService.getAttendeesByEventId(eventId, pageable))
+    }
+
+    @GetMapping("/users/search")
+    fun searchUsers(
+        @RequestParam query: String
+    ): ResponseEntity<List<AttendeeUserPreviewResponse>> {
+        return ResponseEntity.ok(attendanceService.searchUsersForAttendance(query))
     }
 
     @GetMapping("/users/by-code/{code}")

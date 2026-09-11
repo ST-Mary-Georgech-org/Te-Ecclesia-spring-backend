@@ -12,6 +12,7 @@ import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.entity.enums.UserRole
 
 import org.springframework.data.jpa.repository.EntityGraph
+import org.teEcclesia.identity.attendance.repository.projection.AttendeeCandidateProjection
 import org.teEcclesia.identity.repository.projection.UserProfileProjection
 import org.teEcclesia.identity.repository.projection.UserProfileWithDeaconsRecordProjection
 
@@ -181,4 +182,56 @@ interface UserRepository : JpaRepository<User, UUID> {
     ): Page<User>
     
     fun deleteAllByIsPhoneVerifiedIsFalseAndCreatedAtBefore(date: Instant)
+
+    @Query("""
+        SELECT 
+            u.id as id,
+            u.firstName as firstName,
+            u.secondName as secondName,
+            u.thirdName as thirdName,
+            u.lastName as lastName,
+            u.role as role,
+            u.code as code,
+            u.imageUrl as imageUrl,
+            ms.nameAr as makhdoomStageAr,
+            ms.nameEn as makhdoomStageEn,
+            my.nameAr as makhdoomYearAr,
+            my.nameEn as makhdoomYearEn,
+            ks.nameAr as khademStageAr,
+            ks.nameEn as khademStageEn,
+            ky.nameAr as khademYearAr,
+            ky.nameEn as khademYearEn
+        FROM User u 
+        LEFT JOIN u.makhdoomProfile mp
+        LEFT JOIN mp.educationalStage ms
+        LEFT JOIN mp.educationalYear my
+        LEFT JOIN u.khademProfile kp
+        LEFT JOIN kp.educationalStage ks
+        LEFT JOIN kp.educationalYear ky
+        WHERE u.status = org.teEcclesia.identity.entity.enums.UserStatus.APPROVED
+        AND (
+            REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(CONCAT(u.firstName, ' ', u.secondName, ' ', u.thirdName, ' ', u.lastName)), 'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ة', 'ه'), 'ى', 'ي'), 'ؤ', 'و'), 'ئ', 'ء') LIKE CONCAT('%', :normalizedQuery, '%')
+            OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(u.displayName), 'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ة', 'ه'), 'ى', 'ي'), 'ؤ', 'و'), 'ئ', 'ء') LIKE CONCAT('%', :normalizedQuery, '%')
+            OR u.phone LIKE CONCAT('%', :rawQuery, '%')
+            OR u.nationalId LIKE CONCAT('%', :rawQuery, '%')
+            OR LOWER(u.code) LIKE LOWER(CONCAT('%', :rawQuery, '%'))
+            OR (:numericQuery != '' AND u.code LIKE CONCAT('%', :numericQuery, '%'))
+        )
+    """)
+    fun searchAttendanceCandidates(
+        @Param("normalizedQuery") normalizedQuery: String,
+        @Param("rawQuery") rawQuery: String,
+        @Param("numericQuery") numericQuery: String,
+        pageable: Pageable
+    ): List<AttendeeCandidateProjection>
+
+    @EntityGraph(value = User.GRAPH_FULL_PROFILE)
+    @Query("""
+        SELECT u FROM User u 
+        WHERE (LOWER(u.code) = LOWER(:code) OR (:digits != '' AND u.code LIKE CONCAT('%', :digits)))
+    """)
+    fun findByCodeIgnoringPrefixLetter(
+        @Param("code") code: String,
+        @Param("digits") digits: String
+    ): List<User>
 }
