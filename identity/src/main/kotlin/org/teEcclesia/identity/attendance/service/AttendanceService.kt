@@ -1,6 +1,9 @@
 package org.teEcclesia.identity.attendance.service
 
 import org.springframework.context.i18n.LocaleContextHolder
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.PageRequest
+import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.teEcclesia.identity.attendance.dto.AddAttendeeRequest
@@ -114,15 +117,100 @@ class AttendanceService(
     }
 
     @Transactional(readOnly = true)
-    fun getAttendeesByEventId(eventId: Long): List<EventAttendeeResponse> {
-        return eventAttendeeRepository.findAllByEventIdOrderByRegisteredAtDesc(eventId).map {
-            mapToEventAttendeeResponse(it)
+    fun getAttendeesByEventId(eventId: Long, pageable: Pageable): Page<EventAttendeeResponse> {
+        val lang = LocaleContextHolder.getLocale().language
+        val isEn = lang.startsWith("en", ignoreCase = true)
+        return eventAttendeeRepository.findAttendeesByEventId(eventId, pageable).map { p ->
+            val stageName = if (isEn) {
+                p.getMakhdoomStageEn() ?: p.getKhademStageEn()
+            } else {
+                p.getMakhdoomStageAr() ?: p.getKhademStageAr()
+            }
+            val yearName = if (isEn) {
+                p.getMakhdoomYearEn() ?: p.getKhademYearEn()
+            } else {
+                p.getMakhdoomYearAr() ?: p.getKhademYearAr()
+            }
+            val fullName = "${p.getFirstName()} ${p.getSecondName()} ${p.getThirdName()} ${p.getLastName()}"
+
+            EventAttendeeResponse(
+                id = p.getId(),
+                eventId = p.getEventId(),
+                userId = p.getUserId().toString(),
+                name = fullName,
+                role = p.getRole(),
+                stageName = stageName,
+                yearName = yearName,
+                registeredAt = p.getRegisteredAt()
+            )
         }
     }
 
     @Transactional(readOnly = true)
+    fun searchUsersForAttendance(query: String): List<AttendeeUserPreviewResponse> {
+        val raw = query.trim()
+        if (raw.length < 2) return emptyList()
+
+        val normalized = normalizeArabic(raw)
+        val digits = extractNumericCode(raw)
+        val candidates = userRepository.searchAttendanceCandidates(
+            normalizedQuery = normalized,
+            rawQuery = raw,
+            numericQuery = digits,
+            pageable = PageRequest.of(0, 10)
+        )
+        val lang = LocaleContextHolder.getLocale().language
+        val isEn = lang.startsWith("en", ignoreCase = true)
+        return candidates.map { c ->
+            val stageName = if (isEn) {
+                c.getMakhdoomStageEn() ?: c.getKhademStageEn()
+            } else {
+                c.getMakhdoomStageAr() ?: c.getKhademStageAr()
+            }
+            val yearName = if (isEn) {
+                c.getMakhdoomYearEn() ?: c.getKhademYearEn()
+            } else {
+                c.getMakhdoomYearAr() ?: c.getKhademYearAr()
+            }
+            val fullName = "${c.getFirstName()} ${c.getSecondName()} ${c.getThirdName()} ${c.getLastName()}"
+
+            AttendeeUserPreviewResponse(
+                id = c.getId().toString(),
+                name = fullName,
+                role = c.getRole(),
+                stageName = stageName,
+                yearName = yearName,
+                code = c.getCode(),
+                imageUrl = c.getImageUrl()
+            )
+        }
+    }
+
+    private fun normalizeArabic(input: String): String {
+        return input.lowercase().trim()
+            .replace(Regex("[أإآ]"), "ا")
+            .replace('ة', 'ه')
+            .replace('ى', 'ي')
+            .replace('ؤ', 'و')
+            .replace('ئ', 'ء')
+            .replace(Regex("[\\u064B-\\u065F\\u0670]"), "")
+    }
+
+    private fun extractNumericCode(input: String): String {
+        val digits = input.filter { it.isDigit() }
+        return if (digits.length >= 6) digits else ""
+    }
+
+    private fun findUserByCodeOrNumericCode(code: String): User? {
+        val trimmed = code.trim()
+        val digits = extractNumericCode(trimmed)
+        return userRepository.findByCodeIgnoringPrefixLetter(trimmed, digits).firstOrNull()
+            ?: userRepository.findByCode(trimmed)
+    }
+
+    @Transactional(readOnly = true)
     fun getUserByCode(code: String): AttendeeUserPreviewResponse {
-        val user = userRepository.findByCode(code)
+        val user = findUserByCodeOrNumericCode(code)
             ?: throw ResourceNotFoundException("User not found with code $code")
         return mapToAttendeeUserPreview(user)
     }
@@ -132,12 +220,11 @@ class AttendanceService(
         if (!serviceEventRepository.existsById(eventId)) {
             throw ResourceNotFoundException("Event not found with id $eventId")
         }
-        val user = userRepository.findByCode(request.code)
+        val user = findUserByCodeOrNumericCode(request.code)
             ?: throw ResourceNotFoundException("User not found with code ${request.code}")
 
-        if (eventAttendeeRepository.existsByEventIdAndUserId(eventId, user.id)) {
-            val existing = eventAttendeeRepository.findAllByEventIdOrderByRegisteredAtDesc(eventId)
-                .first { it.user.id == user.id }
+        val existing = eventAttendeeRepository.findByEventIdAndUserId(eventId, user.id)
+        if (existing != null) {
             return mapToEventAttendeeResponse(existing)
         }
 
@@ -170,11 +257,12 @@ class AttendanceService(
 
         return AttendeeUserPreviewResponse(
             id = user.id.toString(),
-            name = user.displayName,
+            name = user.fullName,
             role = user.role,
             stageName = stageName,
             yearName = yearName,
-            code = user.code
+            code = user.code,
+            imageUrl = user.imageUrl
         )
     }
 
