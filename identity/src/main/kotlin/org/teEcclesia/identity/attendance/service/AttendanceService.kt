@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.teEcclesia.identity.api.dto.response.LookupResponse
 import org.teEcclesia.identity.attendance.dto.AddAttendeeRequest
 import org.teEcclesia.identity.attendance.dto.AttendeeUserPreviewResponse
 import org.teEcclesia.identity.attendance.dto.ChurchServiceResponse
@@ -22,8 +23,8 @@ import org.teEcclesia.identity.attendance.repository.ChurchServiceRepository
 import org.teEcclesia.identity.attendance.repository.EventAttendeeRepository
 import org.teEcclesia.identity.attendance.repository.ServiceEventRepository
 import org.teEcclesia.identity.attendance.repository.projection.AttendeeCandidateProjection
-import org.teEcclesia.identity.attendance.repository.projection.ResponsibleServantProjection
 import org.teEcclesia.identity.entity.enums.UserRole
+import org.teEcclesia.identity.entity.lookups.EducationalStage
 import org.teEcclesia.identity.exception.ResourceNotFoundException
 import org.teEcclesia.identity.exception.UnauthorizedException
 import org.teEcclesia.identity.repository.EducationalStageRepository
@@ -50,7 +51,7 @@ class AttendanceService(
     private fun checkCanManageService(callerId: UUID, serviceId: Long): ChurchService {
         val role = userRepository.findRoleById(callerId)
             ?: throw UnauthorizedException("User not found")
-        val service = churchServiceRepository.findByIdWithEducationalStage(serviceId)
+        val service = churchServiceRepository.findByIdWithEducationalStages(serviceId)
             ?: throw ResourceNotFoundException("Service not found with id $serviceId")
 
         val isResponsible = role == UserRole.ADMIN || churchServiceRepository.isServantResponsibleForService(serviceId, callerId)
@@ -65,7 +66,7 @@ class AttendanceService(
         val callerRole = callerId?.let { userRepository.findRoleById(it) }
         val isCallerAdmin = callerRole == UserRole.ADMIN
 
-        val servicesPage = churchServiceRepository.findAllWithEducationalStage(pageable)
+        val servicesPage = churchServiceRepository.findAllWithEducationalStages(pageable)
         if (servicesPage.isEmpty) {
             return servicesPage.map { throw IllegalStateException() }
         }
@@ -88,15 +89,17 @@ class AttendanceService(
             } ?: emptyList()
 
             val isResponsible = isCallerAdmin || (callerId != null && servants.any { it.id == callerId })
-            val stageName = service.educationalStage?.let { if (isEn) it.nameEn else it.nameAr }
+            val stageResponses = service.educationalStages.map { stage ->
+                val name = if (isEn) stage.nameEn else stage.nameAr
+                LookupResponse(id = stage.id, name = name, whatsAppLink = null)
+            }
 
             ChurchServiceResponse(
                 id = service.id,
                 name = service.name,
                 createdAt = service.createdAt,
                 responsible = isResponsible,
-                educationalStageId = service.educationalStage?.id,
-                educationalStageName = stageName,
+                educationalStages = stageResponses,
                 responsibleServants = servants
             )
         }
@@ -106,29 +109,13 @@ class AttendanceService(
     fun createService(creatorId: UUID, request: CreateServiceRequest): ChurchServiceResponse {
         checkAdmin(creatorId)
 
-        if (request.responsibleServantIds.size > 30) {
-            throw IllegalArgumentException("Cannot assign more than 30 responsible servants to a service")
-        }
-
-        val stage = request.educationalStageId?.let { stageId ->
-            educationalStageRepository.findByIdOrNull(stageId)
-                ?: throw ResourceNotFoundException("Educational stage not found with id $stageId")
-        }
-
-        val servantIds = if (request.responsibleServantIds.isNotEmpty()) {
-            val validIds = userRepository.findApprovedKhademIdsByIds(request.responsibleServantIds).toSet()
-            if (validIds.size != request.responsibleServantIds.size) {
-                throw IllegalArgumentException("One or more selected servants are invalid or not approved khadems")
-            }
-            request.responsibleServantIds.toMutableSet()
-        } else {
-            mutableSetOf()
-        }
+        val stages = resolveEducationalStages(request.educationalStageIds)
+        val servantIds = resolveResponsibleServantIds(request.responsibleServantIds)
 
         val service = churchServiceRepository.save(
             ChurchService(
                 name = request.name,
-                educationalStage = stage,
+                educationalStages = stages,
                 responsibleServantIds = servantIds,
                 createdById = creatorId
             )
@@ -140,40 +127,50 @@ class AttendanceService(
     fun updateService(callerId: UUID, id: Long, request: CreateServiceRequest): ChurchServiceResponse {
         checkAdmin(callerId)
 
-        if (request.responsibleServantIds.size > 30) {
-            throw IllegalArgumentException("Cannot assign more than 30 responsible servants to a service")
-        }
-
         val service = churchServiceRepository.findByIdOrNull(id)
             ?: throw ResourceNotFoundException("Service not found with id $id")
 
-        val stage = request.educationalStageId?.let { stageId ->
-            educationalStageRepository.findByIdOrNull(stageId)
-                ?: throw ResourceNotFoundException("Educational stage not found with id $stageId")
-        }
-
-        val servantIds = if (request.responsibleServantIds.isNotEmpty()) {
-            val validIds = userRepository.findApprovedKhademIdsByIds(request.responsibleServantIds).toSet()
-            if (validIds.size != request.responsibleServantIds.size) {
-                throw IllegalArgumentException("One or more selected servants are invalid or not approved khadems")
-            }
-            request.responsibleServantIds.toMutableSet()
-        } else {
-            mutableSetOf()
-        }
+        val stages = resolveEducationalStages(request.educationalStageIds)
+        val servantIds = resolveResponsibleServantIds(request.responsibleServantIds)
 
         val updated = churchServiceRepository.save(
             service.copy(
                 name = request.name,
-                educationalStage = stage,
+                educationalStages = stages,
                 responsibleServantIds = servantIds
             )
         )
         return getSingleServiceResponse(updated.id, callerId, isCallerAdmin = true)
     }
 
+    private fun resolveEducationalStages(incomingStageIds: List<Long>?): MutableSet<EducationalStage> {
+        val stageIds = incomingStageIds ?: emptyList()
+        if (stageIds.size > 10) {
+            throw IllegalArgumentException("Cannot assign more than 10 educational stages to a service")
+        }
+        if (stageIds.isEmpty()) return mutableSetOf()
+        val foundStages = educationalStageRepository.findAllById(stageIds)
+        if (foundStages.size != stageIds.size) {
+            throw ResourceNotFoundException("One or more educational stages not found")
+        }
+        return foundStages.toMutableSet()
+    }
+
+    private fun resolveResponsibleServantIds(incomingServantIds: List<UUID>?): MutableSet<UUID> {
+        val servantIds = incomingServantIds ?: emptyList()
+        if (servantIds.size > 30) {
+            throw IllegalArgumentException("Cannot assign more than 30 responsible servants to a service")
+        }
+        if (servantIds.isEmpty()) return mutableSetOf()
+        val validIds = userRepository.findApprovedKhademIdsByIds(servantIds).toSet()
+        if (validIds.size != servantIds.size) {
+            throw IllegalArgumentException("One or more selected servants are invalid or not approved khadems")
+        }
+        return servantIds.toMutableSet()
+    }
+
     private fun getSingleServiceResponse(serviceId: Long, callerId: UUID, isCallerAdmin: Boolean): ChurchServiceResponse {
-        val service = churchServiceRepository.findByIdWithEducationalStage(serviceId)
+        val service = churchServiceRepository.findByIdWithEducationalStages(serviceId)
             ?: throw ResourceNotFoundException("Service not found with id $serviceId")
 
         val servants = churchServiceRepository.findResponsibleServantsByServiceIds(listOf(serviceId)).map { s ->
@@ -187,7 +184,11 @@ class AttendanceService(
 
         val lang = LocaleContextHolder.getLocale().language
         val isEn = lang.startsWith("en", ignoreCase = true)
-        val stageName = service.educationalStage?.let { if (isEn) it.nameEn else it.nameAr }
+        val stageResponses = service.educationalStages.map { stage ->
+            val name = if (isEn) stage.nameEn else stage.nameAr
+            LookupResponse(id = stage.id, name = name, whatsAppLink = null)
+        }
+
         val isResponsible = isCallerAdmin || servants.any { it.id == callerId }
 
         return ChurchServiceResponse(
@@ -195,8 +196,7 @@ class AttendanceService(
             name = service.name,
             createdAt = service.createdAt,
             responsible = isResponsible,
-            educationalStageId = service.educationalStage?.id,
-            educationalStageName = stageName,
+            educationalStages = stageResponses,
             responsibleServants = servants
         )
     }
@@ -410,16 +410,16 @@ class AttendanceService(
         val candidate = findCandidateByCodeOrNumericCode(request.code)
             ?: throw ResourceNotFoundException("User not found with code ${request.code}")
 
-        val serviceStage = service.educationalStage
-        if (serviceStage != null) {
+        if (service.educationalStages.isNotEmpty()) {
             val candidateStageId = candidate.getMakhdoomStageId() ?: candidate.getKhademStageId()
-            if (candidateStageId == null || candidateStageId != serviceStage.id) {
+            val allowedStageIds = service.educationalStages.map { it.id }.toSet()
+            if (candidateStageId == null || !allowedStageIds.contains(candidateStageId)) {
                 val isEn = LocaleContextHolder.getLocale().language.startsWith("en", ignoreCase = true)
-                val stageTitle = if (isEn) serviceStage.nameEn else serviceStage.nameAr
+                val stageTitles = service.educationalStages.joinToString(", ") { if (isEn) it.nameEn else it.nameAr }
                 val message = if (isEn) {
-                    "This user does not belong to the educational stage of this service ($stageTitle)"
+                    "This user does not belong to any educational stage of this service ($stageTitles)"
                 } else {
-                    "هذا الشخص لا ينتمي للمرحلة الدراسية المحددة لهذه الخدمة ($stageTitle)"
+                    "هذا الشخص لا ينتمي لأي من المراحل الدراسية المحددة لهذه الخدمة ($stageTitles)"
                 }
                 throw IllegalArgumentException(message)
             }

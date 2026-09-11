@@ -1,6 +1,7 @@
 package org.teEcclesia.identity.attendance.dto
 
 import com.fasterxml.jackson.annotation.JsonProperty
+import org.teEcclesia.identity.api.dto.response.LookupResponse
 import java.time.Instant
 
 data class ChurchServiceResponse(
@@ -8,7 +9,6 @@ data class ChurchServiceResponse(
     val name: String,
     val createdAt: Instant,
     val responsible: Boolean,
-    val educationalStageId: Long?,
-    val educationalStageName: String?,
+    val educationalStages: List<LookupResponse> = emptyList(),
     val responsibleServants: List<ResponsibleServantDto>
 )
