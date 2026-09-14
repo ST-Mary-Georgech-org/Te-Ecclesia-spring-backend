@@ -213,8 +213,17 @@ class AttendanceService(
 
     @Transactional(readOnly = true)
     fun getEventsByServiceId(serviceId: Long, pageable: Pageable): Page<ServiceEventResponse> {
-        return serviceEventRepository.findAllByServiceIdOrderByEventDateDescStartTimeDesc(serviceId, pageable).map {
-            ServiceEventResponse(it.id, it.serviceId, it.name, it.eventDate, it.startTime, it.endTime, it.createdAt)
+        return serviceEventRepository.findEventsWithAttendeeCountByServiceId(serviceId, pageable).map {
+            ServiceEventResponse(
+                id = it.getId(),
+                serviceId = it.getServiceId(),
+                name = it.getName(),
+                eventDate = it.getEventDate(),
+                startTime = it.getStartTime(),
+                endTime = it.getEndTime(),
+                attendeeCount = it.getAttendeeCount(),
+                createdAt = it.getCreatedAt()
+            )
         }
     }
 
@@ -232,7 +241,16 @@ class AttendanceService(
                 createdById = creatorId
             )
         )
-        return ServiceEventResponse(event.id, event.serviceId, event.name, event.eventDate, event.startTime, event.endTime, event.createdAt)
+        return ServiceEventResponse(
+            id = event.id,
+            serviceId = event.serviceId,
+            name = event.name,
+            eventDate = event.eventDate,
+            startTime = event.startTime,
+            endTime = event.endTime,
+            attendeeCount = 0L,
+            createdAt = event.createdAt
+        )
     }
 
     @Transactional
@@ -250,7 +268,17 @@ class AttendanceService(
                 endTime = request.endTime
             )
         )
-        return ServiceEventResponse(updated.id, updated.serviceId, updated.name, updated.eventDate, updated.startTime, updated.endTime, updated.createdAt)
+        val attendeeCount = eventAttendeeRepository.countByEventId(eventId)
+        return ServiceEventResponse(
+            id = updated.id,
+            serviceId = updated.serviceId,
+            name = updated.name,
+            eventDate = updated.eventDate,
+            startTime = updated.startTime,
+            endTime = updated.endTime,
+            attendeeCount = attendeeCount,
+            createdAt = updated.createdAt
+        )
     }
 
     @Transactional

@@ -72,6 +72,8 @@ interface EventAttendeeRepository : JpaRepository<EventAttendee, Long> {
         pageable: Pageable
     ): Page<UserAttendanceHistoryProjection>
 
+    fun countByEventId(eventId: Long): Long
+
     fun findByEventIdAndUserId(eventId: Long, userId: UUID): EventAttendee?
 
     @Modifying

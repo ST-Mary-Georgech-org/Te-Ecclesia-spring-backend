@@ -5,12 +5,23 @@ import jakarta.persistence.Entity
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
+import jakarta.persistence.Index
 import jakarta.persistence.Table
+import jakarta.persistence.UniqueConstraint
 import java.time.Instant
 import java.util.UUID
 
 @Entity
-@Table(name = "event_attendees", schema = "identity")
+@Table(
+    name = "event_attendees",
+    schema = "identity",
+    uniqueConstraints = [
+        UniqueConstraint(name = "uk_event_attendee_event_user", columnNames = ["event_id", "user_id"])
+    ],
+    indexes = [
+        Index(name = "idx_event_attendees_event_id", columnList = "event_id")
+    ]
+)
 data class EventAttendee(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

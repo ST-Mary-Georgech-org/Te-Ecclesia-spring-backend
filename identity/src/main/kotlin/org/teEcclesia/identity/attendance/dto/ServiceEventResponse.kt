@@ -11,5 +11,6 @@ data class ServiceEventResponse(
     val eventDate: LocalDate,
     val startTime: LocalTime,
     val endTime: LocalTime,
+    val attendeeCount: Long,
     val createdAt: Instant
 )
