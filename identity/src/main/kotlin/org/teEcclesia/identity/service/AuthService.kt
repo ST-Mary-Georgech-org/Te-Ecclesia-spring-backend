@@ -915,12 +915,12 @@ class AuthService(
     fun getConfessionPriests(pageable: Pageable): Page<PriestResponse> {
         val sort = if (pageable.sort.isUnsorted) Sort.by(Sort.Direction.ASC, "kahenProfile.ordinationDate") else pageable.sort
         val effectivePageable = PageRequest.of(pageable.pageNumber, pageable.pageSize, sort)
-        val priestsPage = userRepository.findByRoleAndStatusIs(UserRole.KAHEN, UserStatus.APPROVED, effectivePageable)
+        val priestsPage = userRepository.findPriestsSummary(UserRole.KAHEN, UserStatus.APPROVED, effectivePageable)
         return priestsPage.map { priest ->
             PriestResponse(
-                id = priest.id,
-                name = priest.displayName,
-                ordinationDate = priest.kahenProfile?.ordinationDate
+                id = priest.getId(),
+                name = priest.getName(),
+                ordinationDate = priest.getOrdinationDate()
             )
         }
     }

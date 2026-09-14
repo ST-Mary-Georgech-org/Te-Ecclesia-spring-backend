@@ -187,6 +187,9 @@ fun UserProfileProjection.toProfileResponse(
     imageBaseUrl: String, 
     parentsWhatsAppLink: String?,
     childrenByParentId: Map<Long, List<UserSummaryResponse>> = emptyMap(),
+    responsibleStagesByKhademId: Map<Long, List<LookupResponse>> = emptyMap(),
+    responsibleYearsByKhademId: Map<Long, List<LookupResponse>> = emptyMap(),
+    educationalStagesByKahenId: Map<Long, List<LookupResponse>> = emptyMap(),
     deaconsSchoolRecord: DeaconsSchoolRecordResponse? = null
 ): ProfileResponse {
     val lang = LocaleContextHolder.getLocale().language
@@ -219,22 +222,94 @@ fun UserProfileProjection.toProfileResponse(
         status = getStatus(),
         statusReason = getStatusReason(),
         role = getRole(),
-        confessionPriest = getConfessionPriest()?.toUserSummaryResponse(imageBaseUrl),
+        confessionPriest = getConfessionPriestId()?.let {
+            UserSummaryResponse(
+                id = it,
+                name = getConfessionPriestName() ?: "",
+                fullName = getConfessionPriestFullName() ?: "",
+                code = getConfessionPriestCode(),
+                imageUrl = resolveUrl(imageBaseUrl, getConfessionPriestImageUrl())
+            )
+        },
         externalConfessionPriestName = getExternalConfessionPriestName(),
         externalConfessionChurch = getExternalConfessionChurch(),
         externalConfessionPhone = getExternalConfessionPhone(),
-        khademProfile = getKhademProfile()?.toKhademProfileResponse(lang),
-        kahenProfile = getKahenProfile()?.toKahenProfileResponse(lang),
-        parentProfile = getParentProfile()?.toParentProfileResponse(
-            imageBaseUrl, 
-            parentsWhatsAppLink,
-            children = getParentProfile()?.getId()?.let { childrenByParentId[it] } ?: emptyList()
-        ),
-        ordinationProfile = getOrdinationProfile()?.toOrdinationProfileResponse(lang, imageBaseUrl),
-        makhdoomProfile = getMakhdoomProfile()?.toMakhdoomProfileResponse(lang, imageBaseUrl),
+        khademProfile = getKhademProfileId()?.let { khId ->
+            val stageName = if (lang.startsWith("en", ignoreCase = true)) getKhademStageNameEn() else getKhademStageNameAr()
+            val yearName = if (lang.startsWith("en", ignoreCase = true)) getKhademYearNameEn() else getKhademYearNameAr()
+            KhademProfileResponse(
+                educationalStage = LookupResponse(getKhademStageId() ?: 0L, stageName ?: "", whatsAppLink = null),
+                educationalYear = getKhademYearId()?.let { yId ->
+                    LookupResponse(yId, yearName ?: "", whatsAppLink = getKhademYearWhatsAppLink())
+                },
+                canApproveRequests = getKhademCanApproveRequests() ?: false,
+                responsibleStages = responsibleStagesByKhademId[khId] ?: emptyList(),
+                responsibleYears = responsibleYearsByKhademId[khId] ?: emptyList()
+            )
+        },
+        kahenProfile = getKahenProfileId()?.let { kahenId ->
+            KahenProfileResponse(
+                educationalStages = educationalStagesByKahenId[kahenId] ?: emptyList(),
+                ordinationDate = getKahenOrdinationDate()
+            )
+        },
+        parentProfile = getParentProfileId()?.let { parentId ->
+            val partnerSummary = getPartnerId()?.let {
+                UserSummaryResponse(
+                    id = it,
+                    name = getPartnerName() ?: "",
+                    fullName = getPartnerFullName() ?: "",
+                    code = getPartnerCode(),
+                    imageUrl = resolveUrl(imageBaseUrl, getPartnerImageUrl())
+                )
+            }
+            ParentProfileResponse(
+                partner = partnerSummary,
+                children = childrenByParentId[parentId] ?: emptyList(),
+                nationalIdImageUrl = resolveUrl(imageBaseUrl, getParentNationalIdImageUrl()),
+                whatsAppLink = parentsWhatsAppLink
+            )
+        },
+        ordinationProfile = getOrdinationProfileId()?.let {
+            val rankName = if (lang.startsWith("en", ignoreCase = true)) getOrdinationRankNameEn() else getOrdinationRankNameAr()
+            OrdinationProfileResponse(
+                rank = LookupResponse(getOrdinationRankId() ?: 0L, rankName ?: "", whatsAppLink = null),
+                isOrdinationInAnotherChurch = getOrdinationIsOrdinationInAnotherChurch() ?: false,
+                ordinationYear = getOrdinationYear(),
+                bishopName = getOrdinationBishopName(),
+                ordinationPlace = getOrdinationPlace(),
+                certificateImageUrl = resolveUrl(imageBaseUrl, getOrdinationCertificateImageUrl())
+            )
+        },
+        makhdoomProfile = getMakhdoomProfileId()?.let {
+            val stageName = if (lang.startsWith("en", ignoreCase = true)) getMakhdoomStageNameEn() else getMakhdoomStageNameAr()
+            val yearName = if (lang.startsWith("en", ignoreCase = true)) getMakhdoomYearNameEn() else getMakhdoomYearNameAr()
+            MakhdoomProfileResponse(
+                shamamsaStudyStatus = getMakhdoomShamamsaStudyStatus() ?: org.teEcclesia.identity.entity.enums.ShamamsaStudyStatus.NO,
+                educationalStage = LookupResponse(getMakhdoomStageId() ?: 0L, stageName ?: "", whatsAppLink = null),
+                educationalYear = getMakhdoomYearId()?.let { yId ->
+                    LookupResponse(yId, yearName ?: "", whatsAppLink = getMakhdoomYearWhatsAppLink())
+                },
+                fatherPhone = getMakhdoomFatherPhone(),
+                fatherWhatsapp = getMakhdoomFatherWhatsapp(),
+                motherPhone = getMakhdoomMotherPhone(),
+                motherWhatsapp = getMakhdoomMotherWhatsapp(),
+                isFatherDeceased = getMakhdoomIsFatherDeceased() ?: false,
+                isMotherDeceased = getMakhdoomIsMotherDeceased() ?: false,
+                identityDocumentImageUrl = resolveUrl(imageBaseUrl, getMakhdoomIdentityDocumentImageUrl())
+            )
+        },
         createdAt = getCreatedAt(),
         actionTakenAt = getActionTakenAt(),
-        actionTakenBy = getActionTakenBy()?.toUserSummaryResponse(imageBaseUrl),
+        actionTakenBy = getActionTakenById()?.let {
+            UserSummaryResponse(
+                id = it,
+                name = getActionTakenByName() ?: "",
+                fullName = getActionTakenByFullName() ?: "",
+                code = getActionTakenByCode(),
+                imageUrl = resolveUrl(imageBaseUrl, getActionTakenByImageUrl())
+            )
+        },
         deaconsSchoolRecord = deaconsSchoolRecord
     )
 }
@@ -266,6 +341,16 @@ private fun StageLookupProjection.toLookupResponse(lang: String): LookupResponse
 }
 
 private fun YearLookupProjection.toLookupResponse(lang: String): LookupResponse {
+    val name = if (lang.startsWith("en", ignoreCase = true)) getNameEn() else getNameAr()
+    return LookupResponse(getId(), name, whatsAppLink = getWhatsAppLink())
+}
+
+fun ProfileStageLookupProjection.toLookupResponse(lang: String): LookupResponse {
+    val name = if (lang.startsWith("en", ignoreCase = true)) getNameEn() else getNameAr()
+    return LookupResponse(getId(), name, whatsAppLink = null)
+}
+
+fun ProfileYearLookupProjection.toLookupResponse(lang: String): LookupResponse {
     val name = if (lang.startsWith("en", ignoreCase = true)) getNameEn() else getNameAr()
     return LookupResponse(getId(), name, whatsAppLink = getWhatsAppLink())
 }

@@ -20,7 +20,11 @@ class PushNotificationService(
         body: String,
         dataPayload: Map<String, String> = emptyMap()
     ) {
-        tokens.forEach { token ->
+        val validTokens = tokens.filter { it.isNotBlank() }
+        if (validTokens.isEmpty()) {
+            return
+        }
+        validTokens.forEach { token ->
             sendPushNotificationToToken(token, title, body, dataPayload)
         }
     }
@@ -31,6 +35,7 @@ class PushNotificationService(
         body: String,
         dataPayload: Map<String, String>
     ) {
+        if (token.isBlank()) return
         try {
             val messageBuilder = Message.builder()
                 .setToken(token)

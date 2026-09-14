@@ -1,6 +1,7 @@
 package org.teEcclesia.identity.entity.lookups
 
 import jakarta.persistence.*
+import org.hibernate.annotations.BatchSize
 
 import org.hibernate.envers.Audited
 
@@ -21,6 +22,7 @@ data class EducationalStage(
     @Column(name = "is_khadem_only", nullable = false, columnDefinition = "boolean default false")
     val isKhademOnly: Boolean = false,
     
+    @BatchSize(size = 50)
     @OneToMany(mappedBy = "stage", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
     val years: MutableList<EducationalYear> = mutableListOf()
 )

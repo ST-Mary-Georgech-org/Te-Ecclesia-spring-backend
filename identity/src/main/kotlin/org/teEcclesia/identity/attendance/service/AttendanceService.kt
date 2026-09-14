@@ -16,6 +16,7 @@ import org.teEcclesia.identity.attendance.dto.CreateServiceRequest
 import org.teEcclesia.identity.attendance.dto.EventAttendeeResponse
 import org.teEcclesia.identity.attendance.dto.ResponsibleServantDto
 import org.teEcclesia.identity.attendance.dto.ServiceEventResponse
+import org.teEcclesia.identity.attendance.dto.UserAttendanceHistoryResponse
 import org.teEcclesia.identity.attendance.entity.ChurchService
 import org.teEcclesia.identity.attendance.entity.EventAttendee
 import org.teEcclesia.identity.attendance.entity.ServiceEvent
@@ -479,6 +480,45 @@ class AttendanceService(
         checkCanManageService(callerId, event.serviceId)
         eventAttendeeRepository.deleteByEventIdAndUserId(eventId, userId)
     }
+
+    @Transactional(readOnly = true)
+    fun getUserAttendanceHistory(
+        callerId: UUID?,
+        userId: UUID,
+        serviceId: Long?,
+        pageable: Pageable
+    ): Page<UserAttendanceHistoryResponse> {
+        if (callerId == null) {
+            throw UnauthorizedException("Authentication required")
+        }
+        val callerRole = userRepository.findRoleById(callerId)
+            ?: throw UnauthorizedException("User not found")
+
+        val isSelf = callerId == userId
+        val isAuthorized = callerRole == UserRole.ADMIN || callerRole == UserRole.KHADEM || isSelf
+        if (!isAuthorized) {
+            throw UnauthorizedException("You are not authorized to view attendance history")
+        }
+
+        if (!userRepository.existsById(userId)) {
+            throw ResourceNotFoundException("User not found with id $userId")
+        }
+
+        return eventAttendeeRepository.findAttendanceHistoryByUserId(userId, serviceId, pageable).map { p ->
+            UserAttendanceHistoryResponse(
+                id = p.getId(),
+                eventId = p.getEventId(),
+                serviceId = p.getServiceId(),
+                serviceName = p.getServiceName(),
+                eventName = p.getEventName(),
+                eventDate = p.getEventDate(),
+                startTime = p.getStartTime(),
+                endTime = p.getEndTime(),
+                registeredAt = p.getRegisteredAt()
+            )
+        }
+    }
 }
+
 
 

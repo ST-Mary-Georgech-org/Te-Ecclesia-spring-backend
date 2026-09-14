@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.teEcclesia.identity.attendance.entity.EventAttendee
 import org.teEcclesia.identity.attendance.repository.projection.EventAttendeeProjection
+import org.teEcclesia.identity.attendance.repository.projection.UserAttendanceHistoryProjection
 import org.teEcclesia.identity.entity.User
 import java.util.UUID
 
@@ -47,10 +48,35 @@ interface EventAttendeeRepository : JpaRepository<EventAttendee, Long> {
         pageable: Pageable
     ): Page<EventAttendeeProjection>
 
+    @Query("""
+        SELECT 
+            ea.id as id,
+            se.id as eventId,
+            cs.id as serviceId,
+            cs.name as serviceName,
+            se.name as eventName,
+            se.eventDate as eventDate,
+            se.startTime as startTime,
+            se.endTime as endTime,
+            ea.registeredAt as registeredAt
+        FROM EventAttendee ea
+        JOIN ServiceEvent se ON se.id = ea.eventId
+        JOIN ChurchService cs ON cs.id = se.serviceId
+        WHERE ea.userId = :userId
+          AND (:serviceId IS NULL OR se.serviceId = :serviceId)
+        ORDER BY se.eventDate DESC, se.startTime DESC, ea.registeredAt DESC
+    """)
+    fun findAttendanceHistoryByUserId(
+        @Param("userId") userId: UUID,
+        @Param("serviceId") serviceId: Long?,
+        pageable: Pageable
+    ): Page<UserAttendanceHistoryProjection>
+
     fun findByEventIdAndUserId(eventId: Long, userId: UUID): EventAttendee?
 
     @Modifying
     @Query("DELETE FROM EventAttendee ea WHERE ea.eventId = :eventId AND ea.userId = :userId")
     fun deleteByEventIdAndUserId(@Param("eventId") eventId: Long, @Param("userId") userId: UUID)
 }
+
 

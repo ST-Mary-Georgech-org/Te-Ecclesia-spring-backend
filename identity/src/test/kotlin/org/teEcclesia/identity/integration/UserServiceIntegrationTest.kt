@@ -557,6 +557,15 @@ class UserServiceIntegrationTest {
                 lastName = "Bishoy"
             )
         )
+        val approver = userRepository.save(
+            createUser(email = "approver-summary@test.com", role = UserRole.ADMIN).copy(
+                displayName = "Super Admin",
+                firstName = "Super",
+                secondName = "User",
+                thirdName = "Test",
+                lastName = "Admin"
+            )
+        )
         val child = userRepository.save(
             createUser(email = "child@test.com").copy(
                 displayName = "Fady",
@@ -564,7 +573,17 @@ class UserServiceIntegrationTest {
                 secondName = "Naguib",
                 thirdName = "Kamel",
                 lastName = "Boulos",
-                confessionPriest = priest
+                confessionPriest = priest,
+                actionTakenBy = approver
+            )
+        )
+        val motherUser = userRepository.save(
+            createUser(email = "mother@test.com", role = UserRole.PARENT).copy(
+                displayName = "Mother Mary",
+                firstName = "Mary",
+                secondName = "George",
+                thirdName = "Kamel",
+                lastName = "Boulos"
             )
         )
         val parentUser = userRepository.save(
@@ -579,6 +598,7 @@ class UserServiceIntegrationTest {
         parentProfileRepository.save(
             ParentProfile(
                 user = parentUser,
+                partner = motherUser,
                 children = listOf(child)
             )
         )
@@ -595,9 +615,13 @@ class UserServiceIntegrationTest {
         assertThat(childProfile).isNotNull()
         assertThat(childProfile?.confessionPriest?.name).isEqualTo("Abouna Mina")
         assertThat(childProfile?.confessionPriest?.fullName).isEqualTo("Mina Adly Naguib Bishoy")
+        assertThat(childProfile?.actionTakenBy?.name).isEqualTo("Super Admin")
+        assertThat(childProfile?.actionTakenBy?.fullName).isEqualTo("Super User Test Admin")
 
         val parentResponse = profiles.content.find { it.id == parentUser.id.toString() }
         assertThat(parentResponse).isNotNull()
+        assertThat(parentResponse?.parentProfile?.partner?.name).isEqualTo("Mother Mary")
+        assertThat(parentResponse?.parentProfile?.partner?.fullName).isEqualTo("Mary George Kamel Boulos")
         assertThat(parentResponse?.parentProfile?.children).hasSize(1)
         val childSummary = parentResponse?.parentProfile?.children?.first()
         assertThat(childSummary?.name).isEqualTo("Fady")
@@ -622,6 +646,20 @@ class UserServiceIntegrationTest {
         val profile = userService.getUserProfile(pending.id)
         assertThat(profile.actionTakenAt).isNotNull()
         assertThat(profile.actionTakenBy?.id).isEqualTo(admin.id)
+
+        val page = userService.getUsersByStatus(
+            callerId = admin.id,
+            status = UserStatus.APPROVED,
+            stageId = null,
+            yearId = null,
+            role = null,
+            search = "pending-action-test@mail.com",
+            pageable = PageRequest.of(0, 10)
+        )
+        val approvedFromList = page.content.find { it.id == pending.id.toString() }
+        assertThat(approvedFromList).isNotNull()
+        assertThat(approvedFromList?.actionTakenBy?.id).isEqualTo(admin.id)
+        assertThat(approvedFromList?.actionTakenBy?.name).isEqualTo(admin.displayName)
     }
 
     @Test
