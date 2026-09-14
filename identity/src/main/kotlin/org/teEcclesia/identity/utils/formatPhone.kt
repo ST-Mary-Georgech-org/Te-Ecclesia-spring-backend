@@ -1,10 +1,10 @@
 package org.teEcclesia.identity.utils
 
 fun formatPhone(phone: String): String {
-    var clean = phone.trim().replace(" ", "")
+    var clean = phone.trim().replace(" ", "").replace("-", "")
     
-    if (clean.startsWith("002")) {
-        clean = "+2" + clean.substring(3)
+    if (clean.startsWith("00")) {
+        clean = "+" + clean.substring(2)
     }
     
     if (clean.startsWith("+02")) {
@@ -28,8 +28,13 @@ fun formatPhone(phone: String): String {
         return "+2$clean"
     }
     
-    val regexFull = Regex("""^\+201[0125]\d{8}$""")
-    if (regexFull.matches(clean)) {
+    val regexEgyptFull = Regex("""^\+201[0125]\d{8}$""")
+    if (regexEgyptFull.matches(clean)) {
+        return clean
+    }
+    
+    val regexInternational = Regex("""^\+[1-9]\d{6,14}$""")
+    if (regexInternational.matches(clean)) {
         return clean
     }
     
