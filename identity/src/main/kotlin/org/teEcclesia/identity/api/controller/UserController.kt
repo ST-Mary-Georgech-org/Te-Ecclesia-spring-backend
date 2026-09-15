@@ -55,9 +55,6 @@ class UserController(
         @RequestParam(required = false) search: String?,
         pageable: Pageable
     ): ResponseEntity<Page<ProfileResponse>> {
-        if (status != UserStatus.APPROVED) {
-            authorizeAdminOrKhadem(callerId, requireApprovePermission = true)
-        }
         return ResponseEntity.ok(userService.getUsersByStatus(callerId, status, stageId, yearId, role, search, pageable))
     }
 

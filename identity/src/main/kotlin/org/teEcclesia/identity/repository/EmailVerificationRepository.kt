@@ -4,6 +4,9 @@ import org.teEcclesia.identity.entity.AccountVerification
 import org.teEcclesia.identity.entity.User
 import org.teEcclesia.identity.entity.VerificationMethod
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
+import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 import java.time.Instant
 import java.util.*
 
@@ -15,5 +18,8 @@ interface EmailVerificationRepository : JpaRepository<AccountVerification, UUID>
     fun findByOtpAndMethod(otp: String, method: VerificationMethod): AccountVerification?
     fun findByOtpInAndMethod(otps: List<String>, method: VerificationMethod): AccountVerification?
     fun deleteAllByUserAndMethod(user: User, method: VerificationMethod)
-    fun deleteAllBySentAtBefore(date: Instant)
+
+    @Modifying
+    @Query("DELETE FROM AccountVerification av WHERE av.sentAt < :date")
+    fun deleteAllBySentAtBefore(@Param("date") date: Instant): Int
 }

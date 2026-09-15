@@ -21,7 +21,7 @@ class AsyncPushNotificationListener(
                 tokens = event.tokens,
                 title = event.title,
                 body = event.body,
-                dataPayload = event.dataPayload + ("type" to event.type.name)
+                dataPayload = mapOf("type" to event.type.name) + event.dataPayload
             )
             log.info("Push notifications sent successfully to ${event.tokens.size} tokens.")
         } catch (e: Exception) {

@@ -2,6 +2,7 @@ package org.teEcclesia.identity.entity
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
+import org.hibernate.annotations.BatchSize
 import org.teEcclesia.events.identity.UserCreatedEvent
 import org.teEcclesia.events.identity.UserUpdatedEvent
 import org.teEcclesia.identity.entity.enums.Gender
@@ -20,6 +21,7 @@ import org.hibernate.annotations.SQLRestriction
 @Table(name = "users", schema = "identity")
 @SQLDelete(sql = "UPDATE identity.users SET deleted = true WHERE id=?")
 @SQLRestriction("deleted = false")
+@BatchSize(size = 30)
 @NamedEntityGraph(
     name = User.GRAPH_FULL_PROFILE,
     attributeNodes = [
@@ -97,6 +99,9 @@ data class User(
 
     @Column(nullable = true)
     val imageUrl: String? = null,
+
+    @Column(nullable = true)
+    val identityDocumentImageUrl: String? = null,
 
     @Column(nullable = false)
     val createdAt: Instant = Instant.now(),

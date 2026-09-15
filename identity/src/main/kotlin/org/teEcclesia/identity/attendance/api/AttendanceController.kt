@@ -22,6 +22,7 @@ import org.teEcclesia.identity.attendance.dto.CreateEventRequest
 import org.teEcclesia.identity.attendance.dto.CreateServiceRequest
 import org.teEcclesia.identity.attendance.dto.EventAttendeeResponse
 import org.teEcclesia.identity.attendance.dto.ServiceEventResponse
+import org.teEcclesia.identity.attendance.dto.UserAttendanceHistoryResponse
 import org.teEcclesia.identity.attendance.service.AttendanceService
 import java.util.UUID
 
@@ -145,4 +146,15 @@ class AttendanceController(
         attendanceService.removeAttendee(callerId, eventId, userId)
         return ResponseEntity.ok().build()
     }
+
+    @GetMapping("/users/{userId}/history")
+    fun getUserAttendanceHistory(
+        @AuthenticationPrincipal callerId: UUID?,
+        @PathVariable userId: UUID,
+        @RequestParam(required = false) serviceId: Long?,
+        @PageableDefault(size = 20) pageable: Pageable
+    ): ResponseEntity<Page<UserAttendanceHistoryResponse>> {
+        return ResponseEntity.ok(attendanceService.getUserAttendanceHistory(callerId, userId, serviceId, pageable))
+    }
 }
+

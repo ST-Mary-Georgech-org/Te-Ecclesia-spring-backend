@@ -33,8 +33,5 @@ data class ParentProfile(
         joinColumns = [JoinColumn(name = "parent_profile_id")],
         inverseJoinColumns = [JoinColumn(name = "child_id")]
     )
-    val children: List<User> = emptyList(),
-
-    @Column(nullable = true)
-    val nationalIdImageUrl: String? = null
+    val children: List<User> = emptyList()
 )

@@ -16,6 +16,7 @@ import org.teEcclesia.identity.attendance.dto.CreateServiceRequest
 import org.teEcclesia.identity.attendance.dto.EventAttendeeResponse
 import org.teEcclesia.identity.attendance.dto.ResponsibleServantDto
 import org.teEcclesia.identity.attendance.dto.ServiceEventResponse
+import org.teEcclesia.identity.attendance.dto.UserAttendanceHistoryResponse
 import org.teEcclesia.identity.attendance.entity.ChurchService
 import org.teEcclesia.identity.attendance.entity.EventAttendee
 import org.teEcclesia.identity.attendance.entity.ServiceEvent
@@ -212,8 +213,17 @@ class AttendanceService(
 
     @Transactional(readOnly = true)
     fun getEventsByServiceId(serviceId: Long, pageable: Pageable): Page<ServiceEventResponse> {
-        return serviceEventRepository.findAllByServiceIdOrderByEventDateDescStartTimeDesc(serviceId, pageable).map {
-            ServiceEventResponse(it.id, it.serviceId, it.name, it.eventDate, it.startTime, it.endTime, it.createdAt)
+        return serviceEventRepository.findEventsWithAttendeeCountByServiceId(serviceId, pageable).map {
+            ServiceEventResponse(
+                id = it.getId(),
+                serviceId = it.getServiceId(),
+                name = it.getName(),
+                eventDate = it.getEventDate(),
+                startTime = it.getStartTime(),
+                endTime = it.getEndTime(),
+                attendeeCount = it.getAttendeeCount(),
+                createdAt = it.getCreatedAt()
+            )
         }
     }
 
@@ -231,7 +241,16 @@ class AttendanceService(
                 createdById = creatorId
             )
         )
-        return ServiceEventResponse(event.id, event.serviceId, event.name, event.eventDate, event.startTime, event.endTime, event.createdAt)
+        return ServiceEventResponse(
+            id = event.id,
+            serviceId = event.serviceId,
+            name = event.name,
+            eventDate = event.eventDate,
+            startTime = event.startTime,
+            endTime = event.endTime,
+            attendeeCount = 0L,
+            createdAt = event.createdAt
+        )
     }
 
     @Transactional
@@ -249,7 +268,17 @@ class AttendanceService(
                 endTime = request.endTime
             )
         )
-        return ServiceEventResponse(updated.id, updated.serviceId, updated.name, updated.eventDate, updated.startTime, updated.endTime, updated.createdAt)
+        val attendeeCount = eventAttendeeRepository.countByEventId(eventId)
+        return ServiceEventResponse(
+            id = updated.id,
+            serviceId = updated.serviceId,
+            name = updated.name,
+            eventDate = updated.eventDate,
+            startTime = updated.startTime,
+            endTime = updated.endTime,
+            attendeeCount = attendeeCount,
+            createdAt = updated.createdAt
+        )
     }
 
     @Transactional
@@ -479,6 +508,45 @@ class AttendanceService(
         checkCanManageService(callerId, event.serviceId)
         eventAttendeeRepository.deleteByEventIdAndUserId(eventId, userId)
     }
+
+    @Transactional(readOnly = true)
+    fun getUserAttendanceHistory(
+        callerId: UUID?,
+        userId: UUID,
+        serviceId: Long?,
+        pageable: Pageable
+    ): Page<UserAttendanceHistoryResponse> {
+        if (callerId == null) {
+            throw UnauthorizedException("Authentication required")
+        }
+        val callerRole = userRepository.findRoleById(callerId)
+            ?: throw UnauthorizedException("User not found")
+
+        val isSelf = callerId == userId
+        val isAuthorized = callerRole == UserRole.ADMIN || callerRole == UserRole.KHADEM || isSelf
+        if (!isAuthorized) {
+            throw UnauthorizedException("You are not authorized to view attendance history")
+        }
+
+        if (!userRepository.existsById(userId)) {
+            throw ResourceNotFoundException("User not found with id $userId")
+        }
+
+        return eventAttendeeRepository.findAttendanceHistoryByUserId(userId, serviceId, pageable).map { p ->
+            UserAttendanceHistoryResponse(
+                id = p.getId(),
+                eventId = p.getEventId(),
+                serviceId = p.getServiceId(),
+                serviceName = p.getServiceName(),
+                eventName = p.getEventName(),
+                eventDate = p.getEventDate(),
+                startTime = p.getStartTime(),
+                endTime = p.getEndTime(),
+                registeredAt = p.getRegisteredAt()
+            )
+        }
+    }
 }
+
 
 

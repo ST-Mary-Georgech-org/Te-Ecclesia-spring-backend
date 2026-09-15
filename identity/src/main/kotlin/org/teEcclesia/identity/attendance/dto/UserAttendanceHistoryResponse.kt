@@ -4,13 +4,14 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 
-data class ServiceEventResponse(
+data class UserAttendanceHistoryResponse(
     val id: Long,
+    val eventId: Long,
     val serviceId: Long,
-    val name: String?,
+    val serviceName: String,
+    val eventName: String?,
     val eventDate: LocalDate,
     val startTime: LocalTime,
     val endTime: LocalTime,
-    val attendeeCount: Long,
-    val createdAt: Instant
+    val registeredAt: Instant
 )

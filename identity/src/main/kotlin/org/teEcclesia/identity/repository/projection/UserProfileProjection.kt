@@ -23,6 +23,7 @@ interface UserProfileProjection {
     fun getIsEmailVerified(): Boolean
     fun getIsPhoneVerified(): Boolean
     fun getImageUrl(): String?
+    fun getIdentityDocumentImageUrl(): String?
     fun getJob(): String?
     fun getBuildingNo(): String
     fun getStreet(): String
@@ -37,18 +38,73 @@ interface UserProfileProjection {
     fun getRole(): UserRole
     fun getCreatedAt(): Instant?
     fun getActionTakenAt(): Instant?
-    fun getActionTakenBy(): UserSummaryProjection?
+    // Action Taken By (Flat Summary)
+    fun getActionTakenById(): UUID?
+    fun getActionTakenByName(): String?
+    fun getActionTakenByFullName(): String?
+    fun getActionTakenByCode(): String?
+    fun getActionTakenByImageUrl(): String?
 
-    fun getConfessionPriest(): UserSummaryProjection?
+    // Confession Priest (Flat Summary)
+    fun getConfessionPriestId(): UUID?
+    fun getConfessionPriestName(): String?
+    fun getConfessionPriestFullName(): String?
+    fun getConfessionPriestCode(): String?
+    fun getConfessionPriestImageUrl(): String?
     fun getExternalConfessionPriestName(): String?
     fun getExternalConfessionChurch(): String?
     fun getExternalConfessionPhone(): String?
 
-    fun getKhademProfile(): KhademProfileProjection?
-    fun getKahenProfile(): KahenProfileProjection?
-    fun getParentProfile(): ParentProfileProjection?
-    fun getOrdinationProfile(): OrdinationProfileProjection?
-    fun getMakhdoomProfile(): MakhdoomProfileProjection?
+    // Khadem Profile
+    fun getKhademProfileId(): Long?
+    fun getKhademCanApproveRequests(): Boolean?
+    fun getKhademStageId(): Long?
+    fun getKhademStageNameAr(): String?
+    fun getKhademStageNameEn(): String?
+    fun getKhademYearId(): Long?
+    fun getKhademYearNameAr(): String?
+    fun getKhademYearNameEn(): String?
+    fun getKhademYearWhatsAppLink(): String?
+
+    // Kahen Profile
+    fun getKahenProfileId(): Long?
+    fun getKahenOrdinationDate(): LocalDate?
+
+    // Parent Profile & Partner
+    fun getParentProfileId(): Long?
+    fun getPartnerId(): UUID?
+    fun getPartnerName(): String?
+    fun getPartnerFullName(): String?
+    fun getPartnerCode(): String?
+    fun getPartnerImageUrl(): String?
+
+    // Ordination Profile
+    fun getOrdinationProfileId(): Long?
+    fun getOrdinationRankId(): Long?
+    fun getOrdinationRankNameAr(): String?
+    fun getOrdinationRankNameEn(): String?
+    fun getOrdinationIsOrdinationInAnotherChurch(): Boolean?
+    fun getOrdinationYear(): Int?
+    fun getOrdinationBishopName(): String?
+    fun getOrdinationPlace(): String?
+    fun getOrdinationCertificateImageUrl(): String?
+
+    // Makhdoom Profile
+    fun getMakhdoomProfileId(): Long?
+    fun getMakhdoomShamamsaStudyStatus(): ShamamsaStudyStatus?
+    fun getMakhdoomStageId(): Long?
+    fun getMakhdoomStageNameAr(): String?
+    fun getMakhdoomStageNameEn(): String?
+    fun getMakhdoomYearId(): Long?
+    fun getMakhdoomYearNameAr(): String?
+    fun getMakhdoomYearNameEn(): String?
+    fun getMakhdoomYearWhatsAppLink(): String?
+    fun getMakhdoomFatherPhone(): String?
+    fun getMakhdoomFatherWhatsapp(): String?
+    fun getMakhdoomMotherPhone(): String?
+    fun getMakhdoomMotherWhatsapp(): String?
+    fun getMakhdoomIsFatherDeceased(): Boolean?
+    fun getMakhdoomIsMotherDeceased(): Boolean?
 }
 
 interface UserSummaryProjection {
@@ -90,7 +146,6 @@ interface KahenProfileProjection {
 interface ParentProfileProjection {
     fun getId(): Long
     fun getPartner(): UserSummaryProjection?
-    fun getNationalIdImageUrl(): String?
 }
 
 interface OrdinationProfileProjection {
@@ -114,7 +169,6 @@ interface MakhdoomProfileProjection {
     fun getMotherWhatsapp(): String?
     fun getIsFatherDeceased(): Boolean
     fun getIsMotherDeceased(): Boolean
-    fun getIdentityDocumentImageUrl(): String?
 }
 
 interface ParentChildProjection {
@@ -125,3 +179,25 @@ interface ParentChildProjection {
     fun getCode(): String?
     fun getImageUrl(): String?
 }
+
+interface ProfileStageLookupProjection {
+    fun getProfileId(): Long
+    fun getId(): Long
+    fun getNameAr(): String
+    fun getNameEn(): String
+}
+
+interface ProfileYearLookupProjection {
+    fun getProfileId(): Long
+    fun getId(): Long
+    fun getNameAr(): String
+    fun getNameEn(): String
+    fun getWhatsAppLink(): String?
+}
+
+interface PriestSummaryProjection {
+    fun getId(): UUID
+    fun getName(): String
+    fun getOrdinationDate(): LocalDate?
+}
+

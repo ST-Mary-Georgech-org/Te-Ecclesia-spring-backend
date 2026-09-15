@@ -27,8 +27,15 @@ class UserNotificationListener(
     fun handleUserNotifications(event: UserNotificationsEvent) {
         try {
 
-            val userIds = event.notifications.map { it.userId }.distinct()
-            val emailsMap = userService.findEmailsByUserIds(userIds)
+            val emailNotifications = event.notifications.filter {
+                it.medium == NotificationMedium.EMAIL || it.medium == NotificationMedium.BOTH
+            }
+            val emailsMap = if (emailNotifications.isNotEmpty()) {
+                val emailUserIds = emailNotifications.map { it.userId }.distinct()
+                userService.findEmailsByUserIds(emailUserIds)
+            } else {
+                emptyMap()
+            }
 
             event.notifications.forEach { notification ->
 
@@ -51,8 +58,8 @@ class UserNotificationListener(
                 }
                 
                 if (sendPush) {
-                    val refreshTokens = refreshTokenRepository.findAllByUserId(notification.userId)
-                    val deviceTokens = refreshTokens.mapNotNull { it.deviceToken }.distinct()
+                    val deviceTokens = refreshTokenRepository.findDeviceTokensByUserId(notification.userId)
+                        .filter { it.isNotBlank() }
 
                     if (deviceTokens.isNotEmpty()) {
                         publisher.publish(

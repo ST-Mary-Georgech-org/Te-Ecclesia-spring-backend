@@ -16,6 +16,8 @@ import org.teEcclesia.identity.api.dto.request.ApproveUserRequest
 import org.teEcclesia.identity.api.dto.response.InitiateWhatsAppVerificationResponse
 import org.teEcclesia.identity.api.dto.response.toProfileResponse
 import org.teEcclesia.identity.api.dto.response.toUserSummaryResponse
+import org.teEcclesia.identity.api.dto.response.toLookupResponse
+import org.springframework.context.i18n.LocaleContextHolder
 import org.teEcclesia.identity.exception.UnauthorizedException
 import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.events.notifications.UserNotificationsEvent
@@ -94,14 +96,55 @@ class UserService(
     @Transactional(readOnly = true)
     fun getUserProfile(userId: UUID, imageBaseUrl: String): ProfileResponse {
         val currentYear = systemSettingService.getCurrentAcademicYear()
-        val projection = userRepository.findProfileWithDeaconsRecord(userId, currentYear)
+        val profile = userRepository.findProfileByIdProjection(userId)
             ?: throw UserNotFoundException("User with id: $userId not found")
-        val user = projection.getUser()
-        val deaconsRecord = if (user.role == UserRole.MAKHDOOM) {
-            projection.getDeaconsSchoolRecord()?.toResponse().orEmpty(currentYear)
+
+        val lang = LocaleContextHolder.getLocale().language
+
+        val khademProfileId = profile.getKhademProfileId()
+        val responsibleStagesByKhademId = if (khademProfileId != null) {
+            userRepository.findResponsibleStagesByKhademProfileIds(listOf(khademProfileId)).groupBy(
+                { it.getProfileId() },
+                { it.toLookupResponse(lang) }
+            )
+        } else emptyMap()
+
+        val responsibleYearsByKhademId = if (khademProfileId != null) {
+            userRepository.findResponsibleYearsByKhademProfileIds(listOf(khademProfileId)).groupBy(
+                { it.getProfileId() },
+                { it.toLookupResponse(lang) }
+            )
+        } else emptyMap()
+
+        val kahenProfileId = profile.getKahenProfileId()
+        val educationalStagesByKahenId = if (kahenProfileId != null) {
+            userRepository.findEducationalStagesByKahenProfileIds(listOf(kahenProfileId)).groupBy(
+                { it.getProfileId() },
+                { it.toLookupResponse(lang) }
+            )
+        } else emptyMap()
+
+        val parentId = profile.getParentProfileId()
+        val childrenByParentId = if (parentId != null) {
+            userRepository.findChildrenByParentIds(listOf(parentId)).groupBy(
+                { it.getParentId() },
+                { it.toUserSummaryResponse(imageBaseUrl) }
+            )
+        } else emptyMap()
+
+        val deaconsRecord = if (profile.getRole() == UserRole.MAKHDOOM) {
+            deaconsSchoolRecordRepository.findByUserIdAndAcademicYear(userId, currentYear)?.toResponse().orEmpty(currentYear)
         } else null
 
-        return user.toProfileResponse(imageBaseUrl, getParentsWhatsAppLink(), deaconsRecord)
+        return profile.toProfileResponse(
+            imageBaseUrl = imageBaseUrl,
+            parentsWhatsAppLink = getParentsWhatsAppLink(),
+            childrenByParentId = childrenByParentId,
+            responsibleStagesByKhademId = responsibleStagesByKhademId,
+            responsibleYearsByKhademId = responsibleYearsByKhademId,
+            educationalStagesByKahenId = educationalStagesByKahenId,
+            deaconsSchoolRecord = deaconsRecord
+        )
     }
 
     @Transactional(readOnly = true)
@@ -174,8 +217,9 @@ class UserService(
     }
 
     fun findEmailsByUserIds(userIds: List<UUID>): Map<String, String> {
-        val users = userRepository.findAllById(userIds)
-        return users.associate { it.id.toString() to (it.email ?: "") }
+        if (userIds.isEmpty()) return emptyMap()
+        val projections = userRepository.findEmailsByUserIds(userIds)
+        return projections.associate { it.getId().toString() to (it.getEmail() ?: "") }
     }
 
     @Transactional(readOnly = true)
@@ -232,7 +276,38 @@ class UserService(
             pageable = pageable
         )
         
-        val parentIds = profiles.mapNotNull { it.getParentProfile()?.getId() }
+        val lang = LocaleContextHolder.getLocale().language
+
+        val khademProfileIds = profiles.mapNotNull { it.getKhademProfileId() }
+        val responsibleStagesByKhademId = if (khademProfileIds.isNotEmpty()) {
+            userRepository.findResponsibleStagesByKhademProfileIds(khademProfileIds).groupBy(
+                { it.getProfileId() },
+                { it.toLookupResponse(lang) }
+            )
+        } else {
+            emptyMap()
+        }
+
+        val responsibleYearsByKhademId = if (khademProfileIds.isNotEmpty()) {
+            userRepository.findResponsibleYearsByKhademProfileIds(khademProfileIds).groupBy(
+                { it.getProfileId() },
+                { it.toLookupResponse(lang) }
+            )
+        } else {
+            emptyMap()
+        }
+
+        val kahenProfileIds = profiles.mapNotNull { it.getKahenProfileId() }
+        val educationalStagesByKahenId = if (kahenProfileIds.isNotEmpty()) {
+            userRepository.findEducationalStagesByKahenProfileIds(kahenProfileIds).groupBy(
+                { it.getProfileId() },
+                { it.toLookupResponse(lang) }
+            )
+        } else {
+            emptyMap()
+        }
+
+        val parentIds = profiles.mapNotNull { it.getParentProfileId() }
         val childrenByParentId = if (parentIds.isNotEmpty()) {
             userRepository.findChildrenByParentIds(parentIds).groupBy(
                 { it.getParentId() },
@@ -242,7 +317,16 @@ class UserService(
             emptyMap()
         }
 
-        return profiles.map { it.toProfileResponse(imagesBaseUrl, whatsappLink, childrenByParentId) }
+        return profiles.map {
+            it.toProfileResponse(
+                imageBaseUrl = imagesBaseUrl,
+                parentsWhatsAppLink = whatsappLink,
+                childrenByParentId = childrenByParentId,
+                responsibleStagesByKhademId = responsibleStagesByKhademId,
+                responsibleYearsByKhademId = responsibleYearsByKhademId,
+                educationalStagesByKahenId = educationalStagesByKahenId
+            )
+        }
     }
 
     @Transactional
@@ -268,21 +352,27 @@ class UserService(
             user = updateUserData(user, request.updateProfileData)
         }
         
-        val finalImageUrl = if (image != null) {
-            imageStorageService.uploadImage(image, user.id.toString(), profileImageDirectory)
-        } else user.imageUrl
+        val finalImageUrl = when {
+            image != null -> imageStorageService.uploadImage(image, user.id.toString(), profileImageDirectory)
+            request?.deleteImage == true -> null
+            else -> user.imageUrl
+        }
         
-        val finalDocumentUrl = if (identityDocument != null) {
-            imageStorageService.uploadImage(identityDocument, "doc_${user.id}", documentsDirectory)
-        } else user.makhdoomProfile?.identityDocumentImageUrl
+        val finalDocumentUrl = when {
+            identityDocument != null -> imageStorageService.uploadImage(identityDocument, "doc_${user.id}", documentsDirectory)
+            request?.deleteIdentityDocument == true -> null
+            else -> request?.updateProfileData?.identityDocumentImageUrl ?: user.identityDocumentImageUrl
+        }
         
-        val finalCertificateUrl = if (ordinationCertificate != null) {
-            imageStorageService.uploadImage(ordinationCertificate, "cert_${user.id}", documentsDirectory)
-        } else user.ordinationProfile?.certificateImageUrl
+        val finalCertificateUrl = when {
+            ordinationCertificate != null -> imageStorageService.uploadImage(ordinationCertificate, "cert_${user.id}", documentsDirectory)
+            request?.deleteOrdinationCertificate == true -> null
+            else -> user.ordinationProfile?.certificateImageUrl
+        }
         
         user = user.copy(
             imageUrl = finalImageUrl,
-            makhdoomProfile = user.makhdoomProfile?.copy(identityDocumentImageUrl = finalDocumentUrl),
+            identityDocumentImageUrl = finalDocumentUrl,
             ordinationProfile = user.ordinationProfile?.copy(certificateImageUrl = finalCertificateUrl)
         )
 
@@ -359,21 +449,29 @@ class UserService(
             }
         }
         
-        val finalImageUrl = if (image != null) {
-            imageStorageService.uploadImage(image, user.id.toString(), profileImageDirectory)
-        } else user.imageUrl
+        val finalImageUrl = when {
+            image != null -> imageStorageService.uploadImage(image, user.id.toString(), profileImageDirectory)
+            request.deleteImage == null -> user.imageUrl
+            request.deleteImage -> null
+            else -> user.imageUrl
+        }
         
-        val finalDocumentUrl = if (identityDocument != null) {
-            imageStorageService.uploadImage(identityDocument, "doc_${user.id}", documentsDirectory)
-        } else user.makhdoomProfile?.identityDocumentImageUrl
+        val finalDocumentUrl = when {
+            identityDocument != null -> imageStorageService.uploadImage(identityDocument, "doc_${user.id}", documentsDirectory)
+            request.deleteIdentityDocument == true -> null
+            else -> request.updateProfileData?.identityDocumentImageUrl ?: user.identityDocumentImageUrl
+        }
         
-        val finalCertificateUrl = if (ordinationCertificate != null) {
-            imageStorageService.uploadImage(ordinationCertificate, "cert_${user.id}", documentsDirectory)
-        } else user.ordinationProfile?.certificateImageUrl
+        val finalCertificateUrl = when {
+            ordinationCertificate != null -> imageStorageService.uploadImage(ordinationCertificate, "cert_${user.id}", documentsDirectory)
+            request.deleteOrdinationCertificate == null -> user.ordinationProfile?.certificateImageUrl
+            request.deleteOrdinationCertificate -> null
+            else -> user.ordinationProfile?.certificateImageUrl
+        }
         
         user = user.copy(
             imageUrl = finalImageUrl,
-            makhdoomProfile = user.makhdoomProfile?.copy(identityDocumentImageUrl = finalDocumentUrl),
+            identityDocumentImageUrl = finalDocumentUrl,
             ordinationProfile = user.ordinationProfile?.copy(certificateImageUrl = finalCertificateUrl)
         )
         
@@ -464,6 +562,7 @@ class UserService(
             apartment = updateData.apartment,
             specialMark = updateData.specialMark,
             role = updateData.role ?: user.role,
+            identityDocumentImageUrl = updateData.identityDocumentImageUrl ?: user.identityDocumentImageUrl,
             confessionPriest = confessionPriest,
             externalConfessionPriestName = updateData.externalConfessionPriestName,
             externalConfessionChurch = updateData.externalConfessionChurch,
@@ -516,8 +615,7 @@ class UserService(
                 motherPhone = updateData.makhdoomProfile.motherPhone,
                 motherWhatsapp = updateData.makhdoomProfile.motherWhatsapp,
                 isFatherDeceased = updateData.makhdoomProfile.isFatherDeceased ?: false,
-                isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased ?: false,
-                identityDocumentImageUrl = updateData.makhdoomProfile.identityDocumentImageUrl ?: currentProfile.identityDocumentImageUrl
+                isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased ?: false
             ) ?: MakhdoomProfile(
                 user = user,
                 shamamsaStudyStatus = updateData.makhdoomProfile.shamamsaStudyStatus,
@@ -528,8 +626,7 @@ class UserService(
                 motherPhone = updateData.makhdoomProfile.motherPhone,
                 motherWhatsapp = updateData.makhdoomProfile.motherWhatsapp,
                 isFatherDeceased = updateData.makhdoomProfile.isFatherDeceased ?: false,
-                isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased ?: false,
-                identityDocumentImageUrl = updateData.makhdoomProfile.identityDocumentImageUrl
+                isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased ?: false
             )
             user = user.copy(makhdoomProfile = updatedMakhdoomProfile)
         }
@@ -586,7 +683,7 @@ class UserService(
             }
         }
 
-        if (user.role == UserRole.PARENT && updateData.parentProfile != null) {
+        if ((user.role in listOf(UserRole.PARENT, UserRole.KHADEM, UserRole.KAHEN)) && updateData.parentProfile != null) {
             val updatedParent = parentProfileService.createOrUpdateProfile(user, updateData.parentProfile)
             user = user.copy(parentProfile = updatedParent)
         }
@@ -731,11 +828,18 @@ class UserService(
         )
 
 
+        val finalDocumentUrl = if (identityDocument != null) {
+            imageStorageService.uploadImage(identityDocument, "doc_${userId}", documentsDirectory)
+        } else {
+            request.identityDocumentImageUrl
+        }
+
         val userEntity = request.toEntity(
             hashedPassword = encodedPassword, 
             confessionPriest = confessionPriest,
             id = userId,
-            imageUrl = finalImageUrl
+            imageUrl = finalImageUrl,
+            identityDocumentImageUrl = finalDocumentUrl
         )
         
         // Add Makhdoom profile
@@ -751,11 +855,6 @@ class UserService(
                     IllegalArgumentException("Educational year not found")
                 }
             }
-            val finalDocumentUrl = if (identityDocument != null) {
-                imageStorageService.uploadImage(identityDocument, "doc_${userId}", documentsDirectory)
-            } else {
-                request.makhdoomProfile.identityDocumentImageUrl
-            }
 
             MakhdoomProfile(
                 user = userEntity,
@@ -767,8 +866,7 @@ class UserService(
                 motherPhone = request.makhdoomProfile.motherPhone,
                 motherWhatsapp = request.makhdoomProfile.motherWhatsapp,
                 isFatherDeceased = request.makhdoomProfile.isFatherDeceased ?: false,
-                isMotherDeceased = request.makhdoomProfile.isMotherDeceased ?: false,
-                identityDocumentImageUrl = finalDocumentUrl
+                isMotherDeceased = request.makhdoomProfile.isMotherDeceased ?: false
             )
         } else null
         
@@ -809,11 +907,18 @@ class UserService(
         )
 
 
+        val finalDocumentUrl = if (nationalIdImage != null) {
+            imageStorageService.uploadImage(nationalIdImage, "doc_${userId}", documentsDirectory)
+        } else {
+            request.identityDocumentImageUrl
+        }
+
         val userEntity = request.toEntity(
             hashedPassword = encodedPassword, 
             confessionPriest = confessionPriest,
             id = userId,
-            imageUrl = finalImageUrl
+            imageUrl = finalImageUrl,
+            identityDocumentImageUrl = finalDocumentUrl
         )
         
         val savedUser = userRepository.save(userEntity.copy(
@@ -824,16 +929,9 @@ class UserService(
             code = userCodeGenerator.generateCode(userEntity)
         ))
 
-        val finalDocumentUrl = if (nationalIdImage != null) {
-            imageStorageService.uploadImage(nationalIdImage, "doc_${userId}", documentsDirectory)
-        } else {
-            request.parentProfile?.nationalIdImageUrl
-        }
-
         request.parentProfile?.let {
             val parentProfile = parentProfileService.createOrUpdateProfile(savedUser, it)
-            val updatedParentProfile = parentProfile.copy(nationalIdImageUrl = finalDocumentUrl)
-            val userWithParent = savedUser.copy(parentProfile = updatedParentProfile)
+            val userWithParent = savedUser.copy(parentProfile = parentProfile)
             userRepository.save(userWithParent)
             parentProfileService.syncPartner(userWithParent)
         }
@@ -845,8 +943,8 @@ class UserService(
     @Transactional
     fun updateParentProfile(parentId: UUID, request: ParentProfileRequest) {
         val user = findById(parentId)
-        if (user.role != UserRole.PARENT) {
-            throw IllegalArgumentException("User is not a PARENT")
+        if (user.role !in listOf(UserRole.PARENT, UserRole.KHADEM, UserRole.KAHEN)) {
+            throw IllegalArgumentException("User is not a PARENT, KHADEM, or KAHEN")
         }
 
         val parentProfile = parentProfileService.createOrUpdateProfile(user, request)

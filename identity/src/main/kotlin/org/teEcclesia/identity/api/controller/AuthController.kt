@@ -106,14 +106,14 @@ class AuthController (
     @GetMapping("/search-parents")
     fun searchParents(@RequestParam("query") query: String): ResponseEntity<UserSummaryResponse> {
         val response = authService.searchParents(query, imagesBaseUrl)
-        return if (response != null) ResponseEntity.ok(response) else ResponseEntity.notFound().build()
+        return ResponseEntity.ok(response)
     }
 
     @Tag(name = "Registration")
     @GetMapping("/search-makhdooms")
     fun searchMakhdooms(@RequestParam("query") query: String): ResponseEntity<UserSummaryResponse> {
         val response = authService.searchMakhdooms(query, imagesBaseUrl)
-        return if (response != null) ResponseEntity.ok(response) else ResponseEntity.notFound().build()
+        return ResponseEntity.ok(response)
     }
 
 

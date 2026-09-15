@@ -21,6 +21,7 @@ import org.teEcclesia.identity.exception.PhoneNotVerifiedException
 import org.teEcclesia.identity.exception.EmailNotVerifiedException
 import org.teEcclesia.identity.exception.AccountPendingApprovalException
 import org.teEcclesia.identity.exception.DuplicatePhoneException
+import org.teEcclesia.identity.exception.ResourceNotFoundException
 import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.entity.lookups.Area
 import org.teEcclesia.identity.repository.*
@@ -40,6 +41,7 @@ import org.springframework.web.multipart.MultipartFile
 import org.teEcclesia.events.identity.UserApprovalRequestUpdatedEvent
 import org.teEcclesia.identity.api.dto.response.PriestResponse
 import org.teEcclesia.identity.api.dto.response.UserSummaryResponse
+import org.teEcclesia.identity.api.dto.response.toUserSummaryResponse
 import org.teEcclesia.identity.api.dto.response.VerifyTokenResponse
 import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.utils.formatPhone
@@ -180,19 +182,22 @@ class AuthService(
         val finalIdentityDocumentUrl = if (identityDocument != null) {
             imageStorageService.uploadImage(identityDocument, "id_${userId}", documentsDirectory)
         } else {
-            request.makhdoomProfile?.identityDocumentImageUrl ?: request.parentProfile?.nationalIdImageUrl
+            request.identityDocumentImageUrl
         }
 
         val ordinationProfile = request.ordinationProfile?.let { createOrdinationProfile(userToSave, it, finalCertificateUrl) }
-        val makhdoomProfile = request.makhdoomProfile?.let { createMakhdoomProfile(userToSave, it, finalIdentityDocumentUrl) }
+        val makhdoomProfile = request.makhdoomProfile?.let { createMakhdoomProfile(userToSave, it) }
+        val khademProfile = request.khademProfile?.let { createKhademProfile(userToSave, it) }
         val kahenProfile = request.kahenProfile?.let { createKahenProfile(userToSave, it) }
         val savedUser = userRepository.save(userToSave.copy(
+            identityDocumentImageUrl = finalIdentityDocumentUrl,
             ordinationProfile = ordinationProfile ?: userToSave.ordinationProfile,
             makhdoomProfile = makhdoomProfile ?: userToSave.makhdoomProfile,
+            khademProfile = khademProfile ?: userToSave.khademProfile,
             kahenProfile = kahenProfile ?: userToSave.kahenProfile
         ))
 
-        request.parentProfile?.let { parentProfileService.createOrUpdateProfile(savedUser, it, finalIdentityDocumentUrl) }
+        request.parentProfile?.let { parentProfileService.createOrUpdateProfile(savedUser, it) }
 
         addAreaIfNotExists(savedUser.area)
 
@@ -224,14 +229,11 @@ class AuthService(
         val finalIdentityDocumentUrl = if (identityDocument != null) {
             imageStorageService.uploadImage(identityDocument, "id_${user.id}", documentsDirectory)
         } else {
-            request.makhdoomProfile?.identityDocumentImageUrl 
-                ?: request.parentProfile?.nationalIdImageUrl 
-                ?: user.makhdoomProfile?.identityDocumentImageUrl 
-                ?: user.parentProfile?.nationalIdImageUrl
+            request.identityDocumentImageUrl ?: user.identityDocumentImageUrl
         }
 
         val ordinationProfile = request.ordinationProfile?.let { createOrdinationProfile(user, it, finalCertificateUrl) }
-        val makhdoomProfile = request.makhdoomProfile?.let { createMakhdoomProfile(user, it, finalIdentityDocumentUrl) }
+        val makhdoomProfile = request.makhdoomProfile?.let { createMakhdoomProfile(user, it) }
         val khademProfile = request.khademProfile?.let { createKhademProfile(user, it) }
         val kahenProfile = request.kahenProfile?.let { createKahenProfile(user, it) }
 
@@ -241,13 +243,14 @@ class AuthService(
         val savedUser = userRepository.save(user.copy(
             status = newStatus,
             role = request.role,
+            identityDocumentImageUrl = finalIdentityDocumentUrl,
             ordinationProfile = ordinationProfile ?: user.ordinationProfile,
             makhdoomProfile = makhdoomProfile ?: user.makhdoomProfile,
             khademProfile = khademProfile ?: user.khademProfile,
             kahenProfile = kahenProfile ?: user.kahenProfile
         ))
 
-        request.parentProfile?.let { parentProfileService.createOrUpdateProfile(savedUser, it, finalIdentityDocumentUrl) }
+        request.parentProfile?.let { parentProfileService.createOrUpdateProfile(savedUser, it) }
 
         if (previousStatus == UserStatus.PENDING_APPROVAL && newStatus == UserStatus.PENDING_APPROVAL) {
             teEcclesiaEventPublisher.publish(UserApprovalRequestUpdatedEvent(savedUser.id, savedUser.fullName))
@@ -647,7 +650,7 @@ class AuthService(
         )
     }
 
-    private fun createMakhdoomProfile(user: User, dto: MakhdoomProfileRequest, finalIdentityDocumentUrl: String? = null): MakhdoomProfile {
+    private fun createMakhdoomProfile(user: User, dto: MakhdoomProfileRequest): MakhdoomProfile {
         val educationalStage = educationalStageRepository.findById(dto.educationalStageId).orElseThrow {
             EntityNotFoundException("Educational stage not found")
         }
@@ -670,8 +673,7 @@ class AuthService(
             motherPhone = dto.motherPhone,
             motherWhatsapp = dto.motherWhatsapp,
             isFatherDeceased = dto.isFatherDeceased ?: false,
-            isMotherDeceased = dto.isMotherDeceased ?: false,
-            identityDocumentImageUrl = finalIdentityDocumentUrl ?: dto.identityDocumentImageUrl ?: user.makhdoomProfile?.identityDocumentImageUrl
+            isMotherDeceased = dto.isMotherDeceased ?: false
         )
     }
 
@@ -894,18 +896,21 @@ class AuthService(
         return "https://wa.me/$whatsappBusinessPhone?text=$encodedMessage"
     }
 
+    @Transactional
     @Scheduled(cron = "0 0 0 * * *")
     fun clearExpiredRefreshTokens() {
         val now = Instant.now()
         refreshTokenRepository.deleteAllByExpiryDateBefore(now)
     }
 
+    @Transactional
     @Scheduled(cron = "0 0 0 * * *")
     fun clearExpiredOtps() {
         val now = Instant.now()
         otpRepository.deleteAllBySentAtBefore(now.minus(15, ChronoUnit.MINUTES))
     }
 
+    @Transactional
     @Scheduled(cron = "0 0 0 * * *")
     fun clearUnverifiedUsers() {
         val cutoffDate = Instant.now().minus(1, ChronoUnit.DAYS)
@@ -915,40 +920,34 @@ class AuthService(
     fun getConfessionPriests(pageable: Pageable): Page<PriestResponse> {
         val sort = if (pageable.sort.isUnsorted) Sort.by(Sort.Direction.ASC, "kahenProfile.ordinationDate") else pageable.sort
         val effectivePageable = PageRequest.of(pageable.pageNumber, pageable.pageSize, sort)
-        val priestsPage = userRepository.findByRoleAndStatusIs(UserRole.KAHEN, UserStatus.APPROVED, effectivePageable)
+        val priestsPage = userRepository.findPriestsSummary(UserRole.KAHEN, UserStatus.APPROVED, effectivePageable)
         return priestsPage.map { priest ->
             PriestResponse(
-                id = priest.id,
-                name = priest.displayName,
-                ordinationDate = priest.kahenProfile?.ordinationDate
+                id = priest.getId(),
+                name = priest.getName(),
+                ordinationDate = priest.getOrdinationDate()
             )
         }
     }
 
-    fun searchParents(query: String, imagesBaseUrl: String): UserSummaryResponse? {
-        val user = userRepository.findByRoleAndIdentifier(UserRole.PARENT, UserStatus.APPROVED, query).firstOrNull()
-            ?: return null
-        val fullImageUrl = user.imageUrl?.let { "$imagesBaseUrl/$it" }
-        return UserSummaryResponse(
-            id = user.id,
-            code = user.code,
-            name = user.displayName,
-            fullName = user.fullName,
-            imageUrl = fullImageUrl
-        )
+    fun searchParents(query: String, imagesBaseUrl: String): UserSummaryResponse {
+        val projection = userRepository.findSummaryByRolesAndIdentifier(
+            listOf(UserRole.PARENT, UserRole.KHADEM, UserRole.KAHEN),
+            UserStatus.APPROVED,
+            query
+        ).firstOrNull() ?: throw ResourceNotFoundException("No parent found matching: $query")
+
+        return projection.toUserSummaryResponse(imagesBaseUrl)
     }
 
-    fun searchMakhdooms(query: String, imagesBaseUrl: String): UserSummaryResponse? {
-        val user = userRepository.findByRoleAndIdentifier(UserRole.MAKHDOOM, UserStatus.APPROVED, query).firstOrNull()
-            ?: return null
-        val fullImageUrl = user.imageUrl?.let { "$imagesBaseUrl/$it" }
-        return UserSummaryResponse(
-            id = user.id,
-            code = user.code,
-            name = user.displayName,
-            fullName = user.fullName,
-            imageUrl = fullImageUrl
-        )
+    fun searchMakhdooms(query: String, imagesBaseUrl: String): UserSummaryResponse {
+        val projection = userRepository.findSummaryByRolesAndIdentifier(
+            listOf(UserRole.MAKHDOOM, UserRole.KHADEM, UserRole.PARENT),
+            UserStatus.APPROVED,
+            query
+        ).firstOrNull() ?: throw ResourceNotFoundException("No child found matching: $query")
+
+        return projection.toUserSummaryResponse(imagesBaseUrl)
     }
 
     private fun generateRandomPassword(): String {
