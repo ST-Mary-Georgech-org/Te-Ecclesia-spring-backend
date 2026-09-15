@@ -683,7 +683,7 @@ class UserService(
             }
         }
 
-        if (user.role == UserRole.PARENT && updateData.parentProfile != null) {
+        if ((user.role in listOf(UserRole.PARENT, UserRole.KHADEM, UserRole.KAHEN)) && updateData.parentProfile != null) {
             val updatedParent = parentProfileService.createOrUpdateProfile(user, updateData.parentProfile)
             user = user.copy(parentProfile = updatedParent)
         }
@@ -943,8 +943,8 @@ class UserService(
     @Transactional
     fun updateParentProfile(parentId: UUID, request: ParentProfileRequest) {
         val user = findById(parentId)
-        if (user.role != UserRole.PARENT) {
-            throw IllegalArgumentException("User is not a PARENT")
+        if (user.role !in listOf(UserRole.PARENT, UserRole.KHADEM, UserRole.KAHEN)) {
+            throw IllegalArgumentException("User is not a PARENT, KHADEM, or KAHEN")
         }
 
         val parentProfile = parentProfileService.createOrUpdateProfile(user, request)

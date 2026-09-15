@@ -14,6 +14,7 @@ import org.teEcclesia.identity.exception.UserAlreadyExistsException
 import org.teEcclesia.identity.exception.PhoneNotVerifiedException
 import org.teEcclesia.identity.exception.DuplicatePhoneException
 import org.teEcclesia.identity.exception.EmailNotVerifiedException
+import org.teEcclesia.identity.exception.ResourceNotFoundException
 import org.teEcclesia.identity.security.JwtUtil
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -889,5 +890,78 @@ class AuthServiceIntegrationTest {
             isEmailVerified = isVerified
         )
         return userRepository.save(userToSave)
+    }
+
+    @Test
+    fun `searchParents finds approved Khadem and Kahen users`() {
+        val khadem = createUser(email = "khadem-search@test.com", isVerified = true)
+        userRepository.save(khadem.copy(role = UserRole.KHADEM, code = "K12345678", displayName = "Khadem Search"))
+
+        val kahen = createUser(email = "kahen-search@test.com", isVerified = true)
+        userRepository.save(kahen.copy(role = UserRole.KAHEN, code = "H12345678", displayName = "Kahen Search"))
+
+        val khademResult = authService.searchParents("K12345678", "http://test")
+        assertThat(khademResult).isNotNull()
+        assertThat(khademResult?.name).isEqualTo("Khadem Search")
+
+        val kahenResult = authService.searchParents("H12345678", "http://test")
+        assertThat(kahenResult).isNotNull()
+        assertThat(kahenResult?.name).isEqualTo("Kahen Search")
+    }
+
+    @Test
+    fun `searchMakhdooms finds approved Makhdoom, Khadem, and Parent users but excludes Kahen`() {
+        val makhdoom = createUser(email = "makhdoom-child@test.com", isVerified = true)
+        userRepository.save(makhdoom.copy(role = UserRole.MAKHDOOM, code = "M12345678", displayName = "Makhdoom Child"))
+
+        val khademChild = createUser(email = "khadem-child@test.com", isVerified = true)
+        userRepository.save(khademChild.copy(role = UserRole.KHADEM, code = "K87654321", displayName = "Khadem Child"))
+
+        val parentChild = createUser(email = "parent-child@test.com", isVerified = true)
+        userRepository.save(parentChild.copy(role = UserRole.PARENT, code = "P12345678", displayName = "Parent Child"))
+
+        val kahenUser = createUser(email = "kahen-child@test.com", isVerified = true)
+        userRepository.save(kahenUser.copy(role = UserRole.KAHEN, code = "H87654321", displayName = "Kahen Not Child"))
+
+        val makhdoomResult = authService.searchMakhdooms("M12345678", "http://test")
+        assertThat(makhdoomResult).isNotNull()
+        assertThat(makhdoomResult?.name).isEqualTo("Makhdoom Child")
+
+        val khademResult = authService.searchMakhdooms("K87654321", "http://test")
+        assertThat(khademResult).isNotNull()
+        assertThat(khademResult?.name).isEqualTo("Khadem Child")
+
+        val parentResult = authService.searchMakhdooms("P12345678", "http://test")
+        assertThat(parentResult).isNotNull()
+        assertThat(parentResult.name).isEqualTo("Parent Child")
+
+        assertThrows<ResourceNotFoundException> {
+            authService.searchMakhdooms("H87654321", "http://test")
+        }
+    }
+
+    @Test
+    fun `searchMakhdooms correctly resolves absolute and relative imageUrl`() {
+        val userWithFullUrl = createUser(email = "full-url@test.com", isVerified = true)
+        userRepository.save(userWithFullUrl.copy(
+            role = UserRole.MAKHDOOM,
+            code = "M11111111",
+            displayName = "Full Url User",
+            imageUrl = "https://cdn.example.com/profile/photo.jpg?v=1"
+        ))
+
+        val userWithRelativeUrl = createUser(email = "relative-url@test.com", isVerified = true)
+        userRepository.save(userWithRelativeUrl.copy(
+            role = UserRole.MAKHDOOM,
+            code = "M22222222",
+            displayName = "Relative Url User",
+            imageUrl = "photo2.jpg"
+        ))
+
+        val resultFull = authService.searchMakhdooms("M11111111", "https://cdn.example.com/profile")
+        assertThat(resultFull.imageUrl).isEqualTo("https://cdn.example.com/profile/photo.jpg?v=1")
+
+        val resultRelative = authService.searchMakhdooms("M22222222", "https://cdn.example.com/profile")
+        assertThat(resultRelative.imageUrl).isEqualTo("https://cdn.example.com/profile/photo2.jpg")
     }
 }

@@ -108,6 +108,12 @@ class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error)
     }
 
+    @ExceptionHandler(ResourceNotFoundException::class)
+    fun handleResourceNotFound(ex: ResourceNotFoundException): ResponseEntity<ErrorResponse> {
+        val error = ErrorResponse(ex.message ?: "Resource not found", HttpStatus.NOT_FOUND.value())
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error)
+    }
+
     @ExceptionHandler(
         IllegalArgumentException::class,
         IllegalStateException::class,

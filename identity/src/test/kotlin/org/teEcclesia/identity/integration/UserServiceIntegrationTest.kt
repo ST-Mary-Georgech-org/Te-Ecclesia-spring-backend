@@ -14,6 +14,8 @@ import org.teEcclesia.identity.api.dto.request.UpdateProfileRequest
 import org.teEcclesia.identity.api.dto.request.RegisterRequest
 import org.teEcclesia.identity.api.dto.request.MakhdoomProfileRequest
 import org.teEcclesia.identity.entity.User
+import org.teEcclesia.identity.entity.KhademProfile
+import org.teEcclesia.identity.entity.KahenProfile
 import org.teEcclesia.identity.entity.ParentProfile
 import org.teEcclesia.identity.entity.VerificationPurpose
 import org.teEcclesia.identity.entity.VerificationMethod
@@ -203,7 +205,7 @@ class UserServiceIntegrationTest {
                 thirdName = "Test",
                 lastName = "Case",
                 displayName = "Integration User",
-                nationalId = "2900101010101" + (0..9).random(), // 14 digits
+                nationalId = "2" + (1000000000000L..9999999999999L).random().toString(), // 14 digits
                 email = email,
                 phone = "+2" + listOf("010", "011", "012", "015").random() + (10000000..99999999).random().toString(),
                 homePhone = "0223456789",
@@ -732,6 +734,106 @@ class UserServiceIntegrationTest {
         assertThat(banned.status).isEqualTo(UserStatus.BANNED)
         assertThat(banned.actionTakenAt).isNotNull()
         assertThat(banned.actionTakenBy?.id).isEqualTo(admin.id)
+    }
+
+    @Test
+    fun `getUserProfile and getUsersByStatus return parentProfile for KHADEM and KAHEN roles`() {
+        val admin = createUser(email = "admin-parent-role@mail.com")
+        userRepository.save(admin.copy(role = UserRole.ADMIN, status = UserStatus.APPROVED))
+
+        val spouse = userRepository.save(
+            createUser(email = "spouse@test.com", role = UserRole.PARENT).copy(
+                displayName = "Spouse User",
+                firstName = "Spouse",
+                secondName = "Partner",
+                thirdName = "Test",
+                lastName = "User"
+            )
+        )
+        val child = userRepository.save(
+            createUser(email = "child-role@test.com", role = UserRole.MAKHDOOM).copy(
+                displayName = "Child Role User",
+                firstName = "Child",
+                secondName = "Role",
+                thirdName = "Test",
+                lastName = "User"
+            )
+        )
+
+        val stage = educationalStageRepository.save(EducationalStage(nameAr = "Stage", nameEn = "Stage"))
+        val year = educationalYearRepository.save(EducationalYear(nameAr = "Year", nameEn = "Year", stage = stage, whatsAppLink = null))
+
+        var khademUser = createUser(email = "khadem-parent@test.com", role = UserRole.KHADEM).copy(
+            displayName = "Khadem Parent",
+            firstName = "Khadem",
+            secondName = "Parent",
+            thirdName = "Test",
+            lastName = "User"
+        )
+        khademUser = userRepository.save(
+            khademUser.copy(
+                khademProfile = KhademProfile(
+                    user = khademUser,
+                    educationalStage = stage,
+                    educationalYear = year,
+                    canApproveRequests = false
+                )
+            )
+        )
+        parentProfileRepository.save(
+            ParentProfile(
+                user = khademUser,
+                partner = spouse,
+                children = listOf(child)
+            )
+        )
+
+        val khademProfileResponse = userService.getUserProfile(khademUser.id)
+        assertThat(khademProfileResponse.role).isEqualTo(UserRole.KHADEM)
+        assertThat(khademProfileResponse.khademProfile).isNotNull()
+        assertThat(khademProfileResponse.parentProfile).isNotNull()
+        assertThat(khademProfileResponse.parentProfile?.partner?.name).isEqualTo("Spouse User")
+        assertThat(khademProfileResponse.parentProfile?.children).hasSize(1)
+
+        val spouse2 = userRepository.save(
+            createUser(email = "spouse2@test.com", role = UserRole.PARENT).copy(
+                displayName = "Spouse2 User",
+                firstName = "Spouse2",
+                secondName = "Partner",
+                thirdName = "Test",
+                lastName = "User"
+            )
+        )
+        var kahenUser = createUser(email = "kahen-parent@test.com", role = UserRole.KAHEN).copy(
+            displayName = "Kahen Parent",
+            firstName = "Kahen",
+            secondName = "Parent",
+            thirdName = "Test",
+            lastName = "User"
+        )
+        kahenUser = userRepository.save(
+            kahenUser.copy(
+                kahenProfile = KahenProfile(
+                    user = kahenUser,
+                    educationalStages = mutableListOf(stage),
+                    ordinationDate = LocalDate.of(2020, 1, 1)
+                )
+            )
+        )
+        parentProfileRepository.save(
+            ParentProfile(
+                user = kahenUser,
+                partner = spouse2,
+                children = listOf(child)
+            )
+        )
+
+        val kahenProfileResponse = userService.getUserProfile(kahenUser.id)
+        assertThat(kahenProfileResponse.role).isEqualTo(UserRole.KAHEN)
+        assertThat(kahenProfileResponse.kahenProfile).isNotNull()
+        assertThat(kahenProfileResponse.parentProfile).isNotNull()
+        assertThat(kahenProfileResponse.parentProfile?.partner?.name).isEqualTo("Spouse2 User")
+        assertThat(kahenProfileResponse.parentProfile?.children).hasSize(1)
     }
 }
 

@@ -141,7 +141,7 @@ fun User.toProfileResponse(
                 ordinationDate = it.ordinationDate
             )
         } else null,
-        parentProfile = if (this.role == UserRole.PARENT) this.parentProfile?.let {
+        parentProfile = if (this.role in listOf(UserRole.PARENT, UserRole.KHADEM, UserRole.KAHEN)) this.parentProfile?.let {
             ParentProfileResponse(
                 partner = it.partner?.toUserSummaryResponse(imageBaseUrl),
                 children = it.children.map { child -> child.toUserSummaryResponse(imageBaseUrl) },
@@ -254,7 +254,7 @@ fun UserProfileProjection.toProfileResponse(
                 ordinationDate = getKahenOrdinationDate()
             )
         } else null,
-        parentProfile = if (getRole() == UserRole.PARENT) getParentProfileId()?.let { parentId ->
+        parentProfile = if (getRole() in listOf(UserRole.PARENT, UserRole.KHADEM, UserRole.KAHEN)) getParentProfileId()?.let { parentId ->
             val partnerSummary = getPartnerId()?.let {
                 UserSummaryResponse(
                     id = it,
@@ -313,7 +313,7 @@ fun UserProfileProjection.toProfileResponse(
     )
 }
 
-private fun UserSummaryProjection.toUserSummaryResponse(imageBaseUrl: String): UserSummaryResponse {
+fun UserSummaryProjection.toUserSummaryResponse(imageBaseUrl: String): UserSummaryResponse {
     return UserSummaryResponse(
         id = getId(),
         name = getDisplayName(),

@@ -20,6 +20,7 @@ import org.teEcclesia.identity.repository.projection.ProfileYearLookupProjection
 import org.teEcclesia.identity.repository.projection.UserEmailProjection
 import org.teEcclesia.identity.repository.projection.UserProfileProjection
 import org.teEcclesia.identity.repository.projection.UserProfileWithDeaconsRecordProjection
+import org.teEcclesia.identity.repository.projection.UserSummaryProjection
 
 interface UserRepository : JpaRepository<User, UUID> {
     fun findByCode(code: String): User?
@@ -164,11 +165,11 @@ interface UserRepository : JpaRepository<User, UUID> {
                 kap.ordinationDate as kahenOrdinationDate,
 
                 pp.id as parentProfileId,
-                partner.id as parentPartnerId,
-                partner.displayName as parentPartnerName,
-                CONCAT(partner.firstName, ' ', partner.secondName, ' ', partner.thirdName, ' ', partner.lastName) as parentPartnerFullName,
-                partner.code as parentPartnerCode,
-                partner.imageUrl as parentPartnerImageUrl,
+                partner.id as partnerId,
+                partner.displayName as partnerName,
+                CONCAT(partner.firstName, ' ', partner.secondName, ' ', partner.thirdName, ' ', partner.lastName) as partnerFullName,
+                partner.code as partnerCode,
+                partner.imageUrl as partnerImageUrl,
 
                 op.id as ordinationProfileId,
                 r.id as ordinationRankId,
@@ -423,6 +424,34 @@ interface UserRepository : JpaRepository<User, UUID> {
         @Param("status") status: UserStatus,
         @Param("query") query: String
     ): List<User>
+
+    @Query("""
+        SELECT u FROM User u 
+        WHERE u.role IN :roles AND u.status = :status
+        AND ((u.email = :query AND u.isEmailVerified = true) OR u.nationalId = :query OR u.code = :query OR u.phone = :query)
+    """)
+    fun findByRolesAndIdentifier(
+        @Param("roles") roles: Collection<UserRole>,
+        @Param("status") status: UserStatus,
+        @Param("query") query: String
+    ): List<User>
+
+    @Query("""
+        SELECT 
+            u.id as id,
+            u.displayName as displayName,
+            CONCAT(u.firstName, ' ', u.secondName, ' ', u.thirdName, ' ', u.lastName) as fullName,
+            u.code as code,
+            u.imageUrl as imageUrl
+        FROM User u 
+        WHERE u.role IN :roles AND u.status = :status
+        AND ((u.email = :query AND u.isEmailVerified = true) OR u.nationalId = :query OR u.code = :query OR u.phone = :query)
+    """)
+    fun findSummaryByRolesAndIdentifier(
+        @Param("roles") roles: Collection<UserRole>,
+        @Param("status") status: UserStatus,
+        @Param("query") query: String
+    ): List<UserSummaryProjection>
 
     @Query("""
         SELECT u FROM User u 
