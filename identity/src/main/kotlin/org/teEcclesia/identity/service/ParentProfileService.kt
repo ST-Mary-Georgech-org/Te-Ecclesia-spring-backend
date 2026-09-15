@@ -15,7 +15,7 @@ class ParentProfileService(
     private val parentProfileRepository: ParentProfileRepository
 ) {
     @Transactional
-    fun createOrUpdateProfile(user: User, request: ParentProfileRequest, finalIdentityDocumentUrl: String? = null): ParentProfile {
+    fun createOrUpdateProfile(user: User, request: ParentProfileRequest): ParentProfile {
         var profile = user.parentProfile ?: ParentProfile(user = user)
 
         // Handle Partner
@@ -33,12 +33,9 @@ class ParentProfileService(
             fetchedChildren
         } else emptyList()
 
-        val finalNationalIdUrl = finalIdentityDocumentUrl ?: request.nationalIdImageUrl ?: profile.nationalIdImageUrl
-
         profile = profile.copy(
             partner = partner,
-            children = children,
-            nationalIdImageUrl = finalNationalIdUrl
+            children = children
         )
 
         return parentProfileRepository.save(profile)

@@ -5,6 +5,7 @@ import org.teEcclesia.identity.entity.enums.UserRole
 data class CompleteProfileRequest(
     val role: UserRole,
 
+    val identityDocumentImageUrl: String? = null,
     val ordinationProfile: OrdinationProfileRequest? = null,
     val makhdoomProfile: MakhdoomProfileRequest? = null,
     val khademProfile: KhademProfileRequest? = null,

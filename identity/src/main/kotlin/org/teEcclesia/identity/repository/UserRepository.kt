@@ -119,6 +119,7 @@ interface UserRepository : JpaRepository<User, UUID> {
                 u.isEmailVerified as isEmailVerified,
                 u.isPhoneVerified as isPhoneVerified,
                 u.imageUrl as imageUrl,
+                u.identityDocumentImageUrl as identityDocumentImageUrl,
                 u.job as job,
                 u.buildingNo as buildingNo,
                 u.street as street,
@@ -163,7 +164,6 @@ interface UserRepository : JpaRepository<User, UUID> {
                 kap.ordinationDate as kahenOrdinationDate,
 
                 pp.id as parentProfileId,
-                pp.nationalIdImageUrl as parentNationalIdImageUrl,
                 partner.id as parentPartnerId,
                 partner.displayName as parentPartnerName,
                 CONCAT(partner.firstName, ' ', partner.secondName, ' ', partner.thirdName, ' ', partner.lastName) as parentPartnerFullName,
@@ -194,8 +194,7 @@ interface UserRepository : JpaRepository<User, UUID> {
                 mp.motherPhone as makhdoomMotherPhone,
                 mp.motherWhatsapp as makhdoomMotherWhatsapp,
                 mp.isFatherDeceased as makhdoomIsFatherDeceased,
-                mp.isMotherDeceased as makhdoomIsMotherDeceased,
-                mp.identityDocumentImageUrl as makhdoomIdentityDocumentImageUrl
+                mp.isMotherDeceased as makhdoomIsMotherDeceased
 
             FROM User u 
             LEFT JOIN u.actionTakenBy atb
@@ -240,6 +239,7 @@ interface UserRepository : JpaRepository<User, UUID> {
                 u.isEmailVerified as isEmailVerified,
                 u.isPhoneVerified as isPhoneVerified,
                 u.imageUrl as imageUrl,
+                u.identityDocumentImageUrl as identityDocumentImageUrl,
                 u.job as job,
                 u.buildingNo as buildingNo,
                 u.street as street,
@@ -284,7 +284,6 @@ interface UserRepository : JpaRepository<User, UUID> {
                 kap.ordinationDate as kahenOrdinationDate,
 
                 pp.id as parentProfileId,
-                pp.nationalIdImageUrl as parentNationalIdImageUrl,
                 partner.id as partnerId,
                 partner.displayName as partnerName,
                 CONCAT(partner.firstName, ' ', partner.secondName, ' ', partner.thirdName, ' ', partner.lastName) as partnerFullName,
@@ -315,8 +314,7 @@ interface UserRepository : JpaRepository<User, UUID> {
                 mp.motherPhone as makhdoomMotherPhone,
                 mp.motherWhatsapp as makhdoomMotherWhatsapp,
                 mp.isFatherDeceased as makhdoomIsFatherDeceased,
-                mp.isMotherDeceased as makhdoomIsMotherDeceased,
-                mp.identityDocumentImageUrl as makhdoomIdentityDocumentImageUrl
+                mp.isMotherDeceased as makhdoomIsMotherDeceased
 
             FROM User u 
             LEFT JOIN u.actionTakenBy atb

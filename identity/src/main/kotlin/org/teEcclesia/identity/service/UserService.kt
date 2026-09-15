@@ -361,7 +361,7 @@ class UserService(
         val finalDocumentUrl = when {
             identityDocument != null -> imageStorageService.uploadImage(identityDocument, "doc_${user.id}", documentsDirectory)
             request?.deleteIdentityDocument == true -> null
-            else -> user.makhdoomProfile?.identityDocumentImageUrl
+            else -> request?.updateProfileData?.identityDocumentImageUrl ?: user.identityDocumentImageUrl
         }
         
         val finalCertificateUrl = when {
@@ -372,7 +372,7 @@ class UserService(
         
         user = user.copy(
             imageUrl = finalImageUrl,
-            makhdoomProfile = user.makhdoomProfile?.copy(identityDocumentImageUrl = finalDocumentUrl),
+            identityDocumentImageUrl = finalDocumentUrl,
             ordinationProfile = user.ordinationProfile?.copy(certificateImageUrl = finalCertificateUrl)
         )
 
@@ -458,9 +458,8 @@ class UserService(
         
         val finalDocumentUrl = when {
             identityDocument != null -> imageStorageService.uploadImage(identityDocument, "doc_${user.id}", documentsDirectory)
-            request.deleteIdentityDocument == null -> user.makhdoomProfile?.identityDocumentImageUrl
-            request.deleteIdentityDocument -> null
-            else -> user.makhdoomProfile?.identityDocumentImageUrl
+            request.deleteIdentityDocument == true -> null
+            else -> request.updateProfileData?.identityDocumentImageUrl ?: user.identityDocumentImageUrl
         }
         
         val finalCertificateUrl = when {
@@ -472,7 +471,7 @@ class UserService(
         
         user = user.copy(
             imageUrl = finalImageUrl,
-            makhdoomProfile = user.makhdoomProfile?.copy(identityDocumentImageUrl = finalDocumentUrl),
+            identityDocumentImageUrl = finalDocumentUrl,
             ordinationProfile = user.ordinationProfile?.copy(certificateImageUrl = finalCertificateUrl)
         )
         
@@ -563,6 +562,7 @@ class UserService(
             apartment = updateData.apartment,
             specialMark = updateData.specialMark,
             role = updateData.role ?: user.role,
+            identityDocumentImageUrl = updateData.identityDocumentImageUrl ?: user.identityDocumentImageUrl,
             confessionPriest = confessionPriest,
             externalConfessionPriestName = updateData.externalConfessionPriestName,
             externalConfessionChurch = updateData.externalConfessionChurch,
@@ -615,8 +615,7 @@ class UserService(
                 motherPhone = updateData.makhdoomProfile.motherPhone,
                 motherWhatsapp = updateData.makhdoomProfile.motherWhatsapp,
                 isFatherDeceased = updateData.makhdoomProfile.isFatherDeceased ?: false,
-                isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased ?: false,
-                identityDocumentImageUrl = updateData.makhdoomProfile.identityDocumentImageUrl ?: currentProfile.identityDocumentImageUrl
+                isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased ?: false
             ) ?: MakhdoomProfile(
                 user = user,
                 shamamsaStudyStatus = updateData.makhdoomProfile.shamamsaStudyStatus,
@@ -627,8 +626,7 @@ class UserService(
                 motherPhone = updateData.makhdoomProfile.motherPhone,
                 motherWhatsapp = updateData.makhdoomProfile.motherWhatsapp,
                 isFatherDeceased = updateData.makhdoomProfile.isFatherDeceased ?: false,
-                isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased ?: false,
-                identityDocumentImageUrl = updateData.makhdoomProfile.identityDocumentImageUrl
+                isMotherDeceased = updateData.makhdoomProfile.isMotherDeceased ?: false
             )
             user = user.copy(makhdoomProfile = updatedMakhdoomProfile)
         }
@@ -830,11 +828,18 @@ class UserService(
         )
 
 
+        val finalDocumentUrl = if (identityDocument != null) {
+            imageStorageService.uploadImage(identityDocument, "doc_${userId}", documentsDirectory)
+        } else {
+            request.identityDocumentImageUrl
+        }
+
         val userEntity = request.toEntity(
             hashedPassword = encodedPassword, 
             confessionPriest = confessionPriest,
             id = userId,
-            imageUrl = finalImageUrl
+            imageUrl = finalImageUrl,
+            identityDocumentImageUrl = finalDocumentUrl
         )
         
         // Add Makhdoom profile
@@ -850,11 +855,6 @@ class UserService(
                     IllegalArgumentException("Educational year not found")
                 }
             }
-            val finalDocumentUrl = if (identityDocument != null) {
-                imageStorageService.uploadImage(identityDocument, "doc_${userId}", documentsDirectory)
-            } else {
-                request.makhdoomProfile.identityDocumentImageUrl
-            }
 
             MakhdoomProfile(
                 user = userEntity,
@@ -866,8 +866,7 @@ class UserService(
                 motherPhone = request.makhdoomProfile.motherPhone,
                 motherWhatsapp = request.makhdoomProfile.motherWhatsapp,
                 isFatherDeceased = request.makhdoomProfile.isFatherDeceased ?: false,
-                isMotherDeceased = request.makhdoomProfile.isMotherDeceased ?: false,
-                identityDocumentImageUrl = finalDocumentUrl
+                isMotherDeceased = request.makhdoomProfile.isMotherDeceased ?: false
             )
         } else null
         
@@ -908,11 +907,18 @@ class UserService(
         )
 
 
+        val finalDocumentUrl = if (nationalIdImage != null) {
+            imageStorageService.uploadImage(nationalIdImage, "doc_${userId}", documentsDirectory)
+        } else {
+            request.identityDocumentImageUrl
+        }
+
         val userEntity = request.toEntity(
             hashedPassword = encodedPassword, 
             confessionPriest = confessionPriest,
             id = userId,
-            imageUrl = finalImageUrl
+            imageUrl = finalImageUrl,
+            identityDocumentImageUrl = finalDocumentUrl
         )
         
         val savedUser = userRepository.save(userEntity.copy(
@@ -923,16 +929,9 @@ class UserService(
             code = userCodeGenerator.generateCode(userEntity)
         ))
 
-        val finalDocumentUrl = if (nationalIdImage != null) {
-            imageStorageService.uploadImage(nationalIdImage, "doc_${userId}", documentsDirectory)
-        } else {
-            request.parentProfile?.nationalIdImageUrl
-        }
-
         request.parentProfile?.let {
             val parentProfile = parentProfileService.createOrUpdateProfile(savedUser, it)
-            val updatedParentProfile = parentProfile.copy(nationalIdImageUrl = finalDocumentUrl)
-            val userWithParent = savedUser.copy(parentProfile = updatedParentProfile)
+            val userWithParent = savedUser.copy(parentProfile = parentProfile)
             userRepository.save(userWithParent)
             parentProfileService.syncPartner(userWithParent)
         }

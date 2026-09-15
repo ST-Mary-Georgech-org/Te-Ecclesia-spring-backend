@@ -100,6 +100,9 @@ data class User(
     @Column(nullable = true)
     val imageUrl: String? = null,
 
+    @Column(nullable = true)
+    val identityDocumentImageUrl: String? = null,
+
     @Column(nullable = false)
     val createdAt: Instant = Instant.now(),
 

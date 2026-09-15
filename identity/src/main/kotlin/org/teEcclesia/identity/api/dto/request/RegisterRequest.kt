@@ -49,6 +49,7 @@ data class RegisterRequest(
     val password: String? = null,
 
     val imageUrl: String? = null,
+    val identityDocumentImageUrl: String? = null,
 
     val job: String? = null,
 
@@ -92,7 +93,8 @@ fun RegisterRequest.toEntity(
     hashedPassword: String, 
     confessionPriest: User? = null, 
     id: UUID = UUID.randomUUID(),
-    imageUrl: String? = this.imageUrl
+    imageUrl: String? = this.imageUrl,
+    identityDocumentImageUrl: String? = this.identityDocumentImageUrl
 ): User {
     return User(
         id = id,
@@ -107,6 +109,7 @@ fun RegisterRequest.toEntity(
         email = this.email,
         passwordHash = hashedPassword,
         imageUrl = imageUrl,
+        identityDocumentImageUrl = identityDocumentImageUrl,
         createdAt = Instant.now(),
         birthDate = extractBirthDate(this.nationalId),
         job = this.job,

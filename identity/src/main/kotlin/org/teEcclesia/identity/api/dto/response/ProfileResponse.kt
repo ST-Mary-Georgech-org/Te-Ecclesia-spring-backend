@@ -24,6 +24,7 @@ data class ProfileResponse(
     val isEmailVerified: Boolean,
     val isPhoneVerified: Boolean,
     val imageUrl: String?,
+    val identityDocumentImageUrl: String? = null,
     val job: String?,
     val buildingNo: String,
     val street: String,
@@ -95,6 +96,7 @@ fun User.toProfileResponse(
         isEmailVerified = isEmailVerified,
         isPhoneVerified = isPhoneVerified,
         imageUrl = resolveUrl(imageBaseUrl, imageUrl),
+        identityDocumentImageUrl = resolveUrl(imageBaseUrl, this.identityDocumentImageUrl),
         job = job,
         buildingNo = buildingNo,
         street = street,
@@ -111,7 +113,7 @@ fun User.toProfileResponse(
         externalConfessionPriestName = this.externalConfessionPriestName,
         externalConfessionChurch = this.externalConfessionChurch,
         externalConfessionPhone = this.externalConfessionPhone,
-        khademProfile = this.khademProfile?.let {
+        khademProfile = if (this.role == UserRole.KHADEM) this.khademProfile?.let {
             val stageName = if (lang.startsWith("en", ignoreCase = true)) it.educationalStage.nameEn else it.educationalStage.nameAr
             KhademProfileResponse(
                 educationalStage = LookupResponse(it.educationalStage.id, stageName, whatsAppLink = null),
@@ -129,8 +131,8 @@ fun User.toProfileResponse(
                     LookupResponse(year.id, yName, whatsAppLink = year.whatsAppLink)
                 }
             )
-        },
-        kahenProfile = this.kahenProfile?.let {
+        } else null,
+        kahenProfile = if (this.role == UserRole.KAHEN) this.kahenProfile?.let {
             KahenProfileResponse(
                 educationalStages = it.educationalStages.map { stage ->
                     val stageName = if (lang.startsWith("en", ignoreCase = true)) stage.nameEn else stage.nameAr
@@ -138,15 +140,14 @@ fun User.toProfileResponse(
                 },
                 ordinationDate = it.ordinationDate
             )
-        },
-        parentProfile = this.parentProfile?.let {
+        } else null,
+        parentProfile = if (this.role == UserRole.PARENT) this.parentProfile?.let {
             ParentProfileResponse(
                 partner = it.partner?.toUserSummaryResponse(imageBaseUrl),
                 children = it.children.map { child -> child.toUserSummaryResponse(imageBaseUrl) },
-                nationalIdImageUrl = resolveUrl(imageBaseUrl, it.nationalIdImageUrl),
                 whatsAppLink = parentsWhatsAppLink
             )
-        },
+        } else null,
         ordinationProfile = this.ordinationProfile?.let {
             val rankName = if (lang.startsWith("en", ignoreCase = true)) it.rank.nameEn else it.rank.nameAr
             OrdinationProfileResponse(
@@ -158,7 +159,7 @@ fun User.toProfileResponse(
                 certificateImageUrl = resolveUrl(imageBaseUrl, it.certificateImageUrl)
             )
         },
-        makhdoomProfile = this.makhdoomProfile?.let {
+        makhdoomProfile = if (this.role == UserRole.MAKHDOOM) this.makhdoomProfile?.let {
             val stageName = if (lang.startsWith("en", ignoreCase = true)) it.educationalStage.nameEn else it.educationalStage.nameAr
             MakhdoomProfileResponse(
                 shamamsaStudyStatus = it.shamamsaStudyStatus,
@@ -172,10 +173,9 @@ fun User.toProfileResponse(
                 motherPhone = it.motherPhone,
                 motherWhatsapp = it.motherWhatsapp,
                 isFatherDeceased = it.isFatherDeceased,
-                isMotherDeceased = it.isMotherDeceased,
-                identityDocumentImageUrl = resolveUrl(imageBaseUrl, it.identityDocumentImageUrl)
+                isMotherDeceased = it.isMotherDeceased
             )
-        },
+        } else null,
         createdAt = this.createdAt,
         actionTakenAt = this.actionTakenAt,
         actionTakenBy = this.actionTakenBy?.toUserSummaryResponse(imageBaseUrl),
@@ -210,6 +210,7 @@ fun UserProfileProjection.toProfileResponse(
         isEmailVerified = getIsEmailVerified(),
         isPhoneVerified = getIsPhoneVerified(),
         imageUrl = resolveUrl(imageBaseUrl, getImageUrl()),
+        identityDocumentImageUrl = resolveUrl(imageBaseUrl, getIdentityDocumentImageUrl()),
         job = getJob(),
         buildingNo = getBuildingNo(),
         street = getStreet(),
@@ -234,7 +235,7 @@ fun UserProfileProjection.toProfileResponse(
         externalConfessionPriestName = getExternalConfessionPriestName(),
         externalConfessionChurch = getExternalConfessionChurch(),
         externalConfessionPhone = getExternalConfessionPhone(),
-        khademProfile = getKhademProfileId()?.let { khId ->
+        khademProfile = if (getRole() == UserRole.KHADEM) getKhademProfileId()?.let { khId ->
             val stageName = if (lang.startsWith("en", ignoreCase = true)) getKhademStageNameEn() else getKhademStageNameAr()
             val yearName = if (lang.startsWith("en", ignoreCase = true)) getKhademYearNameEn() else getKhademYearNameAr()
             KhademProfileResponse(
@@ -246,14 +247,14 @@ fun UserProfileProjection.toProfileResponse(
                 responsibleStages = responsibleStagesByKhademId[khId] ?: emptyList(),
                 responsibleYears = responsibleYearsByKhademId[khId] ?: emptyList()
             )
-        },
-        kahenProfile = getKahenProfileId()?.let { kahenId ->
+        } else null,
+        kahenProfile = if (getRole() == UserRole.KAHEN) getKahenProfileId()?.let { kahenId ->
             KahenProfileResponse(
                 educationalStages = educationalStagesByKahenId[kahenId] ?: emptyList(),
                 ordinationDate = getKahenOrdinationDate()
             )
-        },
-        parentProfile = getParentProfileId()?.let { parentId ->
+        } else null,
+        parentProfile = if (getRole() == UserRole.PARENT) getParentProfileId()?.let { parentId ->
             val partnerSummary = getPartnerId()?.let {
                 UserSummaryResponse(
                     id = it,
@@ -266,10 +267,9 @@ fun UserProfileProjection.toProfileResponse(
             ParentProfileResponse(
                 partner = partnerSummary,
                 children = childrenByParentId[parentId] ?: emptyList(),
-                nationalIdImageUrl = resolveUrl(imageBaseUrl, getParentNationalIdImageUrl()),
                 whatsAppLink = parentsWhatsAppLink
             )
-        },
+        } else null,
         ordinationProfile = getOrdinationProfileId()?.let {
             val rankName = if (lang.startsWith("en", ignoreCase = true)) getOrdinationRankNameEn() else getOrdinationRankNameAr()
             OrdinationProfileResponse(
@@ -281,7 +281,7 @@ fun UserProfileProjection.toProfileResponse(
                 certificateImageUrl = resolveUrl(imageBaseUrl, getOrdinationCertificateImageUrl())
             )
         },
-        makhdoomProfile = getMakhdoomProfileId()?.let {
+        makhdoomProfile = if (getRole() == UserRole.MAKHDOOM) getMakhdoomProfileId()?.let {
             val stageName = if (lang.startsWith("en", ignoreCase = true)) getMakhdoomStageNameEn() else getMakhdoomStageNameAr()
             val yearName = if (lang.startsWith("en", ignoreCase = true)) getMakhdoomYearNameEn() else getMakhdoomYearNameAr()
             MakhdoomProfileResponse(
@@ -295,10 +295,9 @@ fun UserProfileProjection.toProfileResponse(
                 motherPhone = getMakhdoomMotherPhone(),
                 motherWhatsapp = getMakhdoomMotherWhatsapp(),
                 isFatherDeceased = getMakhdoomIsFatherDeceased() ?: false,
-                isMotherDeceased = getMakhdoomIsMotherDeceased() ?: false,
-                identityDocumentImageUrl = resolveUrl(imageBaseUrl, getMakhdoomIdentityDocumentImageUrl())
+                isMotherDeceased = getMakhdoomIsMotherDeceased() ?: false
             )
-        },
+        } else null,
         createdAt = getCreatedAt(),
         actionTakenAt = getActionTakenAt(),
         actionTakenBy = getActionTakenById()?.let {
@@ -380,7 +379,6 @@ private fun ParentProfileProjection.toParentProfileResponse(
     return ParentProfileResponse(
         partner = getPartner()?.toUserSummaryResponse(imageBaseUrl),
         children = children,
-        nationalIdImageUrl = resolveUrl(imageBaseUrl, getNationalIdImageUrl()),
         whatsAppLink = parentsWhatsAppLink
     )
 }
@@ -396,7 +394,7 @@ private fun OrdinationProfileProjection.toOrdinationProfileResponse(lang: String
     )
 }
 
-private fun MakhdoomProfileProjection.toMakhdoomProfileResponse(lang: String, imageBaseUrl: String): MakhdoomProfileResponse {
+private fun MakhdoomProfileProjection.toMakhdoomProfileResponse(lang: String): MakhdoomProfileResponse {
     return MakhdoomProfileResponse(
         shamamsaStudyStatus = getShamamsaStudyStatus(),
         educationalStage = getEducationalStage().toLookupResponse(lang),
@@ -406,7 +404,6 @@ private fun MakhdoomProfileProjection.toMakhdoomProfileResponse(lang: String, im
         motherPhone = getMotherPhone(),
         motherWhatsapp = getMotherWhatsapp(),
         isFatherDeceased = getIsFatherDeceased(),
-        isMotherDeceased = getIsMotherDeceased(),
-        identityDocumentImageUrl = resolveUrl(imageBaseUrl, getIdentityDocumentImageUrl())
+        isMotherDeceased = getIsMotherDeceased()
     )
 }

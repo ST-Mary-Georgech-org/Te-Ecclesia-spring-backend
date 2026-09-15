@@ -180,19 +180,20 @@ class AuthService(
         val finalIdentityDocumentUrl = if (identityDocument != null) {
             imageStorageService.uploadImage(identityDocument, "id_${userId}", documentsDirectory)
         } else {
-            request.makhdoomProfile?.identityDocumentImageUrl ?: request.parentProfile?.nationalIdImageUrl
+            request.identityDocumentImageUrl
         }
 
         val ordinationProfile = request.ordinationProfile?.let { createOrdinationProfile(userToSave, it, finalCertificateUrl) }
-        val makhdoomProfile = request.makhdoomProfile?.let { createMakhdoomProfile(userToSave, it, finalIdentityDocumentUrl) }
+        val makhdoomProfile = request.makhdoomProfile?.let { createMakhdoomProfile(userToSave, it) }
         val kahenProfile = request.kahenProfile?.let { createKahenProfile(userToSave, it) }
         val savedUser = userRepository.save(userToSave.copy(
+            identityDocumentImageUrl = finalIdentityDocumentUrl,
             ordinationProfile = ordinationProfile ?: userToSave.ordinationProfile,
             makhdoomProfile = makhdoomProfile ?: userToSave.makhdoomProfile,
             kahenProfile = kahenProfile ?: userToSave.kahenProfile
         ))
 
-        request.parentProfile?.let { parentProfileService.createOrUpdateProfile(savedUser, it, finalIdentityDocumentUrl) }
+        request.parentProfile?.let { parentProfileService.createOrUpdateProfile(savedUser, it) }
 
         addAreaIfNotExists(savedUser.area)
 
@@ -224,14 +225,11 @@ class AuthService(
         val finalIdentityDocumentUrl = if (identityDocument != null) {
             imageStorageService.uploadImage(identityDocument, "id_${user.id}", documentsDirectory)
         } else {
-            request.makhdoomProfile?.identityDocumentImageUrl 
-                ?: request.parentProfile?.nationalIdImageUrl 
-                ?: user.makhdoomProfile?.identityDocumentImageUrl 
-                ?: user.parentProfile?.nationalIdImageUrl
+            request.identityDocumentImageUrl ?: user.identityDocumentImageUrl
         }
 
         val ordinationProfile = request.ordinationProfile?.let { createOrdinationProfile(user, it, finalCertificateUrl) }
-        val makhdoomProfile = request.makhdoomProfile?.let { createMakhdoomProfile(user, it, finalIdentityDocumentUrl) }
+        val makhdoomProfile = request.makhdoomProfile?.let { createMakhdoomProfile(user, it) }
         val khademProfile = request.khademProfile?.let { createKhademProfile(user, it) }
         val kahenProfile = request.kahenProfile?.let { createKahenProfile(user, it) }
 
@@ -241,13 +239,14 @@ class AuthService(
         val savedUser = userRepository.save(user.copy(
             status = newStatus,
             role = request.role,
+            identityDocumentImageUrl = finalIdentityDocumentUrl,
             ordinationProfile = ordinationProfile ?: user.ordinationProfile,
             makhdoomProfile = makhdoomProfile ?: user.makhdoomProfile,
             khademProfile = khademProfile ?: user.khademProfile,
             kahenProfile = kahenProfile ?: user.kahenProfile
         ))
 
-        request.parentProfile?.let { parentProfileService.createOrUpdateProfile(savedUser, it, finalIdentityDocumentUrl) }
+        request.parentProfile?.let { parentProfileService.createOrUpdateProfile(savedUser, it) }
 
         if (previousStatus == UserStatus.PENDING_APPROVAL && newStatus == UserStatus.PENDING_APPROVAL) {
             teEcclesiaEventPublisher.publish(UserApprovalRequestUpdatedEvent(savedUser.id, savedUser.fullName))
@@ -647,7 +646,7 @@ class AuthService(
         )
     }
 
-    private fun createMakhdoomProfile(user: User, dto: MakhdoomProfileRequest, finalIdentityDocumentUrl: String? = null): MakhdoomProfile {
+    private fun createMakhdoomProfile(user: User, dto: MakhdoomProfileRequest): MakhdoomProfile {
         val educationalStage = educationalStageRepository.findById(dto.educationalStageId).orElseThrow {
             EntityNotFoundException("Educational stage not found")
         }
@@ -670,8 +669,7 @@ class AuthService(
             motherPhone = dto.motherPhone,
             motherWhatsapp = dto.motherWhatsapp,
             isFatherDeceased = dto.isFatherDeceased ?: false,
-            isMotherDeceased = dto.isMotherDeceased ?: false,
-            identityDocumentImageUrl = finalIdentityDocumentUrl ?: dto.identityDocumentImageUrl ?: user.makhdoomProfile?.identityDocumentImageUrl
+            isMotherDeceased = dto.isMotherDeceased ?: false
         )
     }
 

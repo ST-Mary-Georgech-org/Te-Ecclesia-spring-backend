@@ -23,6 +23,7 @@ interface UserProfileProjection {
     fun getIsEmailVerified(): Boolean
     fun getIsPhoneVerified(): Boolean
     fun getImageUrl(): String?
+    fun getIdentityDocumentImageUrl(): String?
     fun getJob(): String?
     fun getBuildingNo(): String
     fun getStreet(): String
@@ -71,7 +72,6 @@ interface UserProfileProjection {
 
     // Parent Profile & Partner
     fun getParentProfileId(): Long?
-    fun getParentNationalIdImageUrl(): String?
     fun getPartnerId(): UUID?
     fun getPartnerName(): String?
     fun getPartnerFullName(): String?
@@ -105,7 +105,6 @@ interface UserProfileProjection {
     fun getMakhdoomMotherWhatsapp(): String?
     fun getMakhdoomIsFatherDeceased(): Boolean?
     fun getMakhdoomIsMotherDeceased(): Boolean?
-    fun getMakhdoomIdentityDocumentImageUrl(): String?
 }
 
 interface UserSummaryProjection {
@@ -147,7 +146,6 @@ interface KahenProfileProjection {
 interface ParentProfileProjection {
     fun getId(): Long
     fun getPartner(): UserSummaryProjection?
-    fun getNationalIdImageUrl(): String?
 }
 
 interface OrdinationProfileProjection {
@@ -171,7 +169,6 @@ interface MakhdoomProfileProjection {
     fun getMotherWhatsapp(): String?
     fun getIsFatherDeceased(): Boolean
     fun getIsMotherDeceased(): Boolean
-    fun getIdentityDocumentImageUrl(): String?
 }
 
 interface ParentChildProjection {
