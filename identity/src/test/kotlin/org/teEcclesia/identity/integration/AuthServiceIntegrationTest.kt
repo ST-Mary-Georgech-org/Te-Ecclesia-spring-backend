@@ -29,6 +29,7 @@ import org.teEcclesia.identity.api.dto.request.KahenProfileRequest
 import org.teEcclesia.identity.api.dto.request.MakhdoomProfileRequest
 import org.teEcclesia.identity.api.dto.request.ParentProfileRequest
 import org.teEcclesia.identity.api.dto.request.RegisterRequest
+import org.teEcclesia.identity.api.dto.request.RefreshTokenRequest
 import org.teEcclesia.identity.api.dto.request.VerifyEmailRequest
 import org.teEcclesia.identity.entity.enums.Gender
 import org.teEcclesia.identity.entity.enums.ShamamsaStudyStatus
@@ -963,5 +964,35 @@ class AuthServiceIntegrationTest {
 
         val resultRelative = authService.searchMakhdooms("M22222222", "https://cdn.example.com/profile")
         assertThat(resultRelative.imageUrl).isEqualTo("https://cdn.example.com/profile/photo2.jpg")
+    }
+
+    @Test
+    fun `refreshToken allows repeated calls within grace period and returns same response`() {
+        val user = createUser(email = "refresh-grace@mail.com", isVerified = true)
+        val initialRefreshToken = "test-refresh-token-grace"
+        refreshTokenRepository.save(
+            RefreshToken(
+                token = initialRefreshToken,
+                expiryDate = Instant.now().plus(14, ChronoUnit.DAYS),
+                user = user
+            )
+        )
+
+        every { jwtUtil.validateRefreshToken(initialRefreshToken) } returns true
+        every { jwtUtil.validateTokenForUser(initialRefreshToken, user.id) } returns true
+        every { jwtUtil.generateAccessToken(user.id) } returns "new-access-token-1"
+        every { jwtUtil.generateRefreshToken(user.id) } returns "new-refresh-token-1"
+
+        val request = RefreshTokenRequest(refreshToken = initialRefreshToken)
+
+        // First rotation call
+        val firstResponse = authService.refreshToken(request)
+        assertThat(firstResponse.accessToken).isEqualTo("new-access-token-1")
+        assertThat(firstResponse.refreshToken).isEqualTo("new-refresh-token-1")
+
+        // Second call with the same old refresh token within grace period (e.g. concurrent race)
+        val secondResponse = authService.refreshToken(request)
+        assertThat(secondResponse.accessToken).isEqualTo(firstResponse.accessToken)
+        assertThat(secondResponse.refreshToken).isEqualTo(firstResponse.refreshToken)
     }
 }

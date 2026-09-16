@@ -49,6 +49,7 @@ import org.teEcclesia.storage.service.ImageStorageService
 import org.teEcclesia.identity.entity.WhatsAppPendingToken
 import org.teEcclesia.identity.repository.WhatsAppPendingTokenRepository
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
 @Service
 @Transactional(noRollbackFor = [
@@ -547,68 +548,118 @@ class AuthService(
         return AuthResponse(accessToken, refreshToken)
     }
 
+    private data class RotatedTokenGraceEntry(
+        val response: AuthResponse,
+        val rotatedAt: Instant = Instant.now()
+    )
+
+    private val rotatedTokensGraceCache = ConcurrentHashMap<String, RotatedTokenGraceEntry>()
+
+    private fun cleanExpiredGraceTokens() {
+        val cutoff = Instant.now().minus(60, ChronoUnit.SECONDS)
+        rotatedTokensGraceCache.entries.removeIf { it.value.rotatedAt.isBefore(cutoff) }
+    }
+
     fun refreshToken(request: RefreshTokenRequest): AuthResponse {
-        val refreshTokenEntity = refreshTokenRepository.findByToken(request.refreshToken)
-            ?: throw UnauthorizedException("Invalid refresh token")
-
-        val user = refreshTokenEntity.user
-        val oldDeviceToken = refreshTokenEntity.deviceToken
-
-        refreshTokenRepository.delete(refreshTokenEntity)
-
-        if (refreshTokenEntity.expiryDate.isBefore(Instant.now())) {
-            throw TokenExpiredException("Refresh token is expired. Please login again.")
+        cleanExpiredGraceTokens()
+        rotatedTokensGraceCache[request.refreshToken]?.let { graceEntry ->
+            if (graceEntry.rotatedAt.plus(30, ChronoUnit.SECONDS).isAfter(Instant.now())) {
+                return graceEntry.response
+            } else {
+                rotatedTokensGraceCache.remove(request.refreshToken)
+            }
         }
 
-        if (jwtUtil.validateRefreshToken(request.refreshToken) &&
-            jwtUtil.validateTokenForUser(request.refreshToken, user.id)) {
+        return synchronized(this) {
+            rotatedTokensGraceCache[request.refreshToken]?.let { graceEntry ->
+                if (graceEntry.rotatedAt.plus(30, ChronoUnit.SECONDS).isAfter(Instant.now())) {
+                    return graceEntry.response
+                }
+            }
 
-            val newAccessToken = jwtUtil.generateAccessToken(user.id)
-            val newRefreshToken = jwtUtil.generateRefreshToken(user.id)
+            val refreshTokenEntity = refreshTokenRepository.findByToken(request.refreshToken)
+                ?: throw UnauthorizedException("Invalid refresh token")
 
-            val finalDeviceToken = request.deviceToken ?: oldDeviceToken
-            saveRefreshToken(user, newRefreshToken, finalDeviceToken)
-            teEcclesiaEventPublisher.publish(UserLoggedInEvent(user.id))
+            val user = refreshTokenEntity.user
+            val oldDeviceToken = refreshTokenEntity.deviceToken
 
-            return AuthResponse(newAccessToken, newRefreshToken)
-        } else {
-            throw UnauthorizedException("Invalid refresh token")
+            refreshTokenRepository.delete(refreshTokenEntity)
+
+            if (refreshTokenEntity.expiryDate.isBefore(Instant.now())) {
+                throw TokenExpiredException("Refresh token is expired. Please login again.")
+            }
+
+            if (jwtUtil.validateRefreshToken(request.refreshToken) &&
+                jwtUtil.validateTokenForUser(request.refreshToken, user.id)) {
+
+                val newAccessToken = jwtUtil.generateAccessToken(user.id)
+                val newRefreshToken = jwtUtil.generateRefreshToken(user.id)
+
+                val finalDeviceToken = request.deviceToken ?: oldDeviceToken
+                saveRefreshToken(user, newRefreshToken, finalDeviceToken)
+                teEcclesiaEventPublisher.publish(UserLoggedInEvent(user.id))
+
+                val response = AuthResponse(newAccessToken, newRefreshToken)
+                rotatedTokensGraceCache[request.refreshToken] = RotatedTokenGraceEntry(response)
+                response
+            } else {
+                throw UnauthorizedException("Invalid refresh token")
+            }
         }
     }
 
     fun refreshRegistrationToken(request: RefreshTokenRequest): AuthResponse {
-        val refreshTokenEntity = refreshTokenRepository.findByToken(request.refreshToken)
-            ?: throw UnauthorizedException("Invalid refresh token")
-
-        val user = refreshTokenEntity.user
-        val oldDeviceToken = refreshTokenEntity.deviceToken
-
-        refreshTokenRepository.delete(refreshTokenEntity)
-
-        if (refreshTokenEntity.expiryDate.isBefore(Instant.now())) {
-            throw TokenExpiredException("Refresh token is expired. Please login again.")
+        cleanExpiredGraceTokens()
+        rotatedTokensGraceCache[request.refreshToken]?.let { graceEntry ->
+            if (graceEntry.rotatedAt.plus(30, ChronoUnit.SECONDS).isAfter(Instant.now())) {
+                return graceEntry.response
+            } else {
+                rotatedTokensGraceCache.remove(request.refreshToken)
+            }
         }
 
-        if (jwtUtil.validateRefreshToken(request.refreshToken) &&
-            jwtUtil.validateTokenForUser(request.refreshToken, user.id)) {
+        return synchronized(this) {
+            rotatedTokensGraceCache[request.refreshToken]?.let { graceEntry ->
+                if (graceEntry.rotatedAt.plus(30, ChronoUnit.SECONDS).isAfter(Instant.now())) {
+                    return graceEntry.response
+                }
+            }
 
-            val token = if (user.status == UserStatus.APPROVED) {
-                jwtUtil.generateAccessToken(user.id)
+            val refreshTokenEntity = refreshTokenRepository.findByToken(request.refreshToken)
+                ?: throw UnauthorizedException("Invalid refresh token")
+
+            val user = refreshTokenEntity.user
+            val oldDeviceToken = refreshTokenEntity.deviceToken
+
+            refreshTokenRepository.delete(refreshTokenEntity)
+
+            if (refreshTokenEntity.expiryDate.isBefore(Instant.now())) {
+                throw TokenExpiredException("Refresh token is expired. Please login again.")
+            }
+
+            if (jwtUtil.validateRefreshToken(request.refreshToken) &&
+                jwtUtil.validateTokenForUser(request.refreshToken, user.id)) {
+
+                val token = if (user.status == UserStatus.APPROVED) {
+                    jwtUtil.generateAccessToken(user.id)
+                } else {
+                    jwtUtil.generateRegistrationToken(user.id)
+                }
+                val newRefreshToken = jwtUtil.generateRefreshToken(user.id)
+
+                val finalDeviceToken = request.deviceToken ?: oldDeviceToken
+                saveRefreshToken(user, newRefreshToken, finalDeviceToken)
+
+                if (user.status == UserStatus.APPROVED) {
+                    teEcclesiaEventPublisher.publish(UserLoggedInEvent(user.id))
+                }
+
+                val response = AuthResponse(token, newRefreshToken)
+                rotatedTokensGraceCache[request.refreshToken] = RotatedTokenGraceEntry(response)
+                response
             } else {
-                jwtUtil.generateRegistrationToken(user.id)
+                throw UnauthorizedException("Invalid refresh token")
             }
-            val newRefreshToken = jwtUtil.generateRefreshToken(user.id)
-
-            val finalDeviceToken = request.deviceToken ?: oldDeviceToken
-            saveRefreshToken(user, newRefreshToken, finalDeviceToken)
-
-            if (user.status == UserStatus.APPROVED) {
-                teEcclesiaEventPublisher.publish(UserLoggedInEvent(user.id))
-            }
-
-            return AuthResponse(token, newRefreshToken)
-        } else {
-            throw UnauthorizedException("Invalid refresh token")
         }
     }
 
@@ -730,6 +781,7 @@ class AuthService(
     }
 
     fun logout(userId: UUID, request: RefreshTokenRequest) {
+        rotatedTokensGraceCache.remove(request.refreshToken)
         refreshTokenRepository.findByUserIdAndToken(userId = userId, request.refreshToken)?.let { tokenEntity ->
             refreshTokenRepository.delete(tokenEntity)
         }
