@@ -109,7 +109,7 @@ class InternalAuthControllerIntegrationTest {
         otpRepository.save(
             AccountVerification(
                 otp = token,
-                user = user,
+                userId = user.id,
                 phone = user.phone,
                 method = VerificationMethod.PHONE
             )

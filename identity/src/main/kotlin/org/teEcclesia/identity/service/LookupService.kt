@@ -33,7 +33,11 @@ class LookupService(
         forRole: UserRole?,
         pageable: Pageable
     ): Page<LookupResponse> {
-        val user = userId?.let { userRepository.findById(it).orElse(null) }
+        val user = if (forRole == null && userId != null) {
+            userRepository.findProfileById(userId)
+        } else {
+            null
+        }
         val targetRole = forRole ?: user?.role
 
         return when {

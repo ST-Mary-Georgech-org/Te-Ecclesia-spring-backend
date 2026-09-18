@@ -108,6 +108,12 @@ class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error)
     }
 
+    @ExceptionHandler(AccountDeletedException::class)
+    fun handleAccountDeleted(ex: AccountDeletedException): ResponseEntity<ErrorResponse> {
+        val error = ErrorResponse(ex.message ?: "Account deleted", HttpStatus.GONE.value())
+        return ResponseEntity.status(HttpStatus.GONE).body(error)
+    }
+
     @ExceptionHandler(ResourceNotFoundException::class)
     fun handleResourceNotFound(ex: ResourceNotFoundException): ResponseEntity<ErrorResponse> {
         val error = ErrorResponse(ex.message ?: "Resource not found", HttpStatus.NOT_FOUND.value())

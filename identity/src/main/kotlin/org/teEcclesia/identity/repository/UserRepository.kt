@@ -2,7 +2,9 @@ package org.teEcclesia.identity.repository
 
 import org.teEcclesia.identity.entity.User
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
+import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.util.UUID
 import org.springframework.data.domain.Page
@@ -19,22 +21,22 @@ import org.teEcclesia.identity.repository.projection.ProfileStageLookupProjectio
 import org.teEcclesia.identity.repository.projection.ProfileYearLookupProjection
 import org.teEcclesia.identity.repository.projection.UserEmailProjection
 import org.teEcclesia.identity.repository.projection.UserProfileProjection
-import org.teEcclesia.identity.repository.projection.UserProfileWithDeaconsRecordProjection
 import org.teEcclesia.identity.repository.projection.UserSummaryProjection
+import org.teEcclesia.identity.repository.projection.DeletedUserCheckProjection
+import org.teEcclesia.identity.repository.projection.UserAuthDetailsProjection
+import org.teEcclesia.identity.repository.projection.UserAuthSummaryProjection
+import org.teEcclesia.identity.repository.projection.UserPasswordResetProjection
 
 interface UserRepository : JpaRepository<User, UUID> {
     fun findByCode(code: String): User?
     fun existsByCodeLike(codePattern: String): Boolean
     fun findAllByCodeIn(codes: List<String>): List<User>
-    fun findByNationalId(nationalId: String): User?
-    fun findByNationalIdAndStatus(nationalId: String, status: UserStatus): User?
+    fun <T> findByNationalIdAndStatus(nationalId: String, status: UserStatus, type: Class<T>): T?
     fun findFirstByNationalIdAndStatusNotIn(nationalId: String, statuses: Collection<UserStatus>): User?
     fun findUsersByPhone(phone: String): List<User>
-    fun findUsersByPhoneAndStatus(phone: String, status: UserStatus): List<User>
-    fun findByEmail(email: String): User?
-    fun findByEmailAndStatusAndIsEmailVerifiedIsTrue(email: String, status: UserStatus): User?
-    fun findUsersByEmail(email: String): List<User>
-    fun findByEmailIgnoreCase(email: String): List<User>
+    fun <T> findUsersByPhone(phone: String, type: Class<T>): List<T>
+    fun <T> findUsersByPhoneAndStatus(phone: String, status: UserStatus, type: Class<T>): List<T>
+    fun <T> findByEmailAndStatusAndIsEmailVerifiedIsTrue(email: String, status: UserStatus, type: Class<T>): T?
 
     @Query("SELECT u.id as id, u.email as email FROM User u WHERE u.id IN :userIds AND u.email IS NOT NULL")
     fun findEmailsByUserIds(@Param("userIds") userIds: Collection<UUID>): List<UserEmailProjection>
@@ -90,18 +92,6 @@ interface UserRepository : JpaRepository<User, UUID> {
     @EntityGraph(value = User.GRAPH_FULL_PROFILE)
     @Query("SELECT u FROM User u WHERE u.id = :id")
     fun findProfileById(@Param("id") id: UUID): User?
-
-    @EntityGraph(value = User.GRAPH_FULL_PROFILE)
-    @Query("""
-        SELECT u as user, d as deaconsSchoolRecord 
-        FROM User u 
-        LEFT JOIN DeaconsSchoolRecord d ON d.user = u AND d.academicYear = :academicYear 
-        WHERE u.id = :id
-    """)
-    fun findProfileWithDeaconsRecord(
-        @Param("id") id: UUID,
-        @Param("academicYear") academicYear: Int
-    ): UserProfileWithDeaconsRecordProjection?
 
     @Query(
         value = """
@@ -217,11 +207,27 @@ interface UserRepository : JpaRepository<User, UUID> {
     fun findProfileByIdProjection(@Param("id") id: UUID): UserProfileProjection?
 
     @Query("""
-        SELECT u FROM User u 
+        SELECT 
+            u.id as id,
+            u.code as code,
+            u.phone as phone,
+            u.email as email,
+            u.nationalId as nationalId,
+            u.firstName as firstName,
+            u.secondName as secondName,
+            u.thirdName as thirdName,
+            u.lastName as lastName,
+            u.displayName as displayName,
+            u.passwordHash as passwordHash,
+            u.role as role,
+            u.status as status,
+            u.isEmailVerified as isEmailVerified,
+            u.isPhoneVerified as isPhoneVerified
+        FROM User u 
         WHERE (u.email = :id OR u.nationalId = :id OR u.code = :id OR u.phone = :id)
         ORDER BY u.isPhoneVerified DESC, u.createdAt DESC
     """)
-    fun findUsersByIdentifier(@Param("id") id: String): List<User>
+    fun findAuthSummariesByIdentifier(@Param("id") id: String): List<UserAuthSummaryProjection>
     
     @Query(
         value = """
@@ -394,9 +400,6 @@ interface UserRepository : JpaRepository<User, UUID> {
     """)
     fun findEducationalStagesByKahenProfileIds(@Param("kahenProfileIds") kahenProfileIds: Collection<Long>): List<ProfileStageLookupProjection>
 
-    @EntityGraph(attributePaths = ["kahenProfile"])
-    fun findByRoleAndStatusIs(role: UserRole, status: UserStatus, pageable: Pageable): Page<User>
-
     @Query("""
         SELECT 
             u.id as id,
@@ -411,30 +414,6 @@ interface UserRepository : JpaRepository<User, UUID> {
         @Param("status") status: UserStatus,
         pageable: Pageable
     ): Page<PriestSummaryProjection>
-
-    fun countByRole(role: UserRole): Long
-
-    @Query("""
-        SELECT u FROM User u 
-        WHERE u.role = :role AND u.status = :status
-        AND ((u.email = :query AND u.isEmailVerified = true) OR u.nationalId = :query OR u.code = :query OR u.phone = :query)
-    """)
-    fun findByRoleAndIdentifier(
-        @Param("role") role: UserRole,
-        @Param("status") status: UserStatus,
-        @Param("query") query: String
-    ): List<User>
-
-    @Query("""
-        SELECT u FROM User u 
-        WHERE u.role IN :roles AND u.status = :status
-        AND ((u.email = :query AND u.isEmailVerified = true) OR u.nationalId = :query OR u.code = :query OR u.phone = :query)
-    """)
-    fun findByRolesAndIdentifier(
-        @Param("roles") roles: Collection<UserRole>,
-        @Param("status") status: UserStatus,
-        @Param("query") query: String
-    ): List<User>
 
     @Query("""
         SELECT 
@@ -599,16 +578,6 @@ interface UserRepository : JpaRepository<User, UUID> {
         @Param("digits") digits: String
     ): List<AttendeeCandidateProjection>
 
-    @EntityGraph(value = User.GRAPH_FULL_PROFILE)
-    @Query("""
-        SELECT u FROM User u 
-        WHERE (LOWER(u.code) = LOWER(:code) OR (:digits != '' AND u.code LIKE CONCAT('%', :digits)))
-    """)
-    fun findByCodeIgnoringPrefixLetter(
-        @Param("code") code: String,
-        @Param("digits") digits: String
-    ): List<User>
-
     @Query("""
         SELECT DISTINCT u.id FROM User u 
         LEFT JOIN u.makhdoomProfile mp 
@@ -627,4 +596,141 @@ interface UserRepository : JpaRepository<User, UUID> {
         @Param("stageId") stageId: Long? = null,
         @Param("role") role: UserRole? = null
     ): List<UUID>
+
+    @Query(
+        nativeQuery = true,
+        value = """
+            SELECT 
+                CAST(u.id AS varchar) as id,
+                CONCAT(u.first_name, ' ', u.second_name, ' ', u.third_name, ' ', u.last_name) as fullName,
+                u.password_hash as passwordHash,
+                u.image_url as imageUrl,
+                CAST(u.role AS varchar) as role,
+                CAST(u.status AS varchar) as status
+            FROM identity.users u 
+            WHERE u.id = :userId
+        """
+    )
+    fun findAuthDetailsById(@Param("userId") userId: UUID): UserAuthDetailsProjection?
+
+    @Query(
+        nativeQuery = true,
+        value = """
+            SELECT 
+                u.id as id,
+                u.status as status,
+                u.national_id as nationalId,
+                CONCAT(u.first_name, ' ', u.second_name, ' ', u.third_name, ' ', u.last_name) as fullName,
+                u.password_hash as passwordHash
+            FROM identity.users u
+            WHERE u.national_id = :nationalId 
+              AND u.deleted = true 
+              AND u.status NOT IN ('REJECTED', 'BANNED', 'UNVERIFIED', 'PROFILE_INCOMPLETE')
+            ORDER BY u.created_at DESC
+            LIMIT 1
+        """
+    )
+    fun findDeletedByNationalId(@Param("nationalId") nationalId: String): DeletedUserCheckProjection?
+
+    @Modifying
+    @Transactional
+    @Query(
+        nativeQuery = true,
+        value = "UPDATE identity.users SET deleted = true WHERE id = :userId"
+    )
+    fun softDeleteById(@Param("userId") userId: UUID): Int
+
+    @Modifying
+    @Transactional
+    @Query(
+        nativeQuery = true,
+        value = "UPDATE identity.users SET deleted = false, status = 'APPROVED' WHERE id = :userId"
+    )
+    fun restoreUser(@Param("userId") userId: UUID)
+
+    @Modifying
+    @Transactional
+    @Query(
+        nativeQuery = true,
+        value = "UPDATE identity.users SET password_hash = :newHash WHERE id = :userId"
+    )
+    fun updatePasswordHash(@Param("userId") userId: UUID, @Param("newHash") newHash: String)
+
+    @Query("SELECT u.id FROM User u WHERE u.role = UserRole.ADMIN AND u.status = UserStatus.APPROVED AND u.deleted = false")
+    fun findAllAdminIds(): List<UUID>
+
+    @Query(
+        nativeQuery = true,
+        value = """
+            SELECT 
+                CAST(u.id AS varchar) as id,
+                u.phone as phone,
+                u.email as email,
+                u.national_id as nationalId,
+                CONCAT(u.first_name, ' ', u.second_name, ' ', u.third_name, ' ', u.last_name) as fullName,
+                u.deleted as deleted,
+                u.is_email_verified as isEmailVerified
+            FROM identity.users u
+            WHERE (
+                (LOWER(u.email) = LOWER(:identifier) AND u.is_email_verified = true)
+                OR u.national_id = :identifier
+                OR UPPER(u.code) = UPPER(:identifier)
+                OR u.phone = :identifier
+            )
+              AND u.status NOT IN ('REJECTED', 'BANNED', 'UNVERIFIED', 'PROFILE_INCOMPLETE')
+            ORDER BY u.deleted ASC, u.is_phone_verified DESC, u.created_at DESC
+        """
+    )
+    fun findForPasswordResetByIdentifier(@Param("identifier") identifier: String): List<UserPasswordResetProjection>
+
+    @Query(
+        nativeQuery = true,
+        value = "SELECT u.deleted FROM identity.users u WHERE u.id = :userId"
+    )
+    fun isUserDeleted(@Param("userId") userId: UUID): Boolean?
+
+    @Query(
+        nativeQuery = true,
+        value = "SELECT u.phone FROM identity.users u WHERE u.id = :id"
+    )
+    fun findPhoneById(@Param("id") id: UUID): String?
+
+    @Query(
+        nativeQuery = true,
+        value = "SELECT u.email FROM identity.users u WHERE u.id = :id"
+    )
+    fun findEmailById(@Param("id") id: UUID): String?
+
+    @Modifying
+    @Transactional
+    @Query(
+        nativeQuery = true,
+        value = "UPDATE identity.users SET email = :email, is_email_verified = true WHERE id = :userId"
+    )
+    fun updateEmailAndVerified(@Param("userId") userId: UUID, @Param("email") email: String): Int
+
+    @Modifying
+    @Transactional
+    @Query(
+        nativeQuery = true,
+        value = "UPDATE identity.users SET phone = :phone, is_phone_verified = true WHERE id = :userId"
+    )
+    fun updatePhoneAndVerified(@Param("userId") userId: UUID, @Param("phone") phone: String): Int
+
+    @Modifying
+    @Transactional
+    @Query(
+        nativeQuery = true,
+        value = """
+            UPDATE identity.users 
+            SET is_phone_verified = true, 
+                created_at = :now, 
+                status = CASE WHEN status = 'UNVERIFIED' THEN 'PENDING_APPROVAL' ELSE status END 
+            WHERE id = :userId
+        """
+    )
+    fun verifyUserPhone(
+        @Param("userId") userId: UUID,
+        @Param("now") now: Instant = Instant.now()
+    ): Int
 }

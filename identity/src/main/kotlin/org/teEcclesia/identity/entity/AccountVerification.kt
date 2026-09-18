@@ -2,13 +2,12 @@ package org.teEcclesia.identity.entity
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
+import org.hibernate.annotations.NotFound
+import org.hibernate.annotations.NotFoundAction
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.*
 
-import org.hibernate.envers.Audited
-
-@Audited
 @Entity
 @Table(name = "account_verification", schema = "identity")
 data class AccountVerification(
@@ -36,10 +35,8 @@ data class AccountVerification(
     @Column(nullable = false)
     val purpose: VerificationPurpose = VerificationPurpose.REGISTER,
 
-    @JsonIgnore
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    val user: User
+    @Column(name = "user_id", nullable = false)
+    val userId: UUID
 ) {
     fun isExpired(): Boolean {
         return sentAt.plus(15, ChronoUnit.MINUTES).isBefore(Instant.now())

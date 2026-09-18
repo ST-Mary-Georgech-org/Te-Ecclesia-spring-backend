@@ -42,6 +42,7 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.mock.web.MockMultipartFile
 import org.springframework.test.context.ActiveProfiles
 import org.teEcclesia.identity.entity.enums.ShamamsaStudyStatus
+import org.teEcclesia.identity.utils.formatPhone
 import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -145,7 +146,7 @@ class UserServiceIntegrationTest {
 
         val returnedImageUrl = userService.updateUserImage(existingUser.id, imageFile)
 
-        val updatedUser = userRepository.findByEmail(existingUser.email!!)
+        val updatedUser = userRepository.findById(existingUser.id).orElse(null)
         assertThat(returnedImageUrl).isEqualTo("updated-image.jpg?time=test")
         assertThat(updatedUser?.imageUrl).isEqualTo("updated-image.jpg?time=test")
     }
@@ -167,7 +168,7 @@ class UserServiceIntegrationTest {
 
         userService.deleteUserImage(existingUser.id)
 
-        val updatedUser = userRepository.findByEmail(existingUser.email!!)
+        val updatedUser = userRepository.findById(existingUser.id).orElse(null)
         assertThat(updatedUser?.imageUrl).isNull()
         verify(exactly = 1) {
             imageStorageService.deleteImage(any(), "existing-image.jpg")
@@ -180,7 +181,7 @@ class UserServiceIntegrationTest {
 
         userService.deleteUserImage(existingUser.id)
 
-        val userAfterDelete = userRepository.findByEmail(existingUser.email!!)
+        val userAfterDelete = userRepository.findById(existingUser.id).orElse(null)
         assertThat(userAfterDelete?.imageUrl).isNull()
         verify(exactly = 0) {
             imageStorageService.deleteImage(any(), any())
@@ -388,7 +389,7 @@ class UserServiceIntegrationTest {
         )
 
         userService.createMakhdoomDirectly(admin.id, request)
-        val created = userRepository.findUsersByEmail("unverified-shared-email@mail.com").lastOrNull()
+        val created = userRepository.findUsersByPhone(formatPhone(request.phone)).lastOrNull()
         assertThat(created?.email).isEqualTo("unverified-shared-email@mail.com")
     }
 

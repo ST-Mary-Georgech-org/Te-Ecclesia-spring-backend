@@ -41,3 +41,15 @@ class EmailNotVerifiedException(
 ) : RuntimeException(message)
 
 class ResourceNotFoundException(message: String) : RuntimeException(message)
+
+class DuplicatePhoneException(
+    message: String = "This phone number is associated with multiple accounts. Please use your National ID to reset your password."
+) : RuntimeException(message)
+
+class AccountDeletedException(
+    message: String = "Account has been deleted and can be reactivated"
+) : RuntimeException(message)
+
+class IncorrectPasswordException(
+    message: String = "Invalid password"
+) : RuntimeException(message)
