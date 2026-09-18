@@ -25,6 +25,8 @@ import org.teEcclesia.identity.exception.UnauthorizedException
 import org.teEcclesia.identity.repository.AccountDeletionRequestRepository
 import org.teEcclesia.identity.repository.RefreshTokenRepository
 import org.teEcclesia.identity.repository.UserRepository
+import org.springframework.beans.factory.annotation.Value
+import org.teEcclesia.identity.api.dto.response.resolveUrl
 import org.teEcclesia.identity.security.JwtUtil
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -37,8 +39,11 @@ class AccountDeletionService(
     private val refreshTokenRepository: RefreshTokenRepository,
     private val passwordEncoder: PasswordEncoder,
     private val jwtUtil: JwtUtil,
-    private val eventPublisher: TeEcclesiaEventPublisher
+    private val eventPublisher: TeEcclesiaEventPublisher,
+    @param:Value("\${storage.teEcclesia.cdn-endpoint}") private val cdnEndpoint: String,
+    @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String
 ) {
+    private val imagesBaseUrl: String = "$cdnEndpoint/$profileImageDirectory"
     @Transactional
     fun requestAccountDeletion(userId: UUID, request: DeleteAccountRequest) {
         val userAuth = userRepository.findAuthDetailsById(userId)
@@ -136,7 +141,7 @@ class AccountDeletionService(
                 userId = req.getUserId(),
                 userName = req.getUserName(),
                 userCode = req.getUserCode(),
-                userImageUrl = req.getUserImageUrl(),
+                userImageUrl = resolveUrl(imagesBaseUrl, req.getUserImageUrl()),
                 userRole = req.getUserRole(),
                 reason = req.getReason(),
                 requestedAt = req.getRequestedAt()
