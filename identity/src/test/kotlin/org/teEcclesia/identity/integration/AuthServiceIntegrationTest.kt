@@ -15,6 +15,7 @@ import org.teEcclesia.identity.exception.PhoneNotVerifiedException
 import org.teEcclesia.identity.exception.DuplicatePhoneException
 import org.teEcclesia.identity.exception.EmailNotVerifiedException
 import org.teEcclesia.identity.exception.ResourceNotFoundException
+import org.teEcclesia.identity.repository.AccountDeletionRequestRepository
 import org.teEcclesia.identity.security.JwtUtil
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -25,6 +26,7 @@ import org.springframework.test.util.ReflectionTestUtils
 import org.teEcclesia.identity.api.dto.request.CompleteProfileRequest
 import org.teEcclesia.identity.api.dto.request.ForgotPasswordRequest
 import org.teEcclesia.identity.api.dto.request.LoginRequest
+import org.teEcclesia.identity.api.dto.request.ResetPasswordRequest
 import org.teEcclesia.identity.api.dto.request.KahenProfileRequest
 import org.teEcclesia.identity.api.dto.request.MakhdoomProfileRequest
 import org.teEcclesia.identity.api.dto.request.ParentProfileRequest
@@ -90,13 +92,28 @@ class AuthServiceIntegrationTest {
     @Autowired
     private lateinit var whatsAppPendingTokenRepository: WhatsAppPendingTokenRepository
 
+    @Autowired
+    private lateinit var entityManager: jakarta.persistence.EntityManager
+
+    @Autowired
+    private lateinit var transactionTemplate: org.springframework.transaction.support.TransactionTemplate
+
     @BeforeEach
     fun setUp() {
+        transactionTemplate.execute {
+            entityManager.createNativeQuery("DELETE FROM identity.account_deletion_requests").executeUpdate()
+            entityManager.createNativeQuery("DELETE FROM identity.parent_profiles").executeUpdate()
+            entityManager.createNativeQuery("DELETE FROM identity.khadem_profiles").executeUpdate()
+            entityManager.createNativeQuery("DELETE FROM identity.makhdoom_profiles").executeUpdate()
+            entityManager.createNativeQuery("DELETE FROM identity.kahen_profiles").executeUpdate()
+            entityManager.createNativeQuery("DELETE FROM identity.ordination_profiles").executeUpdate()
+            entityManager.createNativeQuery("DELETE FROM identity.deacons_school_records").executeUpdate()
+            entityManager.createNativeQuery("DELETE FROM identity.refresh_token").executeUpdate()
+            entityManager.createNativeQuery("DELETE FROM identity.account_verification").executeUpdate()
+            entityManager.createNativeQuery("DELETE FROM identity.whatsapp_pending_token").executeUpdate()
+            entityManager.createNativeQuery("DELETE FROM identity.users").executeUpdate()
+        }
         areaRepository.deleteAll()
-        refreshTokenRepository.deleteAll()
-        otpRepository.deleteAll()
-        whatsAppPendingTokenRepository.deleteAll()
-        userRepository.deleteAll()
         educationalYearRepository.deleteAll()
         educationalStageRepository.deleteAll()
         rankRepository.deleteAll()
@@ -169,7 +186,7 @@ class AuthServiceIntegrationTest {
         otpRepository.save(
             AccountVerification(
                 otp = token,
-                user = user,
+                userId = user.id,
                 phone = user.phone,
                 method = VerificationMethod.PHONE
             )
@@ -188,7 +205,7 @@ class AuthServiceIntegrationTest {
         otpRepository.save(
             AccountVerification(
                 otp = "APPROVED_$token",
-                user = user,
+                userId = user.id,
                 phone = user.phone,
                 method = VerificationMethod.PHONE
             )
@@ -217,7 +234,7 @@ class AuthServiceIntegrationTest {
             AccountVerification(
                 otp = "12345",
                 sentAt = Instant.now().minus(20, ChronoUnit.MINUTES),
-                user = user,
+                userId = user.id,
                 email = user.email,
                 method = VerificationMethod.EMAIL
             )
@@ -235,7 +252,7 @@ class AuthServiceIntegrationTest {
             AccountVerification(
                 otp = "12345",
                 sentAt = Instant.now().minus(1, ChronoUnit.MINUTES),
-                user = user,
+                userId = user.id,
                 email = user.email,
                 method = VerificationMethod.EMAIL
             )
@@ -244,7 +261,7 @@ class AuthServiceIntegrationTest {
 
         val authResponse = authService.verifyEmail(user.id, request)
 
-        val verifiedUser = userRepository.findByEmail(user.email)
+        val verifiedUser = userRepository.findById(user.id).orElse(null)
         val savedRefreshToken = refreshTokenRepository.findByToken("refresh-token")
         assertThat(authResponse.accessToken).isEqualTo("access-token")
         assertThat(authResponse.refreshToken).isEqualTo("refresh-token")
@@ -289,7 +306,7 @@ class AuthServiceIntegrationTest {
         otpRepository.save(
             AccountVerification(
                 otp = token,
-                user = user,
+                userId = user.id,
                 phone = user.phone,
                 method = VerificationMethod.PHONE
             )
@@ -314,7 +331,7 @@ class AuthServiceIntegrationTest {
         otpRepository.save(
             AccountVerification(
                 otp = token,
-                user = user,
+                userId = user.id,
                 phone = user.phone,
                 method = VerificationMethod.PHONE,
                 purpose = VerificationPurpose.PASSWORD_RESET
@@ -340,7 +357,7 @@ class AuthServiceIntegrationTest {
         otpRepository.save(
             AccountVerification(
                 otp = token,
-                user = user,
+                userId = user.id,
                 phone = user.phone,
                 method = VerificationMethod.PHONE
             )
@@ -407,7 +424,7 @@ class AuthServiceIntegrationTest {
         otpRepository.save(
             AccountVerification(
                 otp = token,
-                user = user,
+                userId = user.id,
                 phone = user.phone,
                 method = VerificationMethod.PHONE
             )
@@ -523,7 +540,7 @@ class AuthServiceIntegrationTest {
 
         authService.register(request)
 
-        val savedUser = userRepository.findByNationalId(request.nationalId)
+        val savedUser = userRepository.findUsersByPhone(formatPhone(request.phone)).firstOrNull()
         assertThat(savedUser).isNotNull()
         assertThat(savedUser?.homePhone).isNull()
         assertThat(savedUser?.job).isNull()
@@ -651,6 +668,53 @@ class AuthServiceIntegrationTest {
     }
 
     @Test
+    fun `forgotPassword returns isDeletedAccount true for soft-deleted user`() {
+        val user = createUser(email = "deleted-forgot@mail.com", isVerified = true)
+        userRepository.softDeleteById(user.id)
+
+        val request = ForgotPasswordRequest(key = user.nationalId, method = VerificationMethod.PHONE)
+        val response = authService.forgotPassword(request)
+
+        assertThat(response).isNotNull()
+        assertThat(response.isDeletedAccount).isTrue()
+        assertThat(response.link).startsWith("https://wa.me/")
+    }
+
+    @Test
+    fun `resetPassword reactivates soft-deleted user and updates password`() {
+        val user = createUser(email = "deleted-reset@mail.com", isVerified = true)
+        userRepository.softDeleteById(user.id)
+
+        val forgotResponse = authService.forgotPassword(ForgotPasswordRequest(key = user.nationalId, method = VerificationMethod.PHONE))
+        val rawOtp = forgotResponse.token!!
+        val approvedOtp = "APPROVED_$rawOtp"
+
+        // Simulate WhatsApp approval
+        val verification = otpRepository.findByOtpInAndMethod(listOf(rawOtp), VerificationMethod.PHONE)
+        if (verification != null) {
+            otpRepository.save(verification.copy(otp = approvedOtp))
+        }
+
+        val resetRequest = ResetPasswordRequest(
+            key = user.nationalId,
+            otp = rawOtp,
+            newPassword = "NewSecretPassword@123",
+            method = VerificationMethod.PHONE
+        )
+
+        val resultMessage = authService.resetPassword(resetRequest)
+        assertThat(resultMessage).contains("Password reset successfully")
+
+        val isDeleted = userRepository.isUserDeleted(user.id)
+        assertThat(isDeleted).isFalse()
+
+        val restoredUser = userRepository.findById(user.id).orElse(null)
+        assertThat(restoredUser).isNotNull()
+        assertThat(passwordEncoder.matches("NewSecretPassword@123", restoredUser.passwordHash)).isTrue()
+    }
+
+    @Test
+
     fun `completeProfile updates existing profiles correctly instead of throwing duplicate key exception`() {
         var user = createUser(email = "khadem-update@mail.com", isVerified = false)
         user = userRepository.save(user.copy(status = UserStatus.PROFILE_INCOMPLETE))
@@ -795,8 +859,9 @@ class AuthServiceIntegrationTest {
         val response = authService.register(request)
         assertThat(response.token).isNotNull()
 
-        val usersWithEmail = userRepository.findByEmailIgnoreCase("shared-unverified@mail.com")
-        assertThat(usersWithEmail.size).isEqualTo(2)
+        val registeredUser = userRepository.findUsersByPhone(formatPhone(request.phone)).firstOrNull()
+        assertThat(registeredUser).isNotNull()
+        assertThat(registeredUser?.email).isEqualTo("shared-unverified@mail.com")
     }
 
     @Test
@@ -824,7 +889,7 @@ class AuthServiceIntegrationTest {
 
         otpRepository.save(AccountVerification(
             otp = "99999",
-            user = unverifiedUser,
+            userId = unverifiedUser.id,
             email = "competing@mail.com",
             method = VerificationMethod.EMAIL
         ))
@@ -841,7 +906,7 @@ class AuthServiceIntegrationTest {
 
         otpRepository.save(AccountVerification(
             otp = "12345",
-            user = unverifiedUser,
+            userId = unverifiedUser.id,
             email = "valid-verify@mail.com",
             method = VerificationMethod.EMAIL
         ))
@@ -974,7 +1039,7 @@ class AuthServiceIntegrationTest {
             RefreshToken(
                 token = initialRefreshToken,
                 expiryDate = Instant.now().plus(14, ChronoUnit.DAYS),
-                user = user
+                userId = user.id
             )
         )
 

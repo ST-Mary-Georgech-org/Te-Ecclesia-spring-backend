@@ -46,6 +46,7 @@ class SecurityConfig(
                     "/api/v1/identity/auth/refresh-registration",
                     "/api/v1/identity/auth/forgot-password",
                     "/api/v1/identity/auth/reset-password",
+                    "/api/v1/identity/auth/reactivate",
                     "/api/v1/identity/auth/verify-otp",
                     "/api/v1/identity/auth/resend-otp",
                     "/api/v1/identity/auth/whatsapp/status",

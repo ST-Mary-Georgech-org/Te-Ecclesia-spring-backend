@@ -80,7 +80,7 @@ class UserService(
     fun existById(userId: UUID): Boolean = userRepository.existsById(userId)
 
     fun findById(userId: UUID): User {
-        return userRepository.findByIdOrNull(userId)
+        return userRepository.findProfileById(userId)
             ?: throw UserNotFoundException("User with id: $userId not found")
     }
 

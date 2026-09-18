@@ -13,6 +13,7 @@ import java.time.LocalDate
 import java.util.UUID
 
 import org.hibernate.envers.Audited
+import org.hibernate.envers.NotAudited
 import org.hibernate.annotations.SQLDelete
 import org.hibernate.annotations.SQLRestriction
 
@@ -178,14 +179,6 @@ data class User(
 
     @Column(nullable = false)
     val isPhoneVerified: Boolean = false,
-
-    @JsonIgnore
-    @OneToMany(mappedBy = "user", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
-    val accountVerifications: MutableList<AccountVerification> = mutableListOf(),
-
-    @JsonIgnore
-    @OneToMany(mappedBy = "user", cascade = [CascadeType.ALL], orphanRemoval = true)
-    val refreshTokens: MutableList<RefreshToken> = mutableListOf(),
 
     @OneToOne(mappedBy = "user", cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
     val ordinationProfile: OrdinationProfile? = null,
