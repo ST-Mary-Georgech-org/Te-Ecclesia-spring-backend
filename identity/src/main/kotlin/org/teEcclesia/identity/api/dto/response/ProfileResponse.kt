@@ -52,7 +52,7 @@ data class ProfileResponse(
     val deaconsSchoolRecord: DeaconsSchoolRecordResponse? = null
 )
 
-private fun resolveUrl(imageBaseUrl: String, relativePath: String?): String? {
+fun resolveUrl(imageBaseUrl: String, relativePath: String?): String? {
     if (relativePath.isNullOrBlank()) return null
     if (relativePath.startsWith("http://") || relativePath.startsWith("https://")) return relativePath
     return if (relativePath.contains("/")) {

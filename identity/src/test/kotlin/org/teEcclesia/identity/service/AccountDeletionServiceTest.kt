@@ -50,7 +50,9 @@ class AccountDeletionServiceTest {
             refreshTokenRepository = refreshTokenRepository,
             passwordEncoder = passwordEncoder,
             jwtUtil = jwtUtil,
-            eventPublisher = eventPublisher
+            eventPublisher = eventPublisher,
+            cdnEndpoint = "http://localhost:8080",
+            profileImageDirectory = "profiles"
         )
     }
 
@@ -241,7 +243,12 @@ class AccountDeletionServiceTest {
         val adminId = UUID.randomUUID()
         val userId = UUID.randomUUID()
         val requestId = UUID.randomUUID()
-        val proj = mockDeletionRequestProjection(requestId = requestId, userId = userId, userName = "Mina George")
+        val proj = mockDeletionRequestProjection(
+            requestId = requestId,
+            userId = userId,
+            userName = "Mina George",
+            userImageUrl = "photo.jpg?time=123"
+        )
 
         every { userRepository.findRoleById(adminId) } returns UserRole.ADMIN
         every { accountDeletionRequestRepository.findAllPaged(any()) } returns PageImpl(listOf(proj))
@@ -251,6 +258,7 @@ class AccountDeletionServiceTest {
         assertThat(result.content).hasSize(1)
         assertThat(result.content[0].reason).isEqualTo("Reason 1")
         assertThat(result.content[0].userName).isEqualTo("Mina George")
+        assertThat(result.content[0].userImageUrl).isEqualTo("http://localhost:8080/profiles/photo.jpg?time=123")
     }
 
     @Test

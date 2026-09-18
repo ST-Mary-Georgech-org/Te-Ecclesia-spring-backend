@@ -27,6 +27,8 @@ import org.teEcclesia.identity.attendance.repository.projection.AttendeeCandidat
 import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.entity.lookups.EducationalStage
 import org.teEcclesia.identity.exception.ResourceNotFoundException
+import org.springframework.beans.factory.annotation.Value
+import org.teEcclesia.identity.api.dto.response.resolveUrl
 import org.teEcclesia.identity.exception.UnauthorizedException
 import org.teEcclesia.identity.repository.EducationalStageRepository
 import org.teEcclesia.identity.repository.UserRepository
@@ -38,8 +40,11 @@ class AttendanceService(
     private val serviceEventRepository: ServiceEventRepository,
     private val eventAttendeeRepository: EventAttendeeRepository,
     private val userRepository: UserRepository,
-    private val educationalStageRepository: EducationalStageRepository
+    private val educationalStageRepository: EducationalStageRepository,
+    @param:Value("\${storage.teEcclesia.cdn-endpoint}") private val cdnEndpoint: String,
+    @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String
 ) {
+    private val imagesBaseUrl: String = "$cdnEndpoint/$profileImageDirectory"
 
     private fun checkAdmin(callerId: UUID) {
         val role = userRepository.findRoleById(callerId)
@@ -85,7 +90,7 @@ class AttendanceService(
                     id = s.getId(),
                     name = "${s.getFirstName()} ${s.getSecondName()} ${s.getThirdName()} ${s.getLastName()}".trim(),
                     code = s.getCode(),
-                    imageUrl = s.getImageUrl()
+                    imageUrl = resolveUrl(imagesBaseUrl, s.getImageUrl())
                 )
             } ?: emptyList()
 
@@ -179,7 +184,7 @@ class AttendanceService(
                 id = s.getId(),
                 name = "${s.getFirstName()} ${s.getSecondName()} ${s.getThirdName()} ${s.getLastName()}".trim(),
                 code = s.getCode(),
-                imageUrl = s.getImageUrl()
+                imageUrl = resolveUrl(imagesBaseUrl, s.getImageUrl())
             )
         }
 
@@ -375,7 +380,7 @@ class AttendanceService(
                 stageName = stageName,
                 yearName = yearName,
                 code = c.getCode(),
-                imageUrl = c.getImageUrl()
+                imageUrl = resolveUrl(imagesBaseUrl, c.getImageUrl())
             )
         }
     }
@@ -425,7 +430,7 @@ class AttendanceService(
             stageName = stageName,
             yearName = yearName,
             code = candidate.getCode(),
-            imageUrl = candidate.getImageUrl()
+            imageUrl = resolveUrl(imagesBaseUrl, candidate.getImageUrl())
         )
     }
 
