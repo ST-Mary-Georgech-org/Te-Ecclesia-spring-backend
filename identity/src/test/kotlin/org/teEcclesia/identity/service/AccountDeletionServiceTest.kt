@@ -90,11 +90,11 @@ class AccountDeletionServiceTest {
         userId: UUID,
         fullName: String = "Mina George",
         passwordHash: String = "hashed_pw",
-        role: UserRole = UserRole.MAKHDOOM,
-        status: UserStatus = UserStatus.APPROVED
+        role: String = UserRole.MAKHDOOM.name,
+        status: String = UserStatus.APPROVED.name
     ): UserAuthDetailsProjection {
         val proj = mockk<UserAuthDetailsProjection>()
-        every { proj.getId() } returns userId
+        every { proj.getId() } returns userId.toString()
         every { proj.getFullName() } returns fullName
         every { proj.getPasswordHash() } returns passwordHash
         every { proj.getRole() } returns role

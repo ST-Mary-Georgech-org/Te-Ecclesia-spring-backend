@@ -601,12 +601,12 @@ interface UserRepository : JpaRepository<User, UUID> {
         nativeQuery = true,
         value = """
             SELECT 
-                u.id as id,
+                CAST(u.id AS varchar) as id,
                 CONCAT(u.first_name, ' ', u.second_name, ' ', u.third_name, ' ', u.last_name) as fullName,
                 u.password_hash as passwordHash,
                 u.image_url as imageUrl,
-                u.role as role,
-                u.status as status
+                CAST(u.role AS varchar) as role,
+                CAST(u.status AS varchar) as status
             FROM identity.users u 
             WHERE u.id = :userId
         """

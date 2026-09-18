@@ -409,9 +409,11 @@ class AuthService(
         val updatedUserAuth = userRepository.findAuthDetailsById(userId)
             ?: throw EntityNotFoundException("User not found")
 
+        val userUuid = UUID.fromString(updatedUserAuth.getId())
+
         teEcclesiaEventPublisher.publish(
             UserUpdatedEvent(
-                id = updatedUserAuth.getId(),
+                id = userUuid,
                 password = updatedUserAuth.getPasswordHash(),
                 fullName = updatedUserAuth.getFullName(),
                 imageUrl = updatedUserAuth.getImageUrl()
@@ -419,8 +421,8 @@ class AuthService(
         )
 
         if (tokenEntity.purpose != VerificationPurpose.PHONE_CHANGE) {
-            if (previousStatus == UserStatus.UNVERIFIED && updatedUserAuth.getStatus() == UserStatus.PENDING_APPROVAL) {
-                teEcclesiaEventPublisher.publish(UserPendingApprovalEvent(updatedUserAuth.getId(), updatedUserAuth.getFullName()))
+            if (previousStatus == UserStatus.UNVERIFIED.name && updatedUserAuth.getStatus() == UserStatus.PENDING_APPROVAL.name) {
+                teEcclesiaEventPublisher.publish(UserPendingApprovalEvent(userUuid, updatedUserAuth.getFullName()))
             }
         }
     }
@@ -455,9 +457,10 @@ class AuthService(
 
         val userAuth = userRepository.findAuthDetailsById(tokenEntity.userId)
             ?: throw EntityNotFoundException("User not found")
-        val accessToken = jwtUtil.generateAccessToken(userAuth.getId())
-        val refreshToken = jwtUtil.generateRefreshToken(userAuth.getId())
-        saveRefreshToken(userAuth.getId(), refreshToken)
+        val userUuid = UUID.fromString(userAuth.getId())
+        val accessToken = jwtUtil.generateAccessToken(userUuid)
+        val refreshToken = jwtUtil.generateRefreshToken(userUuid)
+        saveRefreshToken(userUuid, refreshToken)
 
         otpRepository.delete(tokenEntity)
 
@@ -660,7 +663,7 @@ class AuthService(
                 val userAuth = userRepository.findAuthDetailsById(userId)
                     ?: throw UnauthorizedException("User not found")
 
-                val token = if (userAuth.getStatus() == UserStatus.APPROVED) {
+                val token = if (userAuth.getStatus() == UserStatus.APPROVED.name) {
                     jwtUtil.generateAccessToken(userId)
                 } else {
                     jwtUtil.generateRegistrationToken(userId)
@@ -670,7 +673,7 @@ class AuthService(
                 val finalDeviceToken = request.deviceToken ?: oldDeviceToken
                 saveRefreshToken(userId, newRefreshToken, finalDeviceToken)
 
-                if (userAuth.getStatus() == UserStatus.APPROVED) {
+                if (userAuth.getStatus() == UserStatus.APPROVED.name) {
                     teEcclesiaEventPublisher.publish(UserLoggedInEvent(userId))
                 }
 
@@ -686,13 +689,14 @@ class AuthService(
     fun upgradeRegistrationToken(userId: UUID): AuthResponse {
         val userAuth = userRepository.findAuthDetailsById(userId)
             ?: throw EntityNotFoundException("User not found")
-        if (userAuth.getStatus() != UserStatus.APPROVED) {
+        if (userAuth.getStatus() != UserStatus.APPROVED.name) {
             throw UnauthorizedException("User is not approved yet")
         }
-        val accessToken = jwtUtil.generateAccessToken(userAuth.getId())
-        val refreshToken = jwtUtil.generateRefreshToken(userAuth.getId())
-        saveRefreshToken(userAuth.getId(), refreshToken)
-        teEcclesiaEventPublisher.publish(UserLoggedInEvent(userAuth.getId()))
+        val userUuid = UUID.fromString(userAuth.getId())
+        val accessToken = jwtUtil.generateAccessToken(userUuid)
+        val refreshToken = jwtUtil.generateRefreshToken(userUuid)
+        saveRefreshToken(userUuid, refreshToken)
+        teEcclesiaEventPublisher.publish(UserLoggedInEvent(userUuid))
         return AuthResponse(accessToken, refreshToken)
     }
 
