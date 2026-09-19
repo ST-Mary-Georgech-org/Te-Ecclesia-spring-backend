@@ -216,23 +216,4 @@ class LookupService(
     fun deleteEducationalYear(id: Long) {
         educationalYearRepository.deleteById(id)
     }
-
-    @Transactional
-    fun createArea(request: AreaRequest): LookupResponse {
-        val area = Area(name = request.name)
-        val saved = areaRepository.save(area)
-        return LookupResponse(saved.id, saved.name, whatsAppLink = null)
-    }
-
-    @Transactional
-    fun updateArea(id: Long, request: AreaRequest): LookupResponse {
-        val area = areaRepository.findById(id).orElseThrow { ResourceNotFoundException("Area not found") }
-        val updated = areaRepository.save(area.copy(name = request.name))
-        return LookupResponse(updated.id, updated.name, whatsAppLink = null)
-    }
-
-    @Transactional
-    fun deleteArea(id: Long) {
-        areaRepository.deleteById(id)
-    }
 }
