@@ -127,8 +127,6 @@ fun RegisterRequest.toEntity(
         externalConfessionPriestName = this.externalConfessionPriestName,
         externalConfessionChurch = this.externalConfessionChurch,
         externalConfessionPhone = this.externalConfessionPhone,
-        accountVerifications = mutableListOf(),
-        refreshTokens = mutableListOf(),
         isEmailVerified = false,
         isPhoneVerified = false
     )

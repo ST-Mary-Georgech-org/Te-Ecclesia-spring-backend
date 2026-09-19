@@ -2,6 +2,7 @@ package org.teEcclesia.identity
 
 import io.mockk.mockk
 import org.teEcclesia.events.publisher.TeEcclesiaEventPublisher
+import org.teEcclesia.identity.repository.AccountDeletionRequestRepository
 import org.teEcclesia.identity.repository.EmailVerificationRepository
 import org.teEcclesia.identity.repository.RefreshTokenRepository
 import org.teEcclesia.identity.repository.UserRepository
@@ -92,7 +93,8 @@ class IdentityTestApplication {
         educationalStageRepository: EducationalStageRepository,
         educationalYearRepository: EducationalYearRepository,
         areaRepository: AreaRepository,
-        userValidationHelper: UserValidationHelper
+        userValidationHelper: UserValidationHelper,
+        accountDeletionRequestRepository: AccountDeletionRequestRepository
     ): AuthService {
         return AuthService(
             userRepository = userRepository,
@@ -111,6 +113,7 @@ class IdentityTestApplication {
             parentProfileService = parentProfileService(),
             imageStorageService = imageStorageService(),
             userValidationHelper = userValidationHelper,
+            accountDeletionRequestRepository = accountDeletionRequestRepository,
             profileImageDirectory = "test-profiles",
             documentsDirectory = "test-docs"
         )

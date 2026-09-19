@@ -19,12 +19,20 @@ import org.teEcclesia.identity.exception.UserAlreadyExistsException
 import org.teEcclesia.identity.exception.IncompleteProfileException
 import org.teEcclesia.identity.exception.PhoneNotVerifiedException
 import org.teEcclesia.identity.exception.EmailNotVerifiedException
+import org.teEcclesia.identity.exception.AccountDeletedException
 import org.teEcclesia.identity.exception.AccountPendingApprovalException
 import org.teEcclesia.identity.exception.DuplicatePhoneException
 import org.teEcclesia.identity.exception.ResourceNotFoundException
 import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.entity.lookups.Area
+import org.teEcclesia.events.notifications.NotificationDetails
+import org.teEcclesia.events.notifications.UserNotificationsEvent
+import org.teEcclesia.events.notifications.utils.NotificationAction
+import org.teEcclesia.events.notifications.utils.NotificationMedium
+import org.teEcclesia.events.notifications.utils.NotificationType
 import org.teEcclesia.identity.repository.*
+import org.teEcclesia.identity.repository.projection.UserAuthSummaryProjection
+import org.teEcclesia.identity.repository.projection.UserPasswordResetProjection
 import org.teEcclesia.identity.security.JwtUtil
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.domain.Page
@@ -32,6 +40,7 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
 import org.springframework.scheduling.annotation.Scheduled
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.stereotype.Service
 import java.net.URLEncoder
@@ -39,6 +48,7 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import org.springframework.web.multipart.MultipartFile
 import org.teEcclesia.events.identity.UserApprovalRequestUpdatedEvent
+import org.teEcclesia.events.identity.UserUpdatedEvent
 import org.teEcclesia.identity.api.dto.response.PriestResponse
 import org.teEcclesia.identity.api.dto.response.UserSummaryResponse
 import org.teEcclesia.identity.api.dto.response.toUserSummaryResponse
@@ -49,6 +59,7 @@ import org.teEcclesia.storage.service.ImageStorageService
 import org.teEcclesia.identity.entity.WhatsAppPendingToken
 import org.teEcclesia.identity.repository.WhatsAppPendingTokenRepository
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
 @Service
 @Transactional(noRollbackFor = [
@@ -72,6 +83,7 @@ class AuthService(
     private val imageStorageService: ImageStorageService,
     private val areaRepository: AreaRepository,
     private val userValidationHelper: UserValidationHelper,
+    private val accountDeletionRequestRepository: AccountDeletionRequestRepository,
     @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String,
     @param:Value("\${whatsapp.business-phone}") private val whatsappBusinessPhone: String,
     @param:Value("\${identity.resources.documents-directory}") private val documentsDirectory: String
@@ -104,6 +116,13 @@ class AuthService(
             throw UserAlreadyExistsException("National ID is already registered.")
         }
 
+        if (existingUser == null) {
+            val deletedUser = userRepository.findDeletedByNationalId(request.nationalId)
+            if (deletedUser != null) {
+                throw AccountDeletedException("This account was previously deleted and can be reactivated.")
+            }
+        }
+
         val verifiedPhoneCount = userRepository.countVerifiedUsersByPhone(
             phone = formattedPhone,
             excludeUserId = existingUser?.id
@@ -129,9 +148,10 @@ class AuthService(
 
         var confessionPriest: User? = null
         if (request.confessionPriestId != null) {
-            confessionPriest = userRepository.findById(request.confessionPriestId).orElseThrow {
-                EntityNotFoundException("Confession priest not found")
+            if (!userRepository.existsById(request.confessionPriestId)) {
+                throw EntityNotFoundException("Confession priest not found")
             }
+            confessionPriest = userRepository.findProfileById(request.confessionPriestId)
         }
 
         val userId = existingUser?.id ?: UUID.randomUUID()
@@ -164,9 +184,7 @@ class AuthService(
                     makhdoomProfile = existingUser.makhdoomProfile,
                     khademProfile = existingUser.khademProfile,
                     parentProfile = existingUser.parentProfile,
-                    createdAt = existingUser.createdAt,
-                    accountVerifications = existingUser.accountVerifications,
-                    refreshTokens = existingUser.refreshTokens
+                    createdAt = existingUser.createdAt
                 )
             } else {
                 it
@@ -214,7 +232,8 @@ class AuthService(
         certificateImage: MultipartFile? = null,
         identityDocument: MultipartFile? = null
     ): RegisterResponse {
-        val user = userRepository.findById(userId).orElseThrow { EntityNotFoundException("User not found") }
+        val user = userRepository.findProfileById(userId)
+            ?: throw EntityNotFoundException("User not found")
 
         if (user.status == UserStatus.APPROVED) {
             throw RuntimeException("Profile is already completed")
@@ -259,7 +278,7 @@ class AuthService(
         val token = generateWhatsAppToken()
         val verificationToken = AccountVerification(
             otp = token,
-            user = savedUser,
+            userId = savedUser.id,
             phone = savedUser.phone,
             method = VerificationMethod.PHONE,
             purpose = VerificationPurpose.REGISTER
@@ -277,17 +296,18 @@ class AuthService(
 
     fun initiateWhatsAppVerification(phone: String): InitiateWhatsAppVerificationResponse {
         val formattedPhone = formatPhone(phone)
-        val users = userRepository.findUsersByPhone(formattedPhone)
-        val user = users.find { !it.isPhoneVerified }
+        val users = userRepository.findUsersByPhone(formattedPhone, UserAuthSummaryProjection::class.java)
+        val user = users.find { !it.getIsPhoneVerified() }
             ?: if (users.isEmpty()) throw EntityNotFoundException("User not found with this phone number") else users[0]
 
-        otpRepository.deleteAllByUserAndMethod(user, VerificationMethod.PHONE)
+        val userId = user.getId()
+        otpRepository.deleteAllByUserIdAndMethod(userId, VerificationMethod.PHONE)
 
         val token = generateWhatsAppToken()
         val verificationToken = AccountVerification(
             otp = token,
-            user = user,
-            phone = user.phone,
+            userId = userId,
+            phone = user.getPhone(),
             method = VerificationMethod.PHONE,
             purpose = VerificationPurpose.REGISTER
         )
@@ -302,11 +322,11 @@ class AuthService(
     }
 
     fun initiateWhatsAppPhoneChangeVerification(user: User, newPhone: String): Pair<String, String> {
-        otpRepository.deleteAllByUserAndMethod(user, VerificationMethod.PHONE)
+        otpRepository.deleteAllByUserIdAndMethod(user.id, VerificationMethod.PHONE)
         val token = generateWhatsAppToken()
         val verificationToken = AccountVerification(
             otp = token,
-            user = user,
+            userId = user.id,
             phone = newPhone,
             method = VerificationMethod.PHONE,
             purpose = VerificationPurpose.PHONE_CHANGE
@@ -326,7 +346,7 @@ class AuthService(
     }
 
     fun getPendingToken(userId: String): String? {
-        val pendingToken = whatsAppPendingTokenRepository.findById(userId).orElse(null) ?: return null
+        val pendingToken = whatsAppPendingTokenRepository.findByIdOrNull(userId) ?: return null
         if (pendingToken.isExpired()) {
             whatsAppPendingTokenRepository.delete(pendingToken)
             return null
@@ -368,40 +388,43 @@ class AuthService(
     }
 
     private fun validateFromNumber(tokenEntity: AccountVerification, fromNumber: String): Boolean {
-        val registeredPhone = tokenEntity.phone ?: tokenEntity.user.phone
+        val registeredPhone = tokenEntity.phone ?: userRepository.findPhoneById(tokenEntity.userId) ?: ""
         val cleanFrom = fromNumber.replace(Regex("""\D"""), "")
         val cleanRegistered = registeredPhone.replace(Regex("""\D"""), "")
         return cleanFrom == cleanRegistered
     }
 
-    private fun updateVerifiedUser(tokenEntity: AccountVerification): User {
-        val user = tokenEntity.user
-        val previousStatus = user.status
-        val verifiedUser = when (tokenEntity.purpose) {
-            VerificationPurpose.PHONE_CHANGE -> {
-                user.copy(
-                    phone = tokenEntity.phone!!,
-                    isPhoneVerified = true
-                )
-            }
-            else -> {
-                val wasUnverified = user.status == UserStatus.UNVERIFIED
-                user.copy(
-                    createdAt = Instant.now(),
-                    isPhoneVerified = true,
-                    status = if (wasUnverified) UserStatus.PENDING_APPROVAL else user.status
-                )
-            }
+    private fun updateVerifiedUser(tokenEntity: AccountVerification) {
+        val userId = tokenEntity.userId
+        val userBefore = userRepository.findAuthDetailsById(userId)
+            ?: throw EntityNotFoundException("User not found")
+        val previousStatus = userBefore.getStatus()
+
+        if (tokenEntity.purpose == VerificationPurpose.PHONE_CHANGE) {
+            userRepository.updatePhoneAndVerified(userId, tokenEntity.phone!!)
+        } else {
+            userRepository.verifyUserPhone(userId, Instant.now())
         }
-        val savedUser = userRepository.save(verifiedUser)
-        teEcclesiaEventPublisher.publish(savedUser.toUserUpdatedEvent())
-        
+
+        val updatedUserAuth = userRepository.findAuthDetailsById(userId)
+            ?: throw EntityNotFoundException("User not found")
+
+        val userUuid = UUID.fromString(updatedUserAuth.getId())
+
+        teEcclesiaEventPublisher.publish(
+            UserUpdatedEvent(
+                id = userUuid,
+                password = updatedUserAuth.getPasswordHash(),
+                fullName = updatedUserAuth.getFullName(),
+                imageUrl = updatedUserAuth.getImageUrl()
+            )
+        )
+
         if (tokenEntity.purpose != VerificationPurpose.PHONE_CHANGE) {
-            if (previousStatus == UserStatus.UNVERIFIED && savedUser.status == UserStatus.PENDING_APPROVAL) {
-                teEcclesiaEventPublisher.publish(UserPendingApprovalEvent(savedUser.id, savedUser.fullName))
+            if (previousStatus == UserStatus.UNVERIFIED.name && updatedUserAuth.getStatus() == UserStatus.PENDING_APPROVAL.name) {
+                teEcclesiaEventPublisher.publish(UserPendingApprovalEvent(userUuid, updatedUserAuth.getFullName()))
             }
         }
-        return savedUser
     }
 
     private fun getVerificationResponseMessage(tokenEntity: AccountVerification): String {
@@ -432,10 +455,12 @@ class AuthService(
             throw RuntimeException("Verification token has expired")
         }
 
-        val user = tokenEntity.user
-        val accessToken = jwtUtil.generateAccessToken(user.id)
-        val refreshToken = jwtUtil.generateRefreshToken(user.id)
-        saveRefreshToken(user, refreshToken)
+        val userAuth = userRepository.findAuthDetailsById(tokenEntity.userId)
+            ?: throw EntityNotFoundException("User not found")
+        val userUuid = UUID.fromString(userAuth.getId())
+        val accessToken = jwtUtil.generateAccessToken(userUuid)
+        val refreshToken = jwtUtil.generateRefreshToken(userUuid)
+        saveRefreshToken(userUuid, refreshToken)
 
         otpRepository.delete(tokenEntity)
 
@@ -443,15 +468,13 @@ class AuthService(
     }
 
     fun verifyEmail(userId: UUID, request: VerifyEmailRequest): AuthResponse {
-        val user = userRepository.findById(userId).orElseThrow {
-            EntityNotFoundException("User not found with id: $userId")
-        }
-
-        val targetEmail = (request.email.ifBlank { user.email })
-            ?.lowercase()?.trim()
+        val currentEmail = userRepository.findEmailById(userId)
+        val targetEmail = (request.email.ifBlank { currentEmail ?: "" })
+            .lowercase().trim()
+            .takeIf { it.isNotEmpty() }
             ?: throw IllegalArgumentException("Email is required for verification")
 
-        val token = otpRepository.findTopByOtpAndUserAndMethod(request.otp, user, VerificationMethod.EMAIL)
+        val token = otpRepository.findTopByOtpAndUserIdAndMethod(request.otp, userId, VerificationMethod.EMAIL)
             ?: throw RuntimeException("Invalid or expired OTP")
 
         if (token.isExpired()) {
@@ -461,16 +484,12 @@ class AuthService(
 
         userValidationHelper.validateEmail(targetEmail, currentUserId = userId)
 
-        val verifiedUser = user.copy(
-            email = targetEmail,
-            isEmailVerified = true
-        )
-        userRepository.save(verifiedUser)
+        userRepository.updateEmailAndVerified(userId, targetEmail)
         otpRepository.delete(token)
 
-        val accessToken = jwtUtil.generateAccessToken(verifiedUser.id)
-        val refreshToken = jwtUtil.generateRefreshToken(verifiedUser.id)
-        saveRefreshToken(verifiedUser, refreshToken, request.deviceToken)
+        val accessToken = jwtUtil.generateAccessToken(userId)
+        val refreshToken = jwtUtil.generateRefreshToken(userId)
+        saveRefreshToken(userId, refreshToken, request.deviceToken)
 
         return AuthResponse(accessToken, refreshToken)
     }
@@ -482,12 +501,12 @@ class AuthService(
             formatPhone(identifier)
         }.getOrDefault(identifier)
 
-        val users = userRepository.findUsersByIdentifier(formattedIdentifier)
+        val users = userRepository.findAuthSummariesByIdentifier(formattedIdentifier)
         if (users.isEmpty()) {
             throw EntityNotFoundException("User not found with this identifier")
         }
 
-        val matchingUsers = users.filter { passwordEncoder.matches(request.password, it.passwordHash) }
+        val matchingUsers = users.filter { passwordEncoder.matches(request.password, it.getPasswordHash()) }
 
         if (matchingUsers.isEmpty()) {
             throw InvalidCredentialsException()
@@ -498,30 +517,32 @@ class AuthService(
         }
 
         val user = matchingUsers[0]
-        val isEmailIdentifier = user.email != null && identifier.equals(user.email, ignoreCase = true)
+        val isEmailIdentifier = user.getEmail() != null && identifier.equals(user.getEmail(), ignoreCase = true)
 
-        if (isEmailIdentifier && !user.isEmailVerified) {
+        if (isEmailIdentifier && !user.getIsEmailVerified()) {
             throw EmailNotVerifiedException()
         }
 
-        when (user.status) {
+        val userId = user.getId()
+
+        when (user.getStatus()) {
             UserStatus.PROFILE_INCOMPLETE -> {
-                val tempToken = jwtUtil.generateRegistrationToken(user.id)
-                val refreshToken = jwtUtil.generateRefreshToken(user.id)
-                saveRefreshToken(user, refreshToken, request.deviceToken)
+                val tempToken = jwtUtil.generateRegistrationToken(userId)
+                val refreshToken = jwtUtil.generateRefreshToken(userId)
+                saveRefreshToken(userId, refreshToken, request.deviceToken)
                 throw IncompleteProfileException(token = tempToken, refreshToken = refreshToken)
             }
             UserStatus.PENDING_APPROVAL -> {
-                val tempToken = jwtUtil.generateRegistrationToken(user.id)
-                val refreshToken = jwtUtil.generateRefreshToken(user.id)
-                saveRefreshToken(user, refreshToken, request.deviceToken)
+                val tempToken = jwtUtil.generateRegistrationToken(userId)
+                val refreshToken = jwtUtil.generateRefreshToken(userId)
+                saveRefreshToken(userId, refreshToken, request.deviceToken)
                 throw AccountPendingApprovalException(token = tempToken, refreshToken = refreshToken)
             }
             UserStatus.UNVERIFIED -> {
-                if (!user.isPhoneVerified) {
-                    val tempToken = jwtUtil.generateRegistrationToken(user.id)
-                    val refreshToken = jwtUtil.generateRefreshToken(user.id)
-                    saveRefreshToken(user, refreshToken, request.deviceToken)
+                if (!user.getIsPhoneVerified()) {
+                    val tempToken = jwtUtil.generateRegistrationToken(userId)
+                    val refreshToken = jwtUtil.generateRefreshToken(userId)
+                    saveRefreshToken(userId, refreshToken, request.deviceToken)
                     throw PhoneNotVerifiedException(token = tempToken, refreshToken = refreshToken)
                 }
             }
@@ -529,115 +550,175 @@ class AuthService(
             UserStatus.BANNED -> throw UnauthorizedException("Account banned")
             UserStatus.APPROVED -> {
                 // If it's approved but phone or email is not verified, block them.
-                if (!user.isPhoneVerified) {
-                    val tempToken = jwtUtil.generateRegistrationToken(user.id)
-                    val refreshToken = jwtUtil.generateRefreshToken(user.id)
-                    saveRefreshToken(user, refreshToken, request.deviceToken)
+                if (!user.getIsPhoneVerified()) {
+                    val tempToken = jwtUtil.generateRegistrationToken(userId)
+                    val refreshToken = jwtUtil.generateRefreshToken(userId)
+                    saveRefreshToken(userId, refreshToken, request.deviceToken)
                     throw PhoneNotVerifiedException(token = tempToken, refreshToken = refreshToken)
                 }
             }
         }
 
-        val accessToken = jwtUtil.generateAccessToken(user.id)
-        val refreshToken = jwtUtil.generateRefreshToken(user.id)
+        val accessToken = jwtUtil.generateAccessToken(userId)
+        val refreshToken = jwtUtil.generateRefreshToken(userId)
 
-        saveRefreshToken(user, refreshToken, request.deviceToken)
-        teEcclesiaEventPublisher.publish(UserLoggedInEvent(user.id))
+        saveRefreshToken(userId, refreshToken, request.deviceToken)
+        teEcclesiaEventPublisher.publish(UserLoggedInEvent(userId))
 
         return AuthResponse(accessToken, refreshToken)
     }
 
+    private data class RotatedTokenGraceEntry(
+        val response: AuthResponse,
+        val rotatedAt: Instant = Instant.now()
+    )
+
+    private val rotatedTokensGraceCache = ConcurrentHashMap<String, RotatedTokenGraceEntry>()
+
+    private fun cleanExpiredGraceTokens() {
+        val cutoff = Instant.now().minus(60, ChronoUnit.SECONDS)
+        rotatedTokensGraceCache.entries.removeIf { it.value.rotatedAt.isBefore(cutoff) }
+    }
+
     fun refreshToken(request: RefreshTokenRequest): AuthResponse {
-        val refreshTokenEntity = refreshTokenRepository.findByToken(request.refreshToken)
-            ?: throw UnauthorizedException("Invalid refresh token")
-
-        val user = refreshTokenEntity.user
-        val oldDeviceToken = refreshTokenEntity.deviceToken
-
-        refreshTokenRepository.delete(refreshTokenEntity)
-
-        if (refreshTokenEntity.expiryDate.isBefore(Instant.now())) {
-            throw TokenExpiredException("Refresh token is expired. Please login again.")
+        cleanExpiredGraceTokens()
+        rotatedTokensGraceCache[request.refreshToken]?.let { graceEntry ->
+            if (graceEntry.rotatedAt.plus(30, ChronoUnit.SECONDS).isAfter(Instant.now())) {
+                return graceEntry.response
+            } else {
+                rotatedTokensGraceCache.remove(request.refreshToken)
+            }
         }
 
-        if (jwtUtil.validateRefreshToken(request.refreshToken) &&
-            jwtUtil.validateTokenForUser(request.refreshToken, user.id)) {
+        return synchronized(this) {
+            rotatedTokensGraceCache[request.refreshToken]?.let { graceEntry ->
+                if (graceEntry.rotatedAt.plus(30, ChronoUnit.SECONDS).isAfter(Instant.now())) {
+                    return graceEntry.response
+                }
+            }
 
-            val newAccessToken = jwtUtil.generateAccessToken(user.id)
-            val newRefreshToken = jwtUtil.generateRefreshToken(user.id)
+            val refreshTokenEntity = refreshTokenRepository.findByToken(request.refreshToken)
+                ?: throw UnauthorizedException("Invalid refresh token")
 
-            val finalDeviceToken = request.deviceToken ?: oldDeviceToken
-            saveRefreshToken(user, newRefreshToken, finalDeviceToken)
-            teEcclesiaEventPublisher.publish(UserLoggedInEvent(user.id))
+            val userId = refreshTokenEntity.userId
+            val oldDeviceToken = refreshTokenEntity.deviceToken
 
-            return AuthResponse(newAccessToken, newRefreshToken)
-        } else {
-            throw UnauthorizedException("Invalid refresh token")
+            refreshTokenRepository.delete(refreshTokenEntity)
+
+            if (refreshTokenEntity.expiryDate.isBefore(Instant.now())) {
+                throw TokenExpiredException("Refresh token is expired. Please login again.")
+            }
+
+            if (jwtUtil.validateRefreshToken(request.refreshToken) &&
+                jwtUtil.validateTokenForUser(request.refreshToken, userId)) {
+
+                val newAccessToken = jwtUtil.generateAccessToken(userId)
+                val newRefreshToken = jwtUtil.generateRefreshToken(userId)
+
+                val finalDeviceToken = request.deviceToken ?: oldDeviceToken
+                saveRefreshToken(userId, newRefreshToken, finalDeviceToken)
+                teEcclesiaEventPublisher.publish(UserLoggedInEvent(userId))
+
+                val response = AuthResponse(newAccessToken, newRefreshToken)
+                rotatedTokensGraceCache[request.refreshToken] = RotatedTokenGraceEntry(response)
+                response
+            } else {
+                throw UnauthorizedException("Invalid refresh token")
+            }
         }
     }
 
     fun refreshRegistrationToken(request: RefreshTokenRequest): AuthResponse {
-        val refreshTokenEntity = refreshTokenRepository.findByToken(request.refreshToken)
-            ?: throw UnauthorizedException("Invalid refresh token")
-
-        val user = refreshTokenEntity.user
-        val oldDeviceToken = refreshTokenEntity.deviceToken
-
-        refreshTokenRepository.delete(refreshTokenEntity)
-
-        if (refreshTokenEntity.expiryDate.isBefore(Instant.now())) {
-            throw TokenExpiredException("Refresh token is expired. Please login again.")
+        cleanExpiredGraceTokens()
+        rotatedTokensGraceCache[request.refreshToken]?.let { graceEntry ->
+            if (graceEntry.rotatedAt.plus(30, ChronoUnit.SECONDS).isAfter(Instant.now())) {
+                return graceEntry.response
+            } else {
+                rotatedTokensGraceCache.remove(request.refreshToken)
+            }
         }
 
-        if (jwtUtil.validateRefreshToken(request.refreshToken) &&
-            jwtUtil.validateTokenForUser(request.refreshToken, user.id)) {
+        return synchronized(this) {
+            rotatedTokensGraceCache[request.refreshToken]?.let { graceEntry ->
+                if (graceEntry.rotatedAt.plus(30, ChronoUnit.SECONDS).isAfter(Instant.now())) {
+                    return graceEntry.response
+                }
+            }
 
-            val token = if (user.status == UserStatus.APPROVED) {
-                jwtUtil.generateAccessToken(user.id)
+            val refreshTokenEntity = refreshTokenRepository.findByToken(request.refreshToken)
+                ?: throw UnauthorizedException("Invalid refresh token")
+
+            val userId = refreshTokenEntity.userId
+            val oldDeviceToken = refreshTokenEntity.deviceToken
+
+            refreshTokenRepository.delete(refreshTokenEntity)
+
+            if (refreshTokenEntity.expiryDate.isBefore(Instant.now())) {
+                throw TokenExpiredException("Refresh token is expired. Please login again.")
+            }
+
+            if (jwtUtil.validateRefreshToken(request.refreshToken) &&
+                jwtUtil.validateTokenForUser(request.refreshToken, userId)) {
+
+                val userAuth = userRepository.findAuthDetailsById(userId)
+                    ?: throw UnauthorizedException("User not found")
+
+                val token = if (userAuth.getStatus() == UserStatus.APPROVED.name) {
+                    jwtUtil.generateAccessToken(userId)
+                } else {
+                    jwtUtil.generateRegistrationToken(userId)
+                }
+                val newRefreshToken = jwtUtil.generateRefreshToken(userId)
+
+                val finalDeviceToken = request.deviceToken ?: oldDeviceToken
+                saveRefreshToken(userId, newRefreshToken, finalDeviceToken)
+
+                if (userAuth.getStatus() == UserStatus.APPROVED.name) {
+                    teEcclesiaEventPublisher.publish(UserLoggedInEvent(userId))
+                }
+
+                val response = AuthResponse(token, newRefreshToken)
+                rotatedTokensGraceCache[request.refreshToken] = RotatedTokenGraceEntry(response)
+                response
             } else {
-                jwtUtil.generateRegistrationToken(user.id)
+                throw UnauthorizedException("Invalid refresh token")
             }
-            val newRefreshToken = jwtUtil.generateRefreshToken(user.id)
-
-            val finalDeviceToken = request.deviceToken ?: oldDeviceToken
-            saveRefreshToken(user, newRefreshToken, finalDeviceToken)
-
-            if (user.status == UserStatus.APPROVED) {
-                teEcclesiaEventPublisher.publish(UserLoggedInEvent(user.id))
-            }
-
-            return AuthResponse(token, newRefreshToken)
-        } else {
-            throw UnauthorizedException("Invalid refresh token")
         }
     }
 
     fun upgradeRegistrationToken(userId: UUID): AuthResponse {
-        val user = userRepository.findById(userId).orElseThrow {
-            EntityNotFoundException("User not found")
-        }
-        if (user.status != UserStatus.APPROVED) {
+        val userAuth = userRepository.findAuthDetailsById(userId)
+            ?: throw EntityNotFoundException("User not found")
+        if (userAuth.getStatus() != UserStatus.APPROVED.name) {
             throw UnauthorizedException("User is not approved yet")
         }
-        val accessToken = jwtUtil.generateAccessToken(user.id)
-        val refreshToken = jwtUtil.generateRefreshToken(user.id)
-        saveRefreshToken(user, refreshToken)
-        teEcclesiaEventPublisher.publish(UserLoggedInEvent(user.id))
+        val userUuid = UUID.fromString(userAuth.getId())
+        val accessToken = jwtUtil.generateAccessToken(userUuid)
+        val refreshToken = jwtUtil.generateRefreshToken(userUuid)
+        saveRefreshToken(userUuid, refreshToken)
+        teEcclesiaEventPublisher.publish(UserLoggedInEvent(userUuid))
         return AuthResponse(accessToken, refreshToken)
     }
 
     private fun saveRefreshToken(user: User, token: String, deviceToken: String? = null) {
-        val expiryDate = Instant.now().plus(14, ChronoUnit.DAYS)
+        saveRefreshToken(user.id, token, deviceToken)
+    }
 
+    private fun saveRefreshToken(userId: UUID, token: String, deviceToken: String? = null) {
+        val expiryDate = Instant.now().plus(14, ChronoUnit.DAYS)
         refreshTokenRepository.save(
-            RefreshToken(token = token, expiryDate = expiryDate, user = user, deviceToken = deviceToken)
+            RefreshToken(
+                token = token,
+                expiryDate = expiryDate,
+                userId = userId,
+                deviceToken = deviceToken
+            )
         )
     }
 
     private fun createOrdinationProfile(user: User, dto: OrdinationProfileRequest, finalCertificateUrl: String?): OrdinationProfile {
-        val rank = rankRepository.findById(dto.rankId).orElseThrow {
-            EntityNotFoundException("Rank not found")
-        }
+        val rank = rankRepository.findByIdOrNull(dto.rankId)
+            ?: throw EntityNotFoundException("Rank not found")
         return OrdinationProfile(
             id = user.ordinationProfile?.id ?: 0,
             user = user,
@@ -651,16 +732,14 @@ class AuthService(
     }
 
     private fun createMakhdoomProfile(user: User, dto: MakhdoomProfileRequest): MakhdoomProfile {
-        val educationalStage = educationalStageRepository.findById(dto.educationalStageId).orElseThrow {
-            EntityNotFoundException("Educational stage not found")
-        }
+        val educationalStage = educationalStageRepository.findByIdOrNull(dto.educationalStageId)
+            ?: throw EntityNotFoundException("Educational stage not found")
         if (educationalStage.isKhademOnly) {
             throw IllegalArgumentException("Educational stage is reserved for Khadem role")
         }
         val educationalYear = dto.educationalYearId?.let {
-            educationalYearRepository.findById(it).orElseThrow {
-                EntityNotFoundException("Educational year not found")
-            }
+            educationalYearRepository.findByIdOrNull(it)
+                ?: throw EntityNotFoundException("Educational year not found")
         }
         return MakhdoomProfile(
             id = user.makhdoomProfile?.id ?: 0,
@@ -692,13 +771,11 @@ class AuthService(
     }
 
     private fun createKhademProfile(user: User, dto: KhademProfileRequest): KhademProfile {
-        val educationalStage = educationalStageRepository.findById(dto.educationalStageId).orElseThrow {
-            EntityNotFoundException("Educational stage not found")
-        }
+        val educationalStage = educationalStageRepository.findByIdOrNull(dto.educationalStageId)
+            ?: throw EntityNotFoundException("Educational stage not found")
         val educationalYear = dto.educationalYearId?.let { id ->
-            educationalYearRepository.findById(id).orElseThrow {
-                EntityNotFoundException("Educational year not found")
-            }
+            educationalYearRepository.findByIdOrNull(id)
+                ?: throw EntityNotFoundException("Educational year not found")
         }
         val responsibleStages = dto.responsibleStageIds?.takeIf { it.isNotEmpty() }?.let {
             educationalStageRepository.findAllById(it)
@@ -718,57 +795,61 @@ class AuthService(
     }
 
     fun updateDeviceToken(userId: UUID, refreshToken: String, deviceToken: String) {
-        val tokenEntity = refreshTokenRepository.findByUserIdAndToken(userId, refreshToken)
-        val entityToSave = if (tokenEntity == null) {
-            val user = userRepository.getReferenceById(userId)
+        val updated = refreshTokenRepository.updateDeviceToken(userId, refreshToken, deviceToken)
+        if (updated == 0) {
             val expiryDate = Instant.now().plus(14, ChronoUnit.DAYS)
-            RefreshToken(token = refreshToken, expiryDate = expiryDate, user = user, deviceToken = deviceToken)
-        } else {
-            tokenEntity.copy(deviceToken = deviceToken)
+            refreshTokenRepository.save(
+                RefreshToken(
+                    token = refreshToken,
+                    expiryDate = expiryDate,
+                    userId = userId,
+                    deviceToken = deviceToken
+                )
+            )
         }
-        refreshTokenRepository.save(entityToSave)
     }
 
     fun logout(userId: UUID, request: RefreshTokenRequest) {
-        refreshTokenRepository.findByUserIdAndToken(userId = userId, request.refreshToken)?.let { tokenEntity ->
-            refreshTokenRepository.delete(tokenEntity)
-        }
+        rotatedTokensGraceCache.remove(request.refreshToken)
+        refreshTokenRepository.deleteByUserIdAndToken(userId, request.refreshToken)
     }
 
     fun forgotPassword(request: ForgotPasswordRequest): ForgotPasswordResponse {
         val user = findUserForPasswordReset(request.key, request.method) ?: throw EntityNotFoundException("User not found or account is not approved yet")
+        val userId = UUID.fromString(user.getId())
 
         return if (request.method == VerificationMethod.PHONE) {
             val token = generateWhatsAppToken()
             val verification = AccountVerification(
                 otp = token,
-                user = user,
-                phone = user.phone,
+                userId = userId,
+                phone = user.getPhone(),
                 method = VerificationMethod.PHONE,
                 purpose = VerificationPurpose.PASSWORD_RESET
             )
             otpRepository.save(verification)
-            ForgotPasswordResponse(buildWhatsAppLink(token), token)
+            ForgotPasswordResponse(buildWhatsAppLink(token), token, isDeletedAccount = user.getDeleted())
         } else {
             val otpCode = emailService.generateOtp()
             val verification = AccountVerification(
                 otp = otpCode,
-                user = user,
-                email = user.email,
+                userId = userId,
+                email = user.getEmail(),
                 method = VerificationMethod.EMAIL,
                 purpose = VerificationPurpose.PASSWORD_RESET
             )
             otpRepository.save(verification)
-            if (user.email != null) {
-                emailService.sendOtp(user.email, verification.otp)
+            if (user.getEmail() != null) {
+                emailService.sendOtp(user.getEmail()!!, verification.otp)
             }
-            ForgotPasswordResponse(link = null, token = null)
+            ForgotPasswordResponse(link = null, token = null, isDeletedAccount = user.getDeleted())
         }
     }
 
     fun verifyOtp(request: VerifyOtpRequest): String {
         val user = findUserForPasswordReset(request.key, request.method)
             ?: throw EntityNotFoundException("User not found")
+        val userId = UUID.fromString(user.getId())
 
         val tokenStr = request.otp
         val approvedTokenStr = "APPROVED_$tokenStr"
@@ -776,7 +857,7 @@ class AuthService(
         val token = otpRepository.findByOtpInAndMethod(listOf(tokenStr, approvedTokenStr), request.method)
             ?: throw RuntimeException("Invalid or expired OTP")
 
-        if (token.user.id != user.id) {
+        if (token.userId != userId) {
             throw RuntimeException("Invalid or expired OTP")
         }
 
@@ -795,6 +876,7 @@ class AuthService(
     fun resetPassword(request: ResetPasswordRequest): String {
         val user = findUserForPasswordReset(request.key, request.method)
             ?: throw EntityNotFoundException("User not found")
+        val userId = UUID.fromString(user.getId())
 
         val tokenStr = request.otp
         val approvedTokenStr = "APPROVED_$tokenStr"
@@ -802,7 +884,7 @@ class AuthService(
         val token = otpRepository.findByOtpInAndMethod(listOf(tokenStr, approvedTokenStr), request.method)
             ?: throw RuntimeException("Invalid OTP")
 
-        if (token.user.id != user.id) {
+        if (token.userId != userId) {
             throw RuntimeException("Invalid OTP")
         }
 
@@ -815,10 +897,27 @@ class AuthService(
             throw UnauthorizedException("Verification pending")
         }
 
-        val updatedUser = user.copy(
-            passwordHash = passwordEncoder.encode(request.newPassword)!!
-        )
-        userRepository.save(updatedUser)
+        if (user.getDeleted()) {
+            userRepository.restoreUser(userId)
+            accountDeletionRequestRepository.deleteByUserId(userId)
+
+            val adminIds = userRepository.findAllAdminIds()
+            if (adminIds.isNotEmpty()) {
+                val notifications = adminIds.map { adminId ->
+                    NotificationDetails(
+                        userId = adminId,
+                        subject = "إعادة تفعيل حساب",
+                        message = "قام ${user.getFullName()} بإعادة تفعيل حسابه بنفسه عبر استعادة كلمة المرور.",
+                        type = NotificationType.ALERT,
+                        medium = NotificationMedium.PUSH,
+                        dataPayload = mapOf("action" to NotificationAction.ACCOUNT_REACTIVATED.name, "targetUserId" to userId.toString())
+                    )
+                }
+                teEcclesiaEventPublisher.publish(UserNotificationsEvent(notifications))
+            }
+        }
+
+        userRepository.updatePasswordHash(userId, passwordEncoder.encode(request.newPassword)!!)
         otpRepository.delete(token)
 
         return "Password reset successfully. You can now login."
@@ -827,58 +926,61 @@ class AuthService(
     fun resendOtp(request: ForgotPasswordRequest): ForgotPasswordResponse {
         val user = findUserForPasswordReset(request.key, request.method)
             ?: throw EntityNotFoundException("User not found")
+        val userId = UUID.fromString(user.getId())
 
         return if (request.method == VerificationMethod.PHONE) {
             val token = generateWhatsAppToken()
             val verification = AccountVerification(
                 otp = token,
-                user = user,
-                phone = user.phone,
+                userId = userId,
+                phone = user.getPhone(),
                 method = VerificationMethod.PHONE,
                 purpose = VerificationPurpose.PASSWORD_RESET
             )
             otpRepository.save(verification)
-            ForgotPasswordResponse(buildWhatsAppLink(token), token)
+            ForgotPasswordResponse(buildWhatsAppLink(token), token, isDeletedAccount = user.getDeleted())
         } else {
             val otpCode = emailService.generateOtp()
             val verificationToken = AccountVerification(
                 otp = otpCode,
-                user = user,
-                email = user.email,
+                userId = userId,
+                email = user.getEmail(),
                 method = VerificationMethod.EMAIL,
                 purpose = VerificationPurpose.PASSWORD_RESET
             )
             otpRepository.save(verificationToken)
-            if (user.email != null) {
-                if (!user.isEmailVerified) {
-                    emailService.sendWelcomeVerificationOtp(user.email, verificationToken.otp)
+            if (user.getEmail() != null) {
+                if (!user.getIsEmailVerified()) {
+                    emailService.sendWelcomeVerificationOtp(user.getEmail()!!, verificationToken.otp)
                 } else {
-                    emailService.sendOtp(user.email, verificationToken.otp)
+                    emailService.sendOtp(user.getEmail()!!, verificationToken.otp)
                 }
             }
-            ForgotPasswordResponse(link = null, token = null)
+            ForgotPasswordResponse(link = null, token = null, isDeletedAccount = user.getDeleted())
         }
     }
 
-    private fun findUserForPasswordReset(key: String, method: VerificationMethod): User? {
-        if (method == VerificationMethod.EMAIL) {
-            return userRepository.findByEmailAndStatusAndIsEmailVerifiedIsTrue(key.lowercase(), UserStatus.APPROVED)
+    private fun findUserForPasswordReset(key: String, method: VerificationMethod): UserPasswordResetProjection? {
+        val trimmedKey = key.trim()
+        val formattedIdentifier = if (method == VerificationMethod.PHONE) {
+            runCatching { formatPhone(trimmedKey) }.getOrDefault(trimmedKey)
+        } else {
+            trimmedKey
         }
 
-        val isNationalId = key.matches(Regex("""\d{14}"""))
-        if (isNationalId) {
-            return userRepository.findByNationalIdAndStatus(key, UserStatus.APPROVED)
+        val users = userRepository.findForPasswordResetByIdentifier(formattedIdentifier)
+        if (users.isEmpty()) {
+            return null
         }
 
-        val formattedPhone = runCatching {
-            formatPhone(key)
-        }.getOrDefault(key)
-
-        val usersByPhone = userRepository.findUsersByPhoneAndStatus(formattedPhone, UserStatus.APPROVED)
-        if (usersByPhone.size > 1) {
-            throw DuplicatePhoneException("This phone number is associated with multiple accounts. Please use your National ID to reset your password.")
+        if (method == VerificationMethod.PHONE && users.size > 1) {
+            val phoneMatches = users.filter { it.getPhone() == formattedIdentifier }
+            if (phoneMatches.size > 1) {
+                throw DuplicatePhoneException("This phone number is associated with multiple accounts. Please use your National ID to reset your password.")
+            }
         }
-        return usersByPhone.firstOrNull()
+
+        return users.firstOrNull()
     }
 
 

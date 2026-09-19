@@ -11,13 +11,16 @@ import java.time.Instant
 import java.util.*
 
 interface EmailVerificationRepository : JpaRepository<AccountVerification, UUID> {
-    fun findByOtpAndUser(otp: String, user: User): AccountVerification?
-    fun findTopByOtpAndUserAndMethod(otp: String, user: User, method: VerificationMethod): AccountVerification?
+    fun findByOtpAndUserId(otp: String, userId: UUID): AccountVerification?
+    fun findTopByOtpAndUserIdAndMethod(otp: String, userId: UUID, method: VerificationMethod): AccountVerification?
     fun findByOtpAndPhone(otp: String, phone: String): AccountVerification?
     fun findByOtpAndEmail(otp: String, email: String): AccountVerification?
     fun findByOtpAndMethod(otp: String, method: VerificationMethod): AccountVerification?
     fun findByOtpInAndMethod(otps: List<String>, method: VerificationMethod): AccountVerification?
-    fun deleteAllByUserAndMethod(user: User, method: VerificationMethod)
+
+    @Modifying
+    @Query("DELETE FROM AccountVerification av WHERE av.userId = :userId AND av.method = :method")
+    fun deleteAllByUserIdAndMethod(@Param("userId") userId: UUID, @Param("method") method: VerificationMethod): Int
 
     @Modifying
     @Query("DELETE FROM AccountVerification av WHERE av.sentAt < :date")

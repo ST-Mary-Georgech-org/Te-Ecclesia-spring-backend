@@ -1,12 +1,9 @@
 package org.teEcclesia.identity.entity
 
-import com.fasterxml.jackson.annotation.JsonIgnore
 import jakarta.persistence.*
 import java.time.Instant
+import java.util.UUID
 
-import org.hibernate.envers.Audited
-
-@Audited
 @Entity
 @Table(name = "refresh_token", schema = "identity")
 data class RefreshToken(
@@ -23,8 +20,6 @@ data class RefreshToken(
     @Column(nullable = true)
     val deviceToken: String? = null,
 
-    @JsonIgnore
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    val user: User
+    @Column(name = "user_id", nullable = false)
+    val userId: UUID
 )

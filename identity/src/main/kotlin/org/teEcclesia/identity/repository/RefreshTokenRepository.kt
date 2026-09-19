@@ -12,11 +12,24 @@ interface RefreshTokenRepository : JpaRepository<RefreshToken, Long> {
     fun findByToken(token: String): RefreshToken?
     fun findByUserIdAndToken(userId: UUID, token: String): RefreshToken?
     fun findAllByUserId(userId: UUID): List<RefreshToken>
+
+    @Modifying
+    @Query("DELETE FROM RefreshToken r WHERE r.userId = :userId AND r.token = :token")
+    fun deleteByUserIdAndToken(@Param("userId") userId: UUID, @Param("token") token: String): Int
+
+    @Modifying
+    @Query("UPDATE RefreshToken r SET r.deviceToken = :deviceToken WHERE r.userId = :userId AND r.token = :token")
+    fun updateDeviceToken(@Param("userId") userId: UUID, @Param("token") token: String, @Param("deviceToken") deviceToken: String): Int
+
+    @Modifying
+    @Query("DELETE FROM RefreshToken r WHERE r.userId = :userId")
+    fun deleteAllByUserId(@Param("userId") userId: UUID): Int
+
     @Modifying
     @Query("DELETE FROM RefreshToken r WHERE r.expiryDate < :date")
     fun deleteAllByExpiryDateBefore(@Param("date") date: Instant): Int
 
-    @Query("SELECT DISTINCT r.deviceToken FROM RefreshToken r WHERE r.user.id = :userId AND r.deviceToken IS NOT NULL AND TRIM(r.deviceToken) != ''")
+    @Query("SELECT DISTINCT r.deviceToken FROM RefreshToken r WHERE r.userId = :userId AND r.deviceToken IS NOT NULL AND TRIM(r.deviceToken) != ''")
     fun findDeviceTokensByUserId(@Param("userId") userId: UUID): List<String>
 
     @Modifying
