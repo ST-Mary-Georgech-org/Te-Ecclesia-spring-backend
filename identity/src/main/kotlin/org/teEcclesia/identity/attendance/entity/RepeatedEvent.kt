@@ -12,8 +12,8 @@ import java.time.LocalTime
 import java.util.UUID
 
 @Entity
-@Table(name = "service_events", schema = "identity")
-data class ServiceEvent(
+@Table(name = "repeated_events", schema = "identity")
+data class RepeatedEvent(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0,
@@ -22,10 +22,13 @@ data class ServiceEvent(
     val serviceId: Long,
 
     @Column(nullable = true)
-    val name: String? = null,
+    val name: String?,
 
-    @Column(name = "event_date", nullable = false)
-    val eventDate: LocalDate,
+    @Column(name = "event_start_date", nullable = false)
+    val startDate: LocalDate,
+
+    @Column(name = "next_creational_date", nullable = false)
+    var nextCreationDate: LocalDate,
 
     @Column(name = "start_time", nullable = false)
     val startTime: LocalTime,
@@ -33,12 +36,13 @@ data class ServiceEvent(
     @Column(name = "end_time", nullable = false)
     val endTime: LocalTime,
 
-    @Column(name = "repeated_event_id")
-    var repeatedEventId: Long? = null,
-
     @Column(name = "created_by_id", nullable = false)
     val createdById: UUID,
+
+    @Column(name = "repeatEvery", nullable = true)
+    val repeatEvery: Int = 1,
 
     @Column(name = "created_at", nullable = false)
     val createdAt: Instant = Instant.now()
 )
+

@@ -7,5 +7,6 @@ data class CreateServiceRequest(
     @field:NotBlank
     val name: String,
     val educationalStageIds: List<Long>? = emptyList(),
-    val responsibleServantIds: List<UUID>? = emptyList()
+    val responsibleServantIds: List<UUID>? = emptyList(),
+    val repeatedEvent: CreateRepeatedEventRequest? = null
 )

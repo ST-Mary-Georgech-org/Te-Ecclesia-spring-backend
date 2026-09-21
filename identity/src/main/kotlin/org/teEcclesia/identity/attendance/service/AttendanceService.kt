@@ -28,10 +28,18 @@ import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.entity.lookups.EducationalStage
 import org.teEcclesia.identity.exception.ResourceNotFoundException
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.scheduling.annotation.Scheduled
 import org.teEcclesia.identity.api.dto.response.resolveUrl
+import org.teEcclesia.identity.attendance.dto.CreateRepeatedEventRequest
+import org.teEcclesia.identity.attendance.dto.RepeatedEventResponse
+import org.teEcclesia.identity.attendance.entity.RepeatedEvent
+import org.teEcclesia.identity.attendance.repository.RepeatedEventRepository
 import org.teEcclesia.identity.exception.UnauthorizedException
 import org.teEcclesia.identity.repository.EducationalStageRepository
 import org.teEcclesia.identity.repository.UserRepository
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 @Service
@@ -41,6 +49,7 @@ class AttendanceService(
     private val eventAttendeeRepository: EventAttendeeRepository,
     private val userRepository: UserRepository,
     private val educationalStageRepository: EducationalStageRepository,
+    private val repeatedEventRepository: RepeatedEventRepository,
     @param:Value("\${storage.teEcclesia.cdn-endpoint}") private val cdnEndpoint: String,
     @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String
 ) {
@@ -81,6 +90,7 @@ class AttendanceService(
         val servantsByServiceId = churchServiceRepository.findResponsibleServantsByServiceIds(serviceIds)
             .groupBy { it.getServiceId() }
 
+        val repeatedEventByServiceId = repeatedEventRepository.findByServiceIdIn(serviceIds).associateBy { it.serviceId }
         val lang = LocaleContextHolder.getLocale().language
         val isEn = lang.startsWith("en", ignoreCase = true)
 
@@ -94,6 +104,20 @@ class AttendanceService(
                 )
             } ?: emptyList()
 
+            val repeatedEvent = repeatedEventByServiceId[service.id]?.let { event ->
+                RepeatedEventResponse(
+                    id = event.id,
+                    serviceId = event.serviceId,
+                    name = event.name,
+                    startDate = event.startDate,
+                    nextCreationDate = event.nextCreationDate,
+                    startTime = event.startTime,
+                    endTime = event.endTime,
+                    repeatEvery = event.repeatEvery,
+                    createdAt = event.createdAt
+                )
+            }
+
             val isResponsible = isCallerAdmin || (callerId != null && servants.any { it.id == callerId })
             val stageResponses = service.educationalStages.map { stage ->
                 val name = if (isEn) stage.nameEn else stage.nameAr
@@ -106,7 +130,8 @@ class AttendanceService(
                 createdAt = service.createdAt,
                 responsible = isResponsible,
                 educationalStages = stageResponses,
-                responsibleServants = servants
+                responsibleServants = servants,
+                repeatedEvent = repeatedEvent
             )
         }
     }
@@ -126,6 +151,9 @@ class AttendanceService(
                 createdById = creatorId
             )
         )
+        request.repeatedEvent?.let { repeatedEvent ->
+            createRepeatedEvent(creatorId,service.id,repeatedEvent)
+        }
         return getSingleServiceResponse(service.id, creatorId, isCallerAdmin = true)
     }
 
@@ -146,6 +174,52 @@ class AttendanceService(
                 responsibleServantIds = servantIds
             )
         )
+
+        var repeatedEvent = repeatedEventRepository.findByServiceId(service.id)
+
+        if (request.repeatedEvent != null) {
+
+            val requestEvent = request.repeatedEvent
+
+            if (repeatedEvent == null) {
+                createRepeatedEvent(callerId,id,requestEvent)
+            } else {
+                val today = LocalDate.now()
+                val currentTime = LocalTime.now()
+
+                repeatedEvent = repeatedEvent.copy(
+                    startDate = requestEvent.startDate ,
+                    startTime = requestEvent.startTime,
+                    endTime = requestEvent.endTime,
+                    repeatEvery = requestEvent.repeatEvery,
+                    name = requestEvent.name?.ifEmpty { null },
+                )
+
+                repeatedEventRepository.save(repeatedEvent)
+
+                if (requestEvent.startDate == today && requestEvent.startTime > currentTime) {
+                    val existingEvent =
+                        serviceEventRepository.findByRepeatedEventIdAndEventDate(
+                            repeatedEvent.id, today
+                        )
+
+                    if (existingEvent == null) {
+                        serviceEventRepository.save(
+                            ServiceEvent(
+                                serviceId = service.id,
+                                name = requestEvent.name?.ifEmpty { null },
+                                eventDate = today,
+                                startTime = requestEvent.startTime,
+                                endTime = requestEvent.endTime,
+                                repeatedEventId = repeatedEvent.id,
+                                createdById = callerId
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
         return getSingleServiceResponse(updated.id, callerId, isCallerAdmin = true)
     }
 
@@ -227,6 +301,7 @@ class AttendanceService(
                 startTime = it.getStartTime(),
                 endTime = it.getEndTime(),
                 attendeeCount = it.getAttendeeCount(),
+                repeated = it.getRepeatedEventId() != null,
                 createdAt = it.getCreatedAt()
             )
         }
@@ -256,6 +331,103 @@ class AttendanceService(
             attendeeCount = 0L,
             createdAt = event.createdAt
         )
+    }
+
+    fun calculateNextCreationDate(
+        nextCreationDate: LocalDate,
+        periodDays: Long,
+        now: LocalDate = LocalDate.now()
+    ): LocalDate{
+        if (!nextCreationDate.isBefore(now)) return nextCreationDate
+
+        val daysPassed = ChronoUnit.DAYS.between(
+            nextCreationDate,
+            now
+        )
+        val cyclesToAdvance = (daysPassed / periodDays) + 1
+        return nextCreationDate.plus(
+            cyclesToAdvance * periodDays,
+            ChronoUnit.DAYS
+        )
+    }
+
+    @Transactional
+    fun createRepeatedEvent(
+        creatorId: UUID,
+        serviceId: Long,
+        request: CreateRepeatedEventRequest
+    ): RepeatedEventResponse {
+        val today = LocalDate.now()
+        val currentTime = LocalTime.now()
+        val service = checkCanManageService(creatorId, serviceId)
+        val nexCreationDate = calculateNextCreationDate(
+            nextCreationDate = request.nextCreationDate,
+            periodDays = request.repeatEvery.toLong()
+        )
+        val repeatedEvent = repeatedEventRepository.save(
+            RepeatedEvent(
+                serviceId = service.id,
+                name = request.name?.ifBlank { null },
+                startDate = request.startDate,
+                nextCreationDate = nexCreationDate,
+                startTime = request.startTime,
+                endTime = request.endTime,
+                createdById = creatorId,
+                repeatEvery = request.repeatEvery,
+            )
+        )
+        if (repeatedEvent.startDate == today && repeatedEvent.startTime > currentTime) {
+            serviceEventRepository.save(
+                ServiceEvent(
+                    serviceId = service.id,
+                    name = request.name?.ifBlank { null },
+                    eventDate = repeatedEvent.startDate,
+                    startTime = repeatedEvent.startTime,
+                    endTime = repeatedEvent.endTime,
+                    repeatedEventId = repeatedEvent.id,
+                    createdById = creatorId
+                )
+            )
+        }
+
+        return RepeatedEventResponse(
+            id = repeatedEvent.id,
+            serviceId = repeatedEvent.serviceId,
+            name = repeatedEvent.name,
+            startDate = repeatedEvent.startDate,
+            nextCreationDate = repeatedEvent.nextCreationDate,
+            startTime = repeatedEvent.startTime,
+            endTime = repeatedEvent.endTime,
+            repeatEvery = repeatedEvent.repeatEvery,
+            createdAt = repeatedEvent.createdAt
+        )
+    }
+
+    @Scheduled(cron = "0 0 0 * * *")
+    @Transactional
+    fun createRepeatedEvents() {
+
+        val today = LocalDate.now()
+
+        val repeatedEvents =
+            repeatedEventRepository.findByNextCreationDate(today)
+
+        repeatedEvents.forEach { repeatedEvent ->
+
+            serviceEventRepository.save(
+                ServiceEvent(
+                    serviceId = repeatedEvent.serviceId,
+                    name = repeatedEvent.name,
+                    eventDate = repeatedEvent.nextCreationDate,
+                    startTime = repeatedEvent.startTime,
+                    endTime = repeatedEvent.endTime,
+                    repeatedEventId = repeatedEvent.id,
+                    createdById = repeatedEvent.createdById
+                )
+            )
+            repeatedEvent.nextCreationDate =
+                repeatedEvent.nextCreationDate.plusDays(repeatedEvent.repeatEvery.toLong())
+        }
     }
 
     @Transactional

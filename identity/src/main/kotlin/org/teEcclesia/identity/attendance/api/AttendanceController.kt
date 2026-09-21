@@ -19,8 +19,10 @@ import org.teEcclesia.identity.attendance.dto.AddAttendeeRequest
 import org.teEcclesia.identity.attendance.dto.AttendeeUserPreviewResponse
 import org.teEcclesia.identity.attendance.dto.ChurchServiceResponse
 import org.teEcclesia.identity.attendance.dto.CreateEventRequest
+import org.teEcclesia.identity.attendance.dto.CreateRepeatedEventRequest
 import org.teEcclesia.identity.attendance.dto.CreateServiceRequest
 import org.teEcclesia.identity.attendance.dto.EventAttendeeResponse
+import org.teEcclesia.identity.attendance.dto.RepeatedEventResponse
 import org.teEcclesia.identity.attendance.dto.ServiceEventResponse
 import org.teEcclesia.identity.attendance.dto.UserAttendanceHistoryResponse
 import org.teEcclesia.identity.attendance.service.AttendanceService
@@ -81,6 +83,15 @@ class AttendanceController(
         @RequestBody request: CreateEventRequest
     ): ResponseEntity<ServiceEventResponse> {
         return ResponseEntity.ok(attendanceService.createEvent(callerId, serviceId, request))
+    }
+
+    @PostMapping("/services/{serviceId}/repeated-events")
+    fun createRepeatedEvent(
+        @AuthenticationPrincipal callerId: UUID,
+        @PathVariable serviceId: Long,
+        @RequestBody request: CreateRepeatedEventRequest
+    ): ResponseEntity<RepeatedEventResponse> {
+        return ResponseEntity.ok(attendanceService.createRepeatedEvent(callerId, serviceId, request))
     }
 
     @PutMapping("/events/{eventId}")

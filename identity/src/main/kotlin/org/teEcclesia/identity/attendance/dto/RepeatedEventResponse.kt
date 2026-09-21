@@ -4,14 +4,14 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 
-data class ServiceEventResponse(
+data class RepeatedEventResponse(
     val id: Long,
     val serviceId: Long,
     val name: String?,
-    val eventDate: LocalDate,
+    val startDate: LocalDate,
+    val nextCreationDate: LocalDate,
     val startTime: LocalTime,
     val endTime: LocalTime,
-    val attendeeCount: Long,
-    val repeated : Boolean = false,
+    val repeatEvery : Int,
     val createdAt: Instant
 )

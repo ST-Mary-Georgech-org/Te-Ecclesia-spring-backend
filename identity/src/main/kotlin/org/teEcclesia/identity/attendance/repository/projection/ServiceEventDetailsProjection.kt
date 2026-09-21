@@ -12,5 +12,6 @@ interface ServiceEventDetailsProjection {
     fun getStartTime(): LocalTime
     fun getEndTime(): LocalTime
     fun getAttendeeCount(): Long
+    fun getRepeatedEventId(): Long?
     fun getCreatedAt(): Instant
 }
