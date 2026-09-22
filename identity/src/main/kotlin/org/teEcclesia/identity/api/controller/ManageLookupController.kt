@@ -22,8 +22,8 @@ class ManageLookupController(
         @AuthenticationPrincipal callerId: UUID,
         @RequestBody request: AreaRequest,
     ): ResponseEntity<LookupResponse> {
-        val caller = userService.findProfileById(callerId)
-        if (caller.role != UserRole.ADMIN) {
+        val callerRole = userService.findRoleById(callerId)
+        if (callerRole != UserRole.ADMIN) {
             throw UnauthorizedException("Only admins can add new area")
         }
         return ResponseEntity.ok(manageLookupService.createArea(request))
@@ -35,8 +35,8 @@ class ManageLookupController(
         @PathVariable id: Long,
         @RequestBody request: AreaRequest,
         ): ResponseEntity<LookupResponse> {
-        val caller = userService.findProfileById(callerId)
-        if (caller.role != UserRole.ADMIN) {
+        val callerRole = userService.findRoleById(callerId)
+        if (callerRole != UserRole.ADMIN) {
             throw UnauthorizedException("Only admins can update the area")
         }
         return ResponseEntity.ok(manageLookupService.updateArea(id, request))
@@ -47,9 +47,9 @@ class ManageLookupController(
         @AuthenticationPrincipal callerId: UUID,
         @PathVariable id: Long,
         ): ResponseEntity<Void> {
-        val caller = userService.findProfileById(callerId)
-        if (caller.role != UserRole.ADMIN) {
-            throw UnauthorizedException("Only admins can delete the year")
+        val callerRole = userService.findRoleById(callerId)
+        if (callerRole != UserRole.ADMIN) {
+            throw UnauthorizedException("Only admins can delete the area")
         }
         manageLookupService.deleteArea(id)
         return ResponseEntity.noContent().build()

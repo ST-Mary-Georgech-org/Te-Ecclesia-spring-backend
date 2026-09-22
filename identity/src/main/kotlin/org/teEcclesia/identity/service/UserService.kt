@@ -89,6 +89,10 @@ class UserService(
             ?: throw UserNotFoundException("User with id: $userId not found")
     }
 
+    fun findRoleById(userId: UUID): UserRole? {
+        return userRepository.findRoleById(userId)
+    }
+
     private fun getParentsWhatsAppLink(): String? {
         return systemSettingService.getSettingValue(SettingKey.PARENTS_WHATSAPP_LINK)
     }
