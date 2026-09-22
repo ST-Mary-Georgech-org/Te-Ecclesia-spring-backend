@@ -12,6 +12,6 @@ data class ServiceEventResponse(
     val startTime: LocalTime,
     val endTime: LocalTime,
     val attendeeCount: Long,
-    val repeated : Boolean = false,
+    val repeated : Boolean,
     val createdAt: Instant
 )

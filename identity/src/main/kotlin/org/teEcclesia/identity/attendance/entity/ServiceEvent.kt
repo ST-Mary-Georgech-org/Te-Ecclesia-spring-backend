@@ -6,11 +6,13 @@ import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.Table
+import org.hibernate.envers.Audited
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.util.UUID
 
+@Audited
 @Entity
 @Table(name = "service_events", schema = "identity")
 data class ServiceEvent(
@@ -34,7 +36,7 @@ data class ServiceEvent(
     val endTime: LocalTime,
 
     @Column(name = "repeated_event_id")
-    var repeatedEventId: Long? = null,
+    val repeatedEventId: Long? = null,
 
     @Column(name = "created_by_id", nullable = false)
     val createdById: UUID,
