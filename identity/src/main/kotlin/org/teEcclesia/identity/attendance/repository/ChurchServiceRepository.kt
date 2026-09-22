@@ -11,7 +11,7 @@ import java.util.UUID
 
 interface ChurchServiceRepository : JpaRepository<ChurchService, Long> {
     @Query(
-        value = "SELECT cs FROM ChurchService cs ORDER BY cs.createdAt DESC",
+        value = "SELECT cs FROM ChurchService cs LEFT JOIN FETCH cs.repeatedEvent ORDER BY cs.createdAt DESC",
         countQuery = "SELECT count(cs) FROM ChurchService cs"
     )
     fun findAllWithEducationalStages(pageable: Pageable): Page<ChurchService>

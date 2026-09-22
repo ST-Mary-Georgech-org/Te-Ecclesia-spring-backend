@@ -10,5 +10,6 @@ data class ChurchServiceResponse(
     val createdAt: Instant,
     val responsible: Boolean,
     val educationalStages: List<LookupResponse> = emptyList(),
-    val responsibleServants: List<ResponsibleServantDto>
+    val responsibleServants: List<ResponsibleServantDto>,
+    val repeatedEvent: RepeatedEventResponse? = null
 )
