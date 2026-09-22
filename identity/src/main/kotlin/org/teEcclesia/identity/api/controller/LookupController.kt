@@ -9,7 +9,9 @@ import java.util.UUID
 import org.teEcclesia.identity.api.dto.request.*
 import org.teEcclesia.identity.api.dto.response.LookupResponse
 import org.teEcclesia.identity.entity.enums.UserRole
+import org.teEcclesia.identity.exception.UnauthorizedException
 import org.teEcclesia.identity.service.LookupService
+import org.teEcclesia.identity.service.UserService
 
 @RestController
 @RequestMapping("/api/v1/lookups")
@@ -88,22 +90,6 @@ class LookupController(
     @DeleteMapping("/educational-years/{id}")
     fun deleteEducationalYear(@PathVariable id: Long): ResponseEntity<Void> {
         lookupService.deleteEducationalYear(id)
-        return ResponseEntity.noContent().build()
-    }
-
-    @PostMapping("/areas")
-    fun createArea(@RequestBody request: AreaRequest): ResponseEntity<LookupResponse> {
-        return ResponseEntity.ok(lookupService.createArea(request))
-    }
-
-    @PutMapping("/areas/{id}")
-    fun updateArea(@PathVariable id: Long, @RequestBody request: AreaRequest): ResponseEntity<LookupResponse> {
-        return ResponseEntity.ok(lookupService.updateArea(id, request))
-    }
-
-    @DeleteMapping("/areas/{id}")
-    fun deleteArea(@PathVariable id: Long): ResponseEntity<Void> {
-        lookupService.deleteArea(id)
         return ResponseEntity.noContent().build()
     }
 }
