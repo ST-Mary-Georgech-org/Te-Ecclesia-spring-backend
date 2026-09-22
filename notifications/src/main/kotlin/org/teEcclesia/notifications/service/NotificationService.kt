@@ -38,7 +38,8 @@ class NotificationService(
                 message = notification.message,
                 type = notification.type,
                 sentAt = notification.sentAt,
-                isRead = notification.isRead
+                isRead = notification.isRead,
+                dataPayload = notification.dataPayload
             )
         }
     }
@@ -51,5 +52,10 @@ class NotificationService(
     @Transactional
     fun markAllAsRead(userId: UUID) {
         notificationRepository.markAllAsReadByUserId(userId)
+    }
+
+    @Transactional
+    fun deleteNotification(id: UUID, userId: UUID) {
+        notificationRepository.deleteByIdAndUserId(id, userId)
     }
 }

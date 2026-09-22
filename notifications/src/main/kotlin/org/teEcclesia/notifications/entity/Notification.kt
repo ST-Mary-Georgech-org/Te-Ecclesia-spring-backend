@@ -33,8 +33,11 @@ data class Notification(
     val isRead: Boolean = false,
 
     @Column(nullable = false)
-    val sentAt: Instant = Instant.now()
+    val sentAt: Instant = Instant.now(),
 
+    @Convert(converter = MapToJsonConverter::class)
+    @Column(name = "data_payload", columnDefinition = "text default '{}'", nullable = false)
+    val dataPayload: Map<String, String> = emptyMap()
 )
 
 fun NotificationDetails.toNotification(): Notification {
@@ -42,6 +45,7 @@ fun NotificationDetails.toNotification(): Notification {
         userId = this.userId,
         title = this.subject,
         message = this.message,
-        type = NotificationType.fromStringOrDefault(this.type.name)
+        type = NotificationType.fromStringOrDefault(this.type.name),
+        dataPayload = this.dataPayload
     )
 }

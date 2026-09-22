@@ -17,4 +17,8 @@ interface NotificationRepository : JpaRepository<Notification, UUID> {
     @Modifying
     @Query("UPDATE Notification n SET n.isRead = true WHERE n.userId = :userId AND n.isRead = false")
     fun markAllAsReadByUserId(userId: UUID): Int
+
+    @Modifying
+    @Query("DELETE FROM Notification n WHERE n.id = :id AND n.userId = :userId")
+    fun deleteByIdAndUserId(id: UUID, userId: UUID): Int
 }
