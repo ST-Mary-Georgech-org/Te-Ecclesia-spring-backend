@@ -21,7 +21,7 @@ class AuditController(
     private fun verifyAdmin(userId: UUID) {
         val user = userService.findById(userId)
         if (user.role != UserRole.ADMIN) {
-            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Only admin can access audit endpoints")
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "error.audit.admin_only")
         }
     }
 

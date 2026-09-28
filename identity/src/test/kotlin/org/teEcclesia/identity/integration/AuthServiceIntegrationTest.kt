@@ -195,7 +195,7 @@ class AuthServiceIntegrationTest {
         val thrownException = assertThrows<UnauthorizedException> {
             authService.getWhatsAppStatus(token)
         }
-        assertThat(thrownException).hasMessageThat().contains("Verification pending")
+        assertThat(thrownException).hasMessageThat().contains("error.verification_pending")
     }
 
     @Test
@@ -224,7 +224,7 @@ class AuthServiceIntegrationTest {
         val request = VerifyEmailRequest(email = "email-otp-invalid@mail.com", otp = "9999")
 
         val thrownException = assertThrows<RuntimeException> { authService.verifyEmail(user.id, request) }
-        assertThat(thrownException).hasMessageThat().contains("Invalid or expired OTP")
+        assertThat(thrownException).hasMessageThat().contains("error.otp.invalid_or_expired")
     }
 
     @Test
@@ -242,7 +242,7 @@ class AuthServiceIntegrationTest {
         val request = VerifyEmailRequest(email = user.email!!, otp = "12345")
 
         val thrownException = assertThrows<RuntimeException> { authService.verifyEmail(user.id, request) }
-        assertThat(thrownException).hasMessageThat().contains("OTP has expired")
+        assertThat(thrownException).hasMessageThat().contains("error.otp.expired")
     }
 
     @Test
@@ -275,7 +275,7 @@ class AuthServiceIntegrationTest {
         val request = LoginRequest(identifier = "invalid-password@mail.com", password = "Password@2")
 
         val thrownException = assertThrows<InvalidCredentialsException> { authService.login(request) }
-        assertThat(thrownException).hasMessageThat().contains("Invalid username or password")
+        assertThat(thrownException).hasMessageThat().contains("error.auth.invalid_credentials")
     }
 
     @Test
@@ -284,7 +284,7 @@ class AuthServiceIntegrationTest {
         val request = LoginRequest(identifier = user.phone, password = "Password@1")
 
         val thrownException = assertThrows<PhoneNotVerifiedException> { authService.login(request) }
-        assertThat(thrownException).hasMessageThat().contains("User phone number is not verified")
+        assertThat(thrownException).hasMessageThat().contains("error.auth.phone_not_verified")
     }
 
     @Test

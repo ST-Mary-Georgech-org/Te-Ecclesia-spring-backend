@@ -6,6 +6,6 @@ fun formatHomePhone(homePhone: String?): String? {
     return when (cleanPhone.length) {
         8 -> "02$cleanPhone"
         10 if cleanPhone.startsWith("02") -> cleanPhone
-        else -> throw IllegalArgumentException("Invalid home phone format. Must be 8 digits, or 10 digits starting with 02.")
+        else -> throw IllegalArgumentException("error.home_phone.invalid_format")
     }
 }

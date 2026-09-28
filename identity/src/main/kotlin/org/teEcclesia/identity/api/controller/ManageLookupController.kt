@@ -24,7 +24,7 @@ class ManageLookupController(
     ): ResponseEntity<LookupResponse> {
         val callerRole = userService.findRoleById(callerId)
         if (callerRole != UserRole.ADMIN) {
-            throw UnauthorizedException("Only admins can add new area")
+            throw UnauthorizedException("error.permission.admin_only")
         }
         return ResponseEntity.ok(manageLookupService.createArea(request))
     }
@@ -37,7 +37,7 @@ class ManageLookupController(
         ): ResponseEntity<LookupResponse> {
         val callerRole = userService.findRoleById(callerId)
         if (callerRole != UserRole.ADMIN) {
-            throw UnauthorizedException("Only admins can update the area")
+            throw UnauthorizedException("error.permission.admin_only")
         }
         return ResponseEntity.ok(manageLookupService.updateArea(id, request))
     }
@@ -49,7 +49,7 @@ class ManageLookupController(
         ): ResponseEntity<Void> {
         val callerRole = userService.findRoleById(callerId)
         if (callerRole != UserRole.ADMIN) {
-            throw UnauthorizedException("Only admins can delete the area")
+            throw UnauthorizedException("error.permission.admin_only")
         }
         manageLookupService.deleteArea(id)
         return ResponseEntity.noContent().build()

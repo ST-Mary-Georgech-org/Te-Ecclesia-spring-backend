@@ -4,6 +4,6 @@ abstract class UploadImageException(message: String, cause: Exception? = null): 
 
 class InvalidImageException(
     val extension: String
-): UploadImageException("uploading image with invalid extension:  $extension")
+): UploadImageException("error.storage.invalid_extension")
 
-class UnknownErrorException(message: String, cause: Exception? = null): UploadImageException(message, cause)
+class UnknownErrorException(message: String = "error.storage.upload_failed", cause: Exception? = null): UploadImageException(message, cause)

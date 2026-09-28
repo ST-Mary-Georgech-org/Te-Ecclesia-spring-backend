@@ -5,12 +5,12 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 
 data class VerifyEmailRequest(
-    @field:NotBlank(message = "Email is required")
-    @field:Email(message = "Invalid email format")
+    @field:NotBlank(message = "{validation.email.required}")
+    @field:Email(message = "{validation.email.invalid}")
     val email: String,
 
-    @field:NotBlank(message = "OTP is required")
-    @field:Size(min = 4, max = 5, message = "OTP must be 4 or 5 characters")
+    @field:NotBlank(message = "{validation.otp.required}")
+    @field:Size(min = 4, max = 5, message = "{validation.otp.size_email}")
     val otp: String,
 
     val deviceToken: String? = null

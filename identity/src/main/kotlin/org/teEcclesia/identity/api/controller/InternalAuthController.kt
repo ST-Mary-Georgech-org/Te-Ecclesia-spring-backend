@@ -24,7 +24,7 @@ class InternalAuthController(
             val token = authService.getPendingToken(request.userId)
             ResponseEntity.ok(GetPendingTokenResponse(token = token))
         } else {
-            val token = request.token ?: throw IllegalArgumentException("Token is required to save pending token")
+            val token = request.token ?: throw IllegalArgumentException("error.token_required")
             authService.savePendingToken(request.userId, token)
             ResponseEntity.ok(SavePendingTokenResponse(status = "saved"))
         }

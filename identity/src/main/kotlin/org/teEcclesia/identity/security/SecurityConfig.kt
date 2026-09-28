@@ -1,5 +1,6 @@
 package org.teEcclesia.identity.security
 
+import org.teEcclesia.identity.security.handler.CustomAccessDeniedHandler
 import org.teEcclesia.identity.security.handler.CustomAuthenticationEntryPoint
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -18,6 +19,7 @@ class SecurityConfig(
     private val jwtFilter: JwtFilter,
     private val internalHmacFilter: InternalHmacFilter,
     private val authenticationEntryPoint: CustomAuthenticationEntryPoint,
+    private val accessDeniedHandler: CustomAccessDeniedHandler,
     ) {
 
     @Bean
@@ -67,6 +69,7 @@ class SecurityConfig(
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter::class.java)
             .exceptionHandling { exception ->
                 exception.authenticationEntryPoint(authenticationEntryPoint)
+                exception.accessDeniedHandler(accessDeniedHandler)
             }
         return http.build()
     }

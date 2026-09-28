@@ -27,7 +27,7 @@ class AdminNotificationService(
     ): AdminSendNotificationResponse {
         val callerRole = userRepository.findRoleById(callerId)
         if (callerRole != UserRole.ADMIN) {
-            throw UnauthorizedException("Only admins can send broadcast notifications")
+            throw UnauthorizedException("error.permission.admin_only")
         }
 
         val effectiveStageId = if (request.role != null && request.role != UserRole.KHADEM && request.role != UserRole.MAKHDOOM) {
@@ -53,7 +53,7 @@ class AdminNotificationService(
         }
 
         if (targetUserIds.isEmpty()) {
-            throw IllegalArgumentException("No recipients found matching the specified criteria")
+            throw IllegalArgumentException("error.admin.no_recipients")
         }
 
         val resolvedType = request.dataPayload?.get("type")

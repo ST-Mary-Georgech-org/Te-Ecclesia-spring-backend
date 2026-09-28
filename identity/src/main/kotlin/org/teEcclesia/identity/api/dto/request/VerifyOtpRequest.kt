@@ -5,11 +5,11 @@ import jakarta.validation.constraints.Size
 import org.teEcclesia.identity.entity.VerificationMethod
 
 data class VerifyOtpRequest(
-    @field:NotBlank(message = "Key is required")
+    @field:NotBlank(message = "{validation.key.required}")
     val key: String,
 
-    @field:NotBlank(message = "OTP is required")
-    @field:Size(min = 4, max = 15, message = "OTP must be between 4 and 15 characters")
+    @field:NotBlank(message = "{validation.otp.required}")
+    @field:Size(min = 4, max = 15, message = "{validation.otp.size}")
     val otp: String,
 
     val method: VerificationMethod,

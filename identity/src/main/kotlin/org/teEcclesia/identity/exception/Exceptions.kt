@@ -3,53 +3,59 @@ package org.teEcclesia.identity.exception
 abstract class AuthenticationException(message: String) : RuntimeException(message)
 
 class InvalidCredentialsException(
-    message: String = "Invalid username or password") : AuthenticationException(message)
+    message: String = "error.auth.invalid_credentials"
+) : AuthenticationException(message)
 
+class TokenExpiredException(
+    message: String = "error.auth.token_expired"
+) : AuthenticationException(message)
 
-class TokenExpiredException (
-    message: String = "Token has expired. Please login again.") : AuthenticationException(message)
-
-
-class UnauthorizedException (
-    message: String = "Unauthorized access") : AuthenticationException(message)
+class UnauthorizedException(
+    message: String = "error.auth.unauthorized"
+) : AuthenticationException(message)
 
 class UserAlreadyExistsException(
-    message: String = "User already exists") : AuthenticationException(message)
+    message: String = "error.auth.user_already_exists"
+) : AuthenticationException(message)
 
-class UserNotFoundException(message: String) : AuthenticationException(message)
+class UserNotFoundException(
+    message: String = "error.user.not_found"
+) : AuthenticationException(message)
 
 class AccountPendingApprovalException(
-    message: String = "User account is pending approval",
+    message: String = "error.auth.account_pending_approval",
     val token: String? = null,
     val refreshToken: String? = null
 ) : RuntimeException(message)
 
 class IncompleteProfileException(
-    message: String = "User profile is incomplete",
+    message: String = "error.auth.profile_incomplete",
     val token: String? = null,
     val refreshToken: String? = null
 ) : RuntimeException(message)
 
 class PhoneNotVerifiedException(
-    message: String = "User phone number is not verified",
+    message: String = "error.auth.phone_not_verified",
     val token: String? = null,
     val refreshToken: String? = null
 ) : RuntimeException(message)
 
 class EmailNotVerifiedException(
-    message: String = "User email is not verified"
+    message: String = "error.auth.email_not_verified"
 ) : RuntimeException(message)
 
-class ResourceNotFoundException(message: String) : RuntimeException(message)
+class ResourceNotFoundException(
+    message: String = "error.resource_not_found"
+) : RuntimeException(message)
 
 class DuplicatePhoneException(
-    message: String = "This phone number is associated with multiple accounts. Please use your National ID to reset your password."
+    message: String = "error.auth.duplicate_phone"
 ) : RuntimeException(message)
 
 class AccountDeletedException(
-    message: String = "Account has been deleted and can be reactivated"
+    message: String = "error.auth.account_deleted"
 ) : RuntimeException(message)
 
 class IncorrectPasswordException(
-    message: String = "Invalid password"
+    message: String = "error.auth.incorrect_password"
 ) : RuntimeException(message)

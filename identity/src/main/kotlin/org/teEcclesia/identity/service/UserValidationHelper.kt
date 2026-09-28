@@ -20,7 +20,7 @@ class UserValidationHelper(
             excludeUserId = currentUserId
         )
         if (exists) {
-            throw UserAlreadyExistsException("Email is already registered and verified.")
+            throw UserAlreadyExistsException("error.auth.email_already_registered")
         }
     }
 
@@ -31,7 +31,7 @@ class UserValidationHelper(
         )
         
         if (exists) {
-            throw UserAlreadyExistsException("National ID is already registered.")
+            throw UserAlreadyExistsException("error.auth.national_id_already_registered")
         }
     }
 
@@ -43,7 +43,7 @@ class UserValidationHelper(
             excludeUserId = currentUserId
         )
         if (verifiedCount >= 3) {
-            throw UserAlreadyExistsException("Phone number is already registered and verified 3 times.")
+            throw UserAlreadyExistsException("error.auth.phone_max_verified")
         }
     }
 

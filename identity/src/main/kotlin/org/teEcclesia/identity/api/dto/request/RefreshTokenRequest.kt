@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotBlank
 
 data class RefreshTokenRequest(
 
-    @field:NotBlank(message = "Refresh token is required")
+    @field:NotBlank(message = "{validation.refresh_token.required}")
     val refreshToken: String,
     
     val deviceToken: String? = null

@@ -15,36 +15,36 @@ import java.time.Instant
 import java.util.UUID
 
 data class RegisterRequest(
-    @field:NotBlank(message = "First name is required")
+    @field:NotBlank(message = "{validation.first_name.required}")
     val firstName: String,
 
-    @field:NotBlank(message = "Second name is required")
+    @field:NotBlank(message = "{validation.second_name.required}")
     val secondName: String,
 
-    @field:NotBlank(message = "Third name is required")
+    @field:NotBlank(message = "{validation.third_name.required}")
     val thirdName: String,
 
-    @field:NotBlank(message = "Last name is required")
+    @field:NotBlank(message = "{validation.last_name.required}")
     val lastName: String,
 
-    @field:NotBlank(message = "Display name is required")
+    @field:NotBlank(message = "{validation.display_name.required}")
     val displayName: String,
 
-    @field:NotBlank(message = "National ID is required")
-    @field:Size(min = 14, max = 14, message = "National ID must be exactly 14 characters")
+    @field:NotBlank(message = "{validation.national_id.required}")
+    @field:Size(min = 14, max = 14, message = "{validation.national_id.size}")
     val nationalId: String,
 
-    @field:NotBlank(message = "Phone number is required")
+    @field:NotBlank(message = "{validation.phone.required}")
     val phone: String,
 
     val homePhone: String? = null,
 
-    @field:Email(message = "Please provide a valid email address")
+    @field:Email(message = "{validation.email.invalid}")
     val email: String? = null,
 
     @field:Pattern(
         regexp = """^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=!]).{8,}$""",
-        message = "Password must contain at least 8 characters, one uppercase, one lowercase, one number and one special character"
+        message = "{validation.password.pattern}"
     )
     val password: String? = null,
 
@@ -53,23 +53,23 @@ data class RegisterRequest(
 
     val job: String? = null,
 
-    @field:NotBlank(message = "Building number is required")
+    @field:NotBlank(message = "{validation.building_no.required}")
     val buildingNo: String,
 
-    @field:NotBlank(message = "Street is required")
+    @field:NotBlank(message = "{validation.street.required}")
     val street: String,
 
     val streetBranch: String? = null,
 
-    @field:NotBlank(message = "Area is required")
+    @field:NotBlank(message = "{validation.area.required}")
     val area: String,
 
-    @field:NotBlank(message = "Floor is required")
+    @field:NotBlank(message = "{validation.floor.required}")
     val floor: String,
 
     val apartment: String? = null,
 
-    @field:NotBlank(message = "Special mark is required")
+    @field:NotBlank(message = "{validation.special_mark.required}")
     val specialMark: String,
 
     val role: UserRole? = null,

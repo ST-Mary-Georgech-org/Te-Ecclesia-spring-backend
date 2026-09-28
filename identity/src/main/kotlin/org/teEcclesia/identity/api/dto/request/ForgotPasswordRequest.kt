@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotBlank
 import org.teEcclesia.identity.entity.VerificationMethod
 
 data class ForgotPasswordRequest(
-    @field:NotBlank(message = "Key is required")
+    @field:NotBlank(message = "{validation.key.required}")
     val key: String,
 
     val method: VerificationMethod

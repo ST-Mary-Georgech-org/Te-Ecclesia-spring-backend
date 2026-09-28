@@ -5,10 +5,10 @@ import org.teEcclesia.identity.entity.enums.UserRole
 import java.util.UUID
 
 data class AdminSendNotificationRequest(
-    @field:NotBlank(message = "Title must not be blank")
+    @field:NotBlank(message = "{validation.title.required}")
     val title: String,
 
-    @field:NotBlank(message = "Body must not be blank")
+    @field:NotBlank(message = "{validation.body.required}")
     val body: String,
 
     val userIds: List<UUID>? = null,

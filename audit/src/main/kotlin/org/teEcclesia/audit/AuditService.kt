@@ -33,7 +33,7 @@ class AuditService(private val entityManager: EntityManager) {
 
     private fun resolveEntityClass(entityTypeId: String): Class<*> {
         return auditedEntitiesMap[entityTypeId.lowercase()]
-            ?: throw IllegalArgumentException("Unknown or non-audited entity type: $entityTypeId")
+            ?: throw IllegalArgumentException("error.audit.unknown_entity")
     }
 
     private fun parseEntityId(clazz: Class<*>, entityIdStr: String): Any {
@@ -90,7 +90,7 @@ class AuditService(private val entityManager: EntityManager) {
         val parsedId = parseEntityId(clazz, entityIdStr)
         val auditReader = AuditReaderFactory.get(entityManager)
         val historicalEntity = auditReader.find(clazz, parsedId, revisionId) 
-            ?: throw EntityNotFoundException("Revision $revisionId not found for $entityType with ID $entityIdStr")
+            ?: throw EntityNotFoundException("error.audit.revision_not_found")
         entityManager.merge(historicalEntity)
     }
 }
