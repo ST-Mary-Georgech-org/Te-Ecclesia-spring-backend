@@ -37,12 +37,12 @@ class UserController(
         
         if (caller.role == UserRole.KHADEM) {
             if (requireApprovePermission && caller.khademProfile?.canApproveRequests != true) {
-                throw UnauthorizedException("User does not have permission to approve requests")
+                throw UnauthorizedException("error.permission.approve_requests")
             }
             return
         }
         
-        throw UnauthorizedException("User is not authorized for this action")
+        throw UnauthorizedException("error.auth.unauthorized")
     }
 
     @GetMapping("/status/{status}")

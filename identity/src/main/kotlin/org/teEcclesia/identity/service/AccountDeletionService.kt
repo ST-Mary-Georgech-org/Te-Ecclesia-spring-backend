@@ -47,10 +47,10 @@ class AccountDeletionService(
     @Transactional
     fun requestAccountDeletion(userId: UUID, request: DeleteAccountRequest) {
         val userAuth = userRepository.findAuthDetailsById(userId)
-            ?: throw EntityNotFoundException("User not found")
+            ?: throw EntityNotFoundException("error.user.not_found")
 
         if (!passwordEncoder.matches(request.password, userAuth.getPasswordHash())) {
-            throw IncorrectPasswordException("Invalid password")
+            throw IncorrectPasswordException()
         }
 
         accountDeletionRequestRepository.deleteByUserId(userId)
@@ -86,10 +86,10 @@ class AccountDeletionService(
     fun reactivateAccount(request: ReactivateAccountRequest): AuthResponse {
         val nationalId = request.nationalId.trim()
         val deletedUser = userRepository.findDeletedByNationalId(nationalId)
-            ?: throw EntityNotFoundException("No deleted account found for the provided national ID")
+            ?: throw EntityNotFoundException("error.no_deleted_account_found")
 
         if (!passwordEncoder.matches(request.password, deletedUser.getPasswordHash())) {
-            throw InvalidCredentialsException("Invalid password")
+            throw InvalidCredentialsException()
         }
 
         val userId = deletedUser.getId()
@@ -131,7 +131,7 @@ class AccountDeletionService(
     fun getDeletionRequests(adminId: UUID, pageable: Pageable): Page<AccountDeletionRequestResponse> {
         val role = userRepository.findRoleById(adminId)
         if (role != UserRole.ADMIN) {
-            throw UnauthorizedException("Only admins can access deletion requests")
+            throw UnauthorizedException("error.permission.admin_only")
         }
 
         val page = accountDeletionRequestRepository.findAllPaged(pageable)
@@ -153,7 +153,7 @@ class AccountDeletionService(
     fun getDeletionRequestCount(adminId: UUID): Long {
         val role = userRepository.findRoleById(adminId)
         if (role != UserRole.ADMIN) {
-            throw UnauthorizedException("Only admins can access deletion requests count")
+            throw UnauthorizedException("error.permission.admin_only")
         }
         return accountDeletionRequestRepository.countAll()
     }
@@ -162,12 +162,12 @@ class AccountDeletionService(
     fun approveDeletion(adminId: UUID, requestId: UUID) {
         val role = userRepository.findRoleById(adminId)
         if (role != UserRole.ADMIN) {
-            throw UnauthorizedException("Only admins can approve deletion requests")
+            throw UnauthorizedException("error.permission.admin_only")
         }
 
         val affected = accountDeletionRequestRepository.deleteByRequestId(requestId)
         if (affected == 0) {
-            throw EntityNotFoundException("Deletion request not found")
+            throw EntityNotFoundException("error.deletion_request_not_found")
         }
     }
 
@@ -175,11 +175,11 @@ class AccountDeletionService(
     fun rejectDeletion(adminId: UUID, requestId: UUID) {
         val role = userRepository.findRoleById(adminId)
         if (role != UserRole.ADMIN) {
-            throw UnauthorizedException("Only admins can reject deletion requests")
+            throw UnauthorizedException("error.permission.admin_only")
         }
 
         val request = accountDeletionRequestRepository.findProjectionById(requestId)
-            ?: throw EntityNotFoundException("Deletion request not found")
+            ?: throw EntityNotFoundException("error.deletion_request_not_found")
 
         val targetUserId = request.getUserId()
         userRepository.restoreUser(targetUserId)

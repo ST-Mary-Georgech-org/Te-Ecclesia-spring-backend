@@ -63,21 +63,21 @@ class AttendanceService(
 
     private fun checkAdmin(callerId: UUID) {
         val role = userRepository.findRoleById(callerId)
-            ?: throw UnauthorizedException("User not found")
+            ?: throw UnauthorizedException("error.user.not_found")
         if (role != UserRole.ADMIN) {
-            throw UnauthorizedException("Only admins can manage services")
+            throw UnauthorizedException("error.attendance.admin_only")
         }
     }
 
     private fun checkCanManageService(callerId: UUID, serviceId: Long): ChurchService {
         val role = userRepository.findRoleById(callerId)
-            ?: throw UnauthorizedException("User not found")
+            ?: throw UnauthorizedException("error.user.not_found")
         val service = churchServiceRepository.findByIdWithEducationalStages(serviceId)
-            ?: throw ResourceNotFoundException("Service not found with id $serviceId")
+            ?: throw ResourceNotFoundException("error.attendance.service_not_found")
 
         val isResponsible = role == UserRole.ADMIN || churchServiceRepository.isServantResponsibleForService(serviceId, callerId)
         if (!isResponsible) {
-            throw UnauthorizedException("You are not authorized to manage events or attendees for this service")
+            throw UnauthorizedException("error.attendance.not_authorized_service")
         }
         return service
     }
@@ -174,7 +174,7 @@ class AttendanceService(
         checkAdmin(callerId)
 
         val service = churchServiceRepository.findByIdOrNull(id)
-            ?: throw ResourceNotFoundException("Service not found with id $id")
+            ?: throw ResourceNotFoundException("error.attendance.service_not_found")
 
         val stages = resolveEducationalStages(request.educationalStageIds)
         val servantIds = resolveResponsibleServantIds(request.responsibleServantIds)
@@ -266,12 +266,12 @@ class AttendanceService(
     private fun resolveEducationalStages(incomingStageIds: List<Long>?): MutableSet<EducationalStage> {
         val stageIds = incomingStageIds ?: emptyList()
         if (stageIds.size > 10) {
-            throw IllegalArgumentException("Cannot assign more than 10 educational stages to a service")
+            throw IllegalArgumentException("error.attendance.max_stages_exceeded")
         }
         if (stageIds.isEmpty()) return mutableSetOf()
         val foundStages = educationalStageRepository.findAllById(stageIds)
         if (foundStages.size != stageIds.size) {
-            throw ResourceNotFoundException("One or more educational stages not found")
+            throw ResourceNotFoundException("error.attendance.stages_not_found")
         }
         return foundStages.toMutableSet()
     }
@@ -279,12 +279,12 @@ class AttendanceService(
     private fun resolveResponsibleServantIds(incomingServantIds: List<UUID>?): MutableSet<UUID> {
         val servantIds = incomingServantIds ?: emptyList()
         if (servantIds.size > 30) {
-            throw IllegalArgumentException("Cannot assign more than 30 responsible servants to a service")
+            throw IllegalArgumentException("error.attendance.max_servants_exceeded")
         }
         if (servantIds.isEmpty()) return mutableSetOf()
         val validIds = userRepository.findApprovedKhademIdsByIds(servantIds).toSet()
         if (validIds.size != servantIds.size) {
-            throw IllegalArgumentException("One or more selected servants are invalid or not approved khadems")
+            throw IllegalArgumentException("error.attendance.invalid_servants")
         }
         return servantIds.toMutableSet()
     }
@@ -334,7 +334,7 @@ class AttendanceService(
     fun deleteService(callerId: UUID, id: Long) {
         checkAdmin(callerId)
         if (!churchServiceRepository.existsById(id)) {
-            throw ResourceNotFoundException("Service not found with id $id")
+            throw ResourceNotFoundException("error.attendance.service_not_found")
         }
         churchServiceRepository.deleteById(id)
     }
@@ -508,7 +508,7 @@ class AttendanceService(
     @Transactional
     fun updateEvent(callerId: UUID, eventId: Long, request: CreateEventRequest): ServiceEventResponse {
         val event = serviceEventRepository.findByIdOrNull(eventId)
-            ?: throw ResourceNotFoundException("Event not found with id $eventId")
+            ?: throw ResourceNotFoundException("error.attendance.event_not_found")
 
         checkCanManageService(callerId, event.serviceId)
 
@@ -537,7 +537,7 @@ class AttendanceService(
     @Transactional
     fun deleteEvent(callerId: UUID, eventId: Long) {
         val event = serviceEventRepository.findByIdOrNull(eventId)
-            ?: throw ResourceNotFoundException("Event not found with id $eventId")
+            ?: throw ResourceNotFoundException("error.attendance.event_not_found")
 
         checkCanManageService(callerId, event.serviceId)
         serviceEventRepository.deleteById(eventId)
@@ -657,7 +657,7 @@ class AttendanceService(
     @Transactional(readOnly = true)
     fun getUserByCode(code: String): AttendeeUserPreviewResponse {
         val candidate = findCandidateByCodeOrNumericCode(code)
-            ?: throw ResourceNotFoundException("User not found with code $code")
+            ?: throw ResourceNotFoundException("error.user.not_found")
         val lang = LocaleContextHolder.getLocale().language
         val isEn = lang.startsWith("en", ignoreCase = true)
         val stageName = if (isEn) {
@@ -685,12 +685,12 @@ class AttendanceService(
     @Transactional
     fun addAttendee(callerId: UUID, eventId: Long, request: AddAttendeeRequest): EventAttendeeResponse {
         val event = serviceEventRepository.findByIdOrNull(eventId)
-            ?: throw ResourceNotFoundException("Event not found with id $eventId")
+            ?: throw ResourceNotFoundException("error.attendance.event_not_found")
 
         val service = checkCanManageService(callerId, event.serviceId)
 
         val candidate = findCandidateByCodeOrNumericCode(request.code)
-            ?: throw ResourceNotFoundException("User not found with code ${request.code}")
+            ?: throw ResourceNotFoundException("error.user.not_found")
 
         if (service.educationalStages.isNotEmpty()) {
             val candidateStageId = candidate.getMakhdoomStageId() ?: candidate.getKhademStageId()
@@ -756,7 +756,7 @@ class AttendanceService(
     @Transactional
     fun removeAttendee(callerId: UUID, eventId: Long, userId: UUID) {
         val event = serviceEventRepository.findByIdOrNull(eventId)
-            ?: throw ResourceNotFoundException("Event not found with id $eventId")
+            ?: throw ResourceNotFoundException("error.attendance.event_not_found")
 
         checkCanManageService(callerId, event.serviceId)
         eventAttendeeRepository.deleteByEventIdAndUserId(eventId, userId)
@@ -770,19 +770,19 @@ class AttendanceService(
         pageable: Pageable
     ): Page<UserAttendanceHistoryResponse> {
         if (callerId == null) {
-            throw UnauthorizedException("Authentication required")
+            throw UnauthorizedException("error.auth.authentication_required")
         }
         val callerRole = userRepository.findRoleById(callerId)
-            ?: throw UnauthorizedException("User not found")
+            ?: throw UnauthorizedException("error.user.not_found")
 
         val isSelf = callerId == userId
         val isAuthorized = callerRole == UserRole.ADMIN || callerRole == UserRole.KHADEM || isSelf
         if (!isAuthorized) {
-            throw UnauthorizedException("You are not authorized to view attendance history")
+            throw UnauthorizedException("error.attendance.not_authorized_history")
         }
 
         if (!userRepository.existsById(userId)) {
-            throw ResourceNotFoundException("User not found with id $userId")
+            throw ResourceNotFoundException("error.user.not_found")
         }
 
         return eventAttendeeRepository.findAttendanceHistoryByUserId(userId, serviceId, pageable).map { p ->

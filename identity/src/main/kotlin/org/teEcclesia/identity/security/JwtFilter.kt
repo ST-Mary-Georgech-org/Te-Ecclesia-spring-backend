@@ -82,19 +82,19 @@ class JwtFilter(
                         path.startsWith("/api/v1/lookups")
 
                     if (!isRegistrationAllowedPath) {
-                        throw IllegalStateException("Registration token cannot be used for this endpoint")
+                        throw IllegalStateException("error.auth.registration_token_not_allowed")
                     }
-                    if (!userService.existById(userId)) throw IllegalStateException("Not authorized")
+                    if (!userService.existById(userId)) throw IllegalStateException("error.auth.unauthorized")
                     val authToken = UsernamePasswordAuthenticationToken(userId, null, emptyList())
                     authToken.details = WebAuthenticationDetailsSource().buildDetails(request)
                     SecurityContextHolder.getContext().authentication = authToken
                 } else if (jwtUtil.validateAccessToken(token) && jwtUtil.validateTokenForUser(token, userId)) {
-                    if (!userService.existById(userId)) throw IllegalStateException("Not authorized")
+                    if (!userService.existById(userId)) throw IllegalStateException("error.auth.unauthorized")
                     val authToken = UsernamePasswordAuthenticationToken(userId, null, emptyList())
                     authToken.details = WebAuthenticationDetailsSource().buildDetails(request)
                     SecurityContextHolder.getContext().authentication = authToken
                 } else {
-                    throw MalformedJwtException("Invalid token")
+                    throw MalformedJwtException("error.auth.token_invalid")
                 }
             }
 
@@ -105,7 +105,7 @@ class JwtFilter(
             authErrorResponder.handleInvalidToken(response)
         } catch (e: Exception) {
             logger.info("Error processing JWT: ${e.message}")
-            authErrorResponder.handleGeneralAuthError(response)
+            authErrorResponder.handleGeneralAuthError(response, e.message)
         }
     }
 }

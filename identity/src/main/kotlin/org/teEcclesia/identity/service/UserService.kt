@@ -81,12 +81,12 @@ class UserService(
 
     fun findById(userId: UUID): User {
         return userRepository.findProfileById(userId)
-            ?: throw UserNotFoundException("User with id: $userId not found")
+            ?: throw UserNotFoundException()
     }
 
     fun findProfileById(userId: UUID): User {
         return userRepository.findProfileById(userId)
-            ?: throw UserNotFoundException("User with id: $userId not found")
+            ?: throw UserNotFoundException()
     }
 
     fun findRoleById(userId: UUID): UserRole? {
@@ -101,7 +101,7 @@ class UserService(
     fun getUserProfile(userId: UUID, imageBaseUrl: String): ProfileResponse {
         val currentYear = systemSettingService.getCurrentAcademicYear()
         val profile = userRepository.findProfileByIdProjection(userId)
-            ?: throw UserNotFoundException("User with id: $userId not found")
+            ?: throw UserNotFoundException()
 
         val lang = LocaleContextHolder.getLocale().language
 
@@ -198,7 +198,7 @@ class UserService(
         val formattedPhone = formatPhone(phone)
 
         if (formattedPhone == user.phone) {
-            throw IllegalArgumentException("New phone number must be different from current phone number.")
+            throw IllegalArgumentException("error.phone.same_as_current")
         }
 
         userValidationHelper.validatePhone(phone = phone, currentUserId = userId)
@@ -234,12 +234,12 @@ class UserService(
 
         if (caller.role == UserRole.KHADEM) {
             val khademProfile = caller.khademProfile
-                ?: throw UnauthorizedException("Khadem profile not found")
+                ?: throw UnauthorizedException("error.khadem_profile_not_found")
 
             val canApprove = khademProfile.canApproveRequests
 
             if (status != UserStatus.APPROVED && !canApprove) {
-                throw UnauthorizedException("User does not have permission to view non-approved requests")
+                throw UnauthorizedException("error.permission.view_unapproved")
             }
 
             if (!canApprove) {
@@ -252,10 +252,10 @@ class UserService(
                 allowedYearIds.addAll(khademProfile.responsibleYears.map { it.id })
 
                 if (stageId != null && !allowedStageIds.contains(stageId)) {
-                    throw UnauthorizedException("Khadem does not have permission to view this stage")
+                    throw UnauthorizedException("error.permission.view_stage")
                 }
                 if (yearId != null && !allowedYearIds.contains(yearId)) {
-                    throw UnauthorizedException("Khadem does not have permission to view this year")
+                    throw UnauthorizedException("error.permission.view_year")
                 }
 
                 if (stageId == null) {
@@ -266,7 +266,7 @@ class UserService(
                 }
             }
         } else if (caller.role != UserRole.ADMIN) {
-            throw UnauthorizedException("Only Admin or Khadem can view users")
+            throw UnauthorizedException("error.permission.view_users")
         }
 
         val whatsappLink = getParentsWhatsAppLink()
@@ -345,7 +345,7 @@ class UserService(
         var user = findById(userId)
         
         if (user.status == UserStatus.APPROVED) {
-            throw RuntimeException("User is already approved")
+            throw RuntimeException("error.user.already_approved")
         }
         
         if (user.isEmailVerified) {
@@ -441,7 +441,7 @@ class UserService(
             
             if (request.updateProfileData.role != null && request.updateProfileData.role != target.role) {
                 if (caller.role != UserRole.ADMIN) {
-                    throw UnauthorizedException("Only admins can change user roles")
+                    throw UnauthorizedException("error.permission.change_roles")
                 }
                 user = user.copy(role = request.updateProfileData.role)
             }
@@ -449,7 +449,7 @@ class UserService(
         
         if (caller.role != UserRole.ADMIN) {
             if (!isResponsibleFor(caller, target)) {
-                throw UnauthorizedException("User is not authorized to edit this profile")
+                throw UnauthorizedException("error.permission.edit_profile")
             }
         }
         
@@ -575,7 +575,7 @@ class UserService(
 
         if (updateData.ordinationProfile != null) {
             val rank = rankRepository.findById(updateData.ordinationProfile.rankId).orElseThrow {
-                IllegalArgumentException("Rank not found")
+                IllegalArgumentException("error.rank_not_found")
             }
             val currentOrdination = user.ordinationProfile
             val updatedOrdination = currentOrdination?.copy(
@@ -599,14 +599,14 @@ class UserService(
 
         if (user.role == UserRole.MAKHDOOM && updateData.makhdoomProfile != null) {
             val educationalStage = educationalStageRepository.findById(updateData.makhdoomProfile.educationalStageId).orElseThrow {
-                IllegalArgumentException("Educational stage not found")
+                IllegalArgumentException("error.stage_not_found")
             }
             if (educationalStage.isKhademOnly) {
-                throw IllegalArgumentException("Educational stage is reserved for Khadem role")
+                throw IllegalArgumentException("error.stage_reserved_khadem")
             }
             val educationalYear = updateData.makhdoomProfile.educationalYearId?.let {
                 educationalYearRepository.findById(it).orElseThrow {
-                    IllegalArgumentException("Educational year not found")
+                    IllegalArgumentException("error.year_not_found")
                 }
             }
             val currentProfile = user.makhdoomProfile
@@ -638,11 +638,11 @@ class UserService(
         if (user.role == UserRole.KHADEM) {
             updateData.khademProfile?.let { khademDto ->
                 val educationalStage = educationalStageRepository.findById(khademDto.educationalStageId).orElseThrow {
-                    IllegalArgumentException("Educational stage not found")
+                    IllegalArgumentException("error.stage_not_found")
                 }
                 val educationalYear = khademDto.educationalYearId?.let {
                     educationalYearRepository.findById(it).orElseThrow {
-                        IllegalArgumentException("Educational year not found")
+                        IllegalArgumentException("error.year_not_found")
                     }
                 }
                 val respStages = khademDto.responsibleStageIds?.takeIf { it.isNotEmpty() }?.let {
@@ -716,7 +716,7 @@ class UserService(
     fun rejectUser(userId: UUID, reason: String, callerId: UUID?) {
         val user = findById(userId)
         if (user.status != UserStatus.PENDING_APPROVAL) {
-            throw RuntimeException("Only users pending approval can be rejected")
+            throw RuntimeException("error.user.reject_only_pending")
         }
         val caller = callerId?.let { userRepository.getReferenceById(it) }
         val updatedUser = userRepository.save(
@@ -777,12 +777,12 @@ class UserService(
         val caller = findById(callerId)
         val user = findById(userId)
         if (!isResponsibleFor(caller, user)) {
-            throw UnauthorizedException("User is not authorized to edit this profile")
+            throw UnauthorizedException("error.permission.edit_profile")
         }
         
         val existingUser = userRepository.findByCode(newCode)
         if (existingUser != null && existingUser.id != userId) {
-            throw IllegalArgumentException("Code already exists for another user")
+            throw IllegalArgumentException("error.user.code_exists")
         }
 
         val savedUser = userRepository.save(user.copy(code = newCode))
@@ -795,7 +795,7 @@ class UserService(
         if (caller.role == UserRole.KHADEM) {
             val khademProfile = caller.khademProfile
             if (khademProfile == null || (khademProfile.responsibleStages.isEmpty() && khademProfile.responsibleYears.isEmpty())) {
-                throw UnauthorizedException("Only Khadems responsible for a stage or year can add a student")
+                throw UnauthorizedException("error.permission.add_student_stage")
             }
             val reqStageId = request.makhdoomProfile?.educationalStageId
             val reqYearId = request.makhdoomProfile?.educationalYearId
@@ -804,10 +804,10 @@ class UserService(
             val hasYear = reqYearId != null && khademProfile.responsibleYears.any { it.id == reqYearId }
             
             if (!hasStage && !hasYear) {
-                throw UnauthorizedException("You are not responsible for this educational stage or year")
+                throw UnauthorizedException("error.permission.not_responsible_stage")
             }
         } else if (caller.role != UserRole.ADMIN) {
-            throw UnauthorizedException("Only Admin or responsible Khadem can add a student")
+            throw UnauthorizedException("error.permission.add_student")
         }
 
         var confessionPriest: User? = null
@@ -849,14 +849,14 @@ class UserService(
         // Add Makhdoom profile
         val makhdoomProfile = if (request.makhdoomProfile != null) {
             val educationalStage = educationalStageRepository.findById(request.makhdoomProfile.educationalStageId).orElseThrow {
-                IllegalArgumentException("Educational stage not found")
+                IllegalArgumentException("error.stage_not_found")
             }
             if (educationalStage.isKhademOnly) {
-                throw IllegalArgumentException("Educational stage is reserved for Khadem role")
+                throw IllegalArgumentException("error.stage_reserved_khadem")
             }
             val educationalYear = request.makhdoomProfile.educationalYearId?.let {
                 educationalYearRepository.findById(it).orElseThrow {
-                    IllegalArgumentException("Educational year not found")
+                    IllegalArgumentException("error.year_not_found")
                 }
             }
 
@@ -948,7 +948,7 @@ class UserService(
     fun updateParentProfile(parentId: UUID, request: ParentProfileRequest) {
         val user = findById(parentId)
         if (user.role !in listOf(UserRole.PARENT, UserRole.KHADEM, UserRole.KAHEN)) {
-            throw IllegalArgumentException("User is not a PARENT, KHADEM, or KAHEN")
+            throw IllegalArgumentException("error.user.invalid_role_type")
         }
 
         val parentProfile = parentProfileService.createOrUpdateProfile(user, request)
@@ -967,7 +967,7 @@ class UserService(
         val caller = findById(callerId)
         val target = findById(targetUserId)
         if (!isResponsibleFor(caller, target)) {
-            throw UnauthorizedException("User is not authorized to edit this profile")
+            throw UnauthorizedException("error.permission.edit_profile")
         }
 
         if (caller.role == UserRole.KHADEM) {
@@ -980,7 +980,7 @@ class UserService(
                 val hasYear = reqYearId != null && khademProfile.responsibleYears.any { it.id == reqYearId }
                 
                 if (!hasStage && !hasYear) {
-                    throw UnauthorizedException("You are not responsible for this educational stage or year")
+                    throw UnauthorizedException("error.permission.not_responsible_stage")
                 }
             }
         }
@@ -1034,14 +1034,14 @@ class UserService(
 
         val finalUser = if (target.role == UserRole.MAKHDOOM && request.makhdoomProfile != null) {
             val educationalStage = educationalStageRepository.findById(request.makhdoomProfile.educationalStageId).orElseThrow {
-                IllegalArgumentException("Educational stage not found")
+                IllegalArgumentException("error.stage_not_found")
             }
             if (educationalStage.isKhademOnly) {
-                throw IllegalArgumentException("Educational stage is reserved for Khadem role")
+                throw IllegalArgumentException("error.stage_reserved_khadem")
             }
             val educationalYear = request.makhdoomProfile.educationalYearId?.let {
                 educationalYearRepository.findById(it).orElseThrow {
-                    IllegalArgumentException("Educational year not found")
+                    IllegalArgumentException("error.year_not_found")
                 }
             }
 

@@ -38,5 +38,5 @@ fun formatPhone(phone: String): String {
         return clean
     }
     
-    throw IllegalArgumentException("Invalid phone number format.")
+    throw IllegalArgumentException("error.phone.invalid_format")
 }

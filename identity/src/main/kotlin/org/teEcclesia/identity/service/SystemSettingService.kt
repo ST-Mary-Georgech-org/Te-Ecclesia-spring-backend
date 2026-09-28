@@ -31,7 +31,7 @@ class SystemSettingService(
 
     @Transactional
     fun updateCurrentAcademicYear(year: Int): SystemSetting {
-        require(year in 2000..2100) { "Academic year must be between 2000 and 2100" }
+        require(year in 2000..2100) { "error.setting.academic_year_range" }
         return updateSettingValue(SettingKey.CURRENT_ACADEMIC_YEAR, year.toString(), "Current Academic Year")
     }
 }

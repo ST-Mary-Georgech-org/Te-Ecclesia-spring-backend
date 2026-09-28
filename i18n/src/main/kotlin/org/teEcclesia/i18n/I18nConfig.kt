@@ -4,6 +4,7 @@ import org.springframework.context.MessageSource
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.support.ReloadableResourceBundleMessageSource
+import java.util.Locale
 
 @Configuration
 class I18nConfig {
@@ -13,6 +14,7 @@ class I18nConfig {
         rs.setBasename("classpath:messages")
         rs.setDefaultEncoding("UTF-8")
         rs.setFallbackToSystemLocale(false)
+        rs.setDefaultLocale(Locale.forLanguageTag("ar"))
         return rs
     }
 }

@@ -22,7 +22,7 @@ class ManageLookupService(
 
     @Transactional
     fun updateArea(id: Long, request: AreaRequest): LookupResponse {
-        val area = areaRepository.findById(id).orElseThrow { ResourceNotFoundException("Area not found") }
+        val area = areaRepository.findById(id).orElseThrow { ResourceNotFoundException("error.area_not_found") }
         val updated = areaRepository.save(area.copy(name = request.name))
         return LookupResponse(updated.id, updated.name, whatsAppLink = null)
     }

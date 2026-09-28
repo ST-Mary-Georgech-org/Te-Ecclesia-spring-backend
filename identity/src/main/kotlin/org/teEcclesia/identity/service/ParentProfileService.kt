@@ -21,14 +21,14 @@ class ParentProfileService(
         // Handle Partner
         val partner = if (!request.partnerCode.isNullOrBlank()) {
             userRepository.findByCode(request.partnerCode)
-                ?: throw ResourceNotFoundException("Partner code ${request.partnerCode} is invalid")
+                ?: throw ResourceNotFoundException("error.parent.partner_code_invalid")
         } else null
 
         // Handle Children
         val children = if (!request.childrenCodes.isNullOrEmpty()) {
             val fetchedChildren = userRepository.findAllByCodeIn(request.childrenCodes)
             if (fetchedChildren.size != request.childrenCodes.size) {
-                throw ResourceNotFoundException("One or more children codes are invalid")
+                throw ResourceNotFoundException("error.parent.children_codes_invalid")
             }
             fetchedChildren
         } else emptyList()

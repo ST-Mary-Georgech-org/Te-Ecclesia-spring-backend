@@ -141,7 +141,7 @@ class LookupService(
 
     @Transactional
     fun updateRank(id: Long, request: RankRequest): LookupResponse {
-        val rank = rankRepository.findById(id).orElseThrow { ResourceNotFoundException("Rank not found") }
+        val rank = rankRepository.findById(id).orElseThrow { ResourceNotFoundException("error.rank_not_found") }
         val updated = rankRepository.save(
             rank.copy(
                 nameAr = request.nameAr,
@@ -170,7 +170,7 @@ class LookupService(
 
     @Transactional
     fun updateEducationalStage(id: Long, request: EducationalStageRequest): LookupResponse {
-        val stage = educationalStageRepository.findById(id).orElseThrow { ResourceNotFoundException("Stage not found") }
+        val stage = educationalStageRepository.findById(id).orElseThrow { ResourceNotFoundException("error.stage_not_found") }
         val updated = educationalStageRepository.save(
             stage.copy(
                 nameAr = request.nameAr,
@@ -189,7 +189,7 @@ class LookupService(
     @Transactional
     fun createEducationalYear(request: EducationalYearRequest): LookupResponse {
         val stage = educationalStageRepository.findById(request.stageId)
-            .orElseThrow { ResourceNotFoundException("Stage not found") }
+            .orElseThrow { ResourceNotFoundException("error.stage_not_found") }
         val year = EducationalYear(
             nameAr = request.nameAr,
             nameEn = request.nameEn,
@@ -202,9 +202,9 @@ class LookupService(
 
     @Transactional
     fun updateEducationalYear(id: Long, request: EducationalYearRequest): LookupResponse {
-        val year = educationalYearRepository.findById(id).orElseThrow { ResourceNotFoundException("Year not found") }
+        val year = educationalYearRepository.findById(id).orElseThrow { ResourceNotFoundException("error.year_not_found") }
         val stage = educationalStageRepository.findById(request.stageId)
-            .orElseThrow { ResourceNotFoundException("Stage not found") }
+            .orElseThrow { ResourceNotFoundException("error.stage_not_found") }
         val updated = educationalYearRepository.save(
             year.copy(
                 nameAr = request.nameAr,

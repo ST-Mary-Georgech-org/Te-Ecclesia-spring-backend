@@ -33,6 +33,7 @@ dependencies {
 	implementation(projects.events)
 	implementation(projects.storage)
 	implementation(projects.httpClient)
+	implementation(projects.i18n)
 }
 
 tasks.withType<Test> {

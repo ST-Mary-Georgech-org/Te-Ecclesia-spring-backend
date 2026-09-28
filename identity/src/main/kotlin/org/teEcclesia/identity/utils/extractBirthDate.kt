@@ -3,7 +3,7 @@ package org.teEcclesia.identity.utils
 import java.time.LocalDate
 
 fun extractBirthDate(nationalId: String): LocalDate {
-        require(nationalId.length == 14) { "National ID must be exactly 14 digits" }
+        require(nationalId.length == 14) { "error.national_id.invalid" }
 
         val centuryDigit = nationalId.substring(0, 1).toInt()
         val yearPart = nationalId.substring(1, 3).toInt()
@@ -13,7 +13,7 @@ fun extractBirthDate(nationalId: String): LocalDate {
         val century = when (centuryDigit) {
             2 -> 1900
             3 -> 2000
-            else -> throw IllegalArgumentException("Unsupported or invalid birth century digit: $centuryDigit")
+            else -> throw IllegalArgumentException("error.national_id.invalid_century")
         }
 
         val year = century + yearPart

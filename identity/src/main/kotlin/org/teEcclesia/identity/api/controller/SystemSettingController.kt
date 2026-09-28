@@ -32,7 +32,7 @@ class SystemSettingController(
     ): ResponseEntity<AcademicYearResponse> {
         val caller = userService.findProfileById(callerId)
         if (caller.role != UserRole.ADMIN) {
-            throw UnauthorizedException("Only admins can change the academic year")
+            throw UnauthorizedException("error.permission.admin_only")
         }
         systemSettingService.updateCurrentAcademicYear(request.year)
         return ResponseEntity.ok(AcademicYearResponse(request.year))

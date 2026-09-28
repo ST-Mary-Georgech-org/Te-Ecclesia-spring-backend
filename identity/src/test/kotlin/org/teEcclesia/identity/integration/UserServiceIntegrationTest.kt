@@ -133,7 +133,7 @@ class UserServiceIntegrationTest {
 
         val thrownException = assertThrows<UserNotFoundException> { userService.findById(missingUserId) }
 
-        assertThat(thrownException).hasMessageThat().contains("User with id: $missingUserId not found")
+        assertThat(thrownException).hasMessageThat().contains("error.user.not_found")
     }
 
     @Test
@@ -159,7 +159,7 @@ class UserServiceIntegrationTest {
         val thrownException =
             assertThrows<UserNotFoundException> { userService.updateUserImage(missingUserId, imageFile) }
 
-        assertThat(thrownException).hasMessageThat().contains("User with id: $missingUserId not found")
+        assertThat(thrownException).hasMessageThat().contains("error.user.not_found")
     }
 
     @Test
@@ -194,7 +194,7 @@ class UserServiceIntegrationTest {
 
         val thrownException = assertThrows<UserNotFoundException> { userService.deleteUserImage(missingUserId) }
 
-        assertThat(thrownException).hasMessageThat().contains("User with id: $missingUserId not found")
+        assertThat(thrownException).hasMessageThat().contains("error.user.not_found")
     }
 
     private fun createUser(email: String, imageUrl: String? = null, role: UserRole = UserRole.GUEST): User {
