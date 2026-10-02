@@ -576,14 +576,14 @@ class AuthService(
     private val rotatedTokensGraceCache = ConcurrentHashMap<String, RotatedTokenGraceEntry>()
 
     private fun cleanExpiredGraceTokens() {
-        val cutoff = Instant.now().minus(60, ChronoUnit.SECONDS)
+        val cutoff = Instant.now().minus(ROTATED_TOKEN_CACHE_CLEANUP_SECONDS, ChronoUnit.SECONDS)
         rotatedTokensGraceCache.entries.removeIf { it.value.rotatedAt.isBefore(cutoff) }
     }
 
     fun refreshToken(request: RefreshTokenRequest): AuthResponse {
         cleanExpiredGraceTokens()
         rotatedTokensGraceCache[request.refreshToken]?.let { graceEntry ->
-            if (graceEntry.rotatedAt.plus(30, ChronoUnit.SECONDS).isAfter(Instant.now())) {
+            if (graceEntry.rotatedAt.plus(ROTATED_TOKEN_GRACE_PERIOD_SECONDS, ChronoUnit.SECONDS).isAfter(Instant.now())) {
                 return graceEntry.response
             } else {
                 rotatedTokensGraceCache.remove(request.refreshToken)
@@ -592,7 +592,7 @@ class AuthService(
 
         return synchronized(this) {
             rotatedTokensGraceCache[request.refreshToken]?.let { graceEntry ->
-                if (graceEntry.rotatedAt.plus(30, ChronoUnit.SECONDS).isAfter(Instant.now())) {
+                if (graceEntry.rotatedAt.plus(ROTATED_TOKEN_GRACE_PERIOD_SECONDS, ChronoUnit.SECONDS).isAfter(Instant.now())) {
                     return graceEntry.response
                 }
             }
@@ -631,7 +631,7 @@ class AuthService(
     fun refreshRegistrationToken(request: RefreshTokenRequest): AuthResponse {
         cleanExpiredGraceTokens()
         rotatedTokensGraceCache[request.refreshToken]?.let { graceEntry ->
-            if (graceEntry.rotatedAt.plus(30, ChronoUnit.SECONDS).isAfter(Instant.now())) {
+            if (graceEntry.rotatedAt.plus(ROTATED_TOKEN_GRACE_PERIOD_SECONDS, ChronoUnit.SECONDS).isAfter(Instant.now())) {
                 return graceEntry.response
             } else {
                 rotatedTokensGraceCache.remove(request.refreshToken)
@@ -640,7 +640,7 @@ class AuthService(
 
         return synchronized(this) {
             rotatedTokensGraceCache[request.refreshToken]?.let { graceEntry ->
-                if (graceEntry.rotatedAt.plus(30, ChronoUnit.SECONDS).isAfter(Instant.now())) {
+                if (graceEntry.rotatedAt.plus(ROTATED_TOKEN_GRACE_PERIOD_SECONDS, ChronoUnit.SECONDS).isAfter(Instant.now())) {
                     return graceEntry.response
                 }
             }
@@ -1071,5 +1071,10 @@ class AuthService(
 
         password.shuffle()
         return password.joinToString("")
+    }
+
+    companion object {
+        private const val ROTATED_TOKEN_GRACE_PERIOD_SECONDS = 120L
+        private const val ROTATED_TOKEN_CACHE_CLEANUP_SECONDS = 180L
     }
 }
