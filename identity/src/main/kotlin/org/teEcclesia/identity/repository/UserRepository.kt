@@ -185,7 +185,13 @@ interface UserRepository : JpaRepository<User, UUID> {
                 mp.motherPhone as makhdoomMotherPhone,
                 mp.motherWhatsapp as makhdoomMotherWhatsapp,
                 mp.isFatherDeceased as makhdoomIsFatherDeceased,
-                mp.isMotherDeceased as makhdoomIsMotherDeceased
+                mp.isMotherDeceased as makhdoomIsMotherDeceased,
+
+                dsr.academicYear as deaconsSchoolAcademicYear,
+                dsr.enrolled as deaconsSchoolEnrolled,
+                dsr.paid as deaconsSchoolPaid,
+                dsr.paidAmount as deaconsSchoolPaidAmount,
+                dsr.status as deaconsSchoolStatus
 
             FROM User u 
             LEFT JOIN u.actionTakenBy atb
@@ -201,10 +207,14 @@ interface UserRepository : JpaRepository<User, UUID> {
             LEFT JOIN u.makhdoomProfile mp
             LEFT JOIN mp.educationalStage ms
             LEFT JOIN mp.educationalYear my
+            LEFT JOIN u.deaconsSchoolRecords dsr ON dsr.academicYear = :academicYear
             WHERE u.id = :id
         """
     )
-    fun findProfileByIdProjection(@Param("id") id: UUID): UserProfileProjection?
+    fun findProfileByIdProjection(
+        @Param("id") id: UUID,
+        @Param("academicYear") academicYear: Int
+    ): UserProfileProjection?
 
     @Query("""
         SELECT 

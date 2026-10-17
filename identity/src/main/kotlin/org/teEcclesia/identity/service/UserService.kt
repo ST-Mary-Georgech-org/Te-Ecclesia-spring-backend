@@ -100,7 +100,7 @@ class UserService(
     @Transactional(readOnly = true)
     fun getUserProfile(userId: UUID, imageBaseUrl: String): ProfileResponse {
         val currentYear = systemSettingService.getCurrentAcademicYear()
-        val profile = userRepository.findProfileByIdProjection(userId)
+        val profile = userRepository.findProfileByIdProjection(userId, currentYear)
             ?: throw UserNotFoundException()
 
         val lang = LocaleContextHolder.getLocale().language
@@ -137,7 +137,23 @@ class UserService(
         } else emptyMap()
 
         val deaconsRecord = if (profile.getRole() == UserRole.MAKHDOOM) {
-            deaconsSchoolRecordRepository.findByUserIdAndAcademicYear(userId, currentYear)?.toResponse().orEmpty(currentYear)
+            if (profile.getDeaconsSchoolEnrolled() != null) {
+                DeaconsSchoolRecordResponse(
+                    academicYear = profile.getDeaconsSchoolAcademicYear() ?: currentYear,
+                    enrolled = profile.getDeaconsSchoolEnrolled() ?: false,
+                    paid = profile.getDeaconsSchoolPaid() ?: false,
+                    paidAmount = profile.getDeaconsSchoolPaidAmount() ?: BigDecimal.ZERO,
+                    status = profile.getDeaconsSchoolStatus() ?: DeaconsSchoolStatus.PENDING
+                )
+            } else {
+                DeaconsSchoolRecordResponse(
+                    academicYear = currentYear,
+                    enrolled = false,
+                    paid = false,
+                    paidAmount = BigDecimal.ZERO,
+                    status = DeaconsSchoolStatus.PENDING
+                )
+            }
         } else null
 
         return profile.toProfileResponse(

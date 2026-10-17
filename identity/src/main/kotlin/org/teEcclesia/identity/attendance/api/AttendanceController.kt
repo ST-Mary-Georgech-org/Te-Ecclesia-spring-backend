@@ -158,9 +158,18 @@ class AttendanceController(
         return ResponseEntity.ok().build()
     }
 
+    @GetMapping("/my-history")
+    fun getMyAttendanceHistory(
+        @AuthenticationPrincipal callerId: UUID,
+        @RequestParam(required = false) serviceId: Long?,
+        @PageableDefault(size = 20) pageable: Pageable
+    ): ResponseEntity<Page<UserAttendanceHistoryResponse>> {
+        return ResponseEntity.ok(attendanceService.getMyAttendanceHistory(callerId, serviceId, pageable))
+    }
+
     @GetMapping("/users/{userId}/history")
     fun getUserAttendanceHistory(
-        @AuthenticationPrincipal callerId: UUID?,
+        @AuthenticationPrincipal callerId: UUID,
         @PathVariable userId: UUID,
         @RequestParam(required = false) serviceId: Long?,
         @PageableDefault(size = 20) pageable: Pageable

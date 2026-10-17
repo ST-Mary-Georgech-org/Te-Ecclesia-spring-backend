@@ -35,10 +35,13 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.teEcclesia.identity.api.dto.response.resolveUrl
 import org.teEcclesia.identity.attendance.dto.CreateRepeatedEventRequest
 import org.teEcclesia.identity.attendance.dto.RepeatedEventResponse
+import org.teEcclesia.identity.attendance.dto.toUserAttendanceHistoryResponse
 import org.teEcclesia.identity.attendance.entity.RepeatedEvent
 import org.teEcclesia.identity.attendance.repository.RepeatedEventRepository
+import org.teEcclesia.identity.attendance.repository.projection.UserAttendanceHistoryProjection
 import org.teEcclesia.identity.exception.UnauthorizedException
 import org.teEcclesia.identity.repository.EducationalStageRepository
+import org.teEcclesia.identity.repository.ParentProfileRepository
 import org.teEcclesia.identity.repository.UserRepository
 import java.time.LocalDate
 import java.time.LocalTime
@@ -53,6 +56,7 @@ class AttendanceService(
     private val userRepository: UserRepository,
     private val educationalStageRepository: EducationalStageRepository,
     private val repeatedEventRepository: RepeatedEventRepository,
+    private val parentProfileRepository: ParentProfileRepository,
     platformTransactionManager: PlatformTransactionManager,
     @param:Value("\${storage.teEcclesia.cdn-endpoint}") private val cdnEndpoint: String,
     @param:Value("\${identity.resources.profile-image-directory}") private val profileImageDirectory: String
@@ -763,20 +767,28 @@ class AttendanceService(
     }
 
     @Transactional(readOnly = true)
+    fun getMyAttendanceHistory(
+        callerId: UUID,
+        serviceId: Long?,
+        pageable: Pageable
+    ): Page<UserAttendanceHistoryResponse> {
+        return eventAttendeeRepository.findAttendanceHistoryByUserId(callerId, serviceId, pageable)
+            .map(UserAttendanceHistoryProjection::toUserAttendanceHistoryResponse)
+    }
+
+    @Transactional(readOnly = true)
     fun getUserAttendanceHistory(
-        callerId: UUID?,
+        callerId: UUID,
         userId: UUID,
         serviceId: Long?,
         pageable: Pageable
     ): Page<UserAttendanceHistoryResponse> {
-        if (callerId == null) {
-            throw UnauthorizedException("error.auth.authentication_required")
-        }
         val callerRole = userRepository.findRoleById(callerId)
             ?: throw UnauthorizedException("error.user.not_found")
 
         val isSelf = callerId == userId
-        val isAuthorized = callerRole == UserRole.ADMIN || callerRole == UserRole.KHADEM || isSelf
+        val isParentOfUser = !isSelf && parentProfileRepository.isChildOfParent(callerId, userId)
+        val isAuthorized = callerRole == UserRole.ADMIN || callerRole == UserRole.KHADEM || isSelf || isParentOfUser
         if (!isAuthorized) {
             throw UnauthorizedException("error.attendance.not_authorized_history")
         }
@@ -785,19 +797,8 @@ class AttendanceService(
             throw ResourceNotFoundException("error.user.not_found")
         }
 
-        return eventAttendeeRepository.findAttendanceHistoryByUserId(userId, serviceId, pageable).map { p ->
-            UserAttendanceHistoryResponse(
-                id = p.getId(),
-                eventId = p.getEventId(),
-                serviceId = p.getServiceId(),
-                serviceName = p.getServiceName(),
-                eventName = p.getEventName(),
-                eventDate = p.getEventDate(),
-                startTime = p.getStartTime(),
-                endTime = p.getEndTime(),
-                registeredAt = p.getRegisteredAt()
-            )
-        }
+        return eventAttendeeRepository.findAttendanceHistoryByUserId(userId, serviceId, pageable)
+            .map(UserAttendanceHistoryProjection::toUserAttendanceHistoryResponse)
     }
 }
 

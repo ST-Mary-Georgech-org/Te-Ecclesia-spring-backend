@@ -4,6 +4,8 @@ import org.teEcclesia.identity.entity.enums.Gender
 import org.teEcclesia.identity.entity.enums.UserRole
 import org.teEcclesia.identity.entity.enums.UserStatus
 import org.teEcclesia.identity.entity.enums.ShamamsaStudyStatus
+import org.teEcclesia.identity.entity.enums.DeaconsSchoolStatus
+import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
@@ -105,6 +107,13 @@ interface UserProfileProjection {
     fun getMakhdoomMotherWhatsapp(): String?
     fun getMakhdoomIsFatherDeceased(): Boolean?
     fun getMakhdoomIsMotherDeceased(): Boolean?
+
+    // Deacons School Record
+    fun getDeaconsSchoolAcademicYear(): Int?
+    fun getDeaconsSchoolEnrolled(): Boolean?
+    fun getDeaconsSchoolPaid(): Boolean?
+    fun getDeaconsSchoolPaidAmount(): BigDecimal?
+    fun getDeaconsSchoolStatus(): DeaconsSchoolStatus?
 }
 
 interface UserSummaryProjection {
